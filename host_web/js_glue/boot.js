@@ -189,6 +189,58 @@ function clampVolume(v) {
 }
 
 /**
+ * Hard-fail audio load — same surface as texture hard-fail in applyManifest:
+ * log `audio load failed: {id}`, optional #status DOM message, then throw.
+ * Does not pretend playback succeeded.
+ *
+ * @param {string} id logical audio id
+ * @param {unknown} [detail] optional reason (no URL, media error, play fail)
+ */
+function audioLoadFailed(id, detail) {
+  console.error("audio load failed:", id, detail != null ? detail : "");
+  const msg =
+    detail != null && String(detail).length
+      ? `MoonSight: failed to load audio '${id}': ${detail}`
+      : `MoonSight: failed to load audio '${id}'`;
+  try {
+    const status =
+      typeof document !== "undefined" ? document.querySelector("#status") : null;
+    if (status) status.textContent = msg;
+  } catch (_) {
+    /* ignore */
+  }
+  throw new Error(msg);
+}
+
+/** Autoplay policy (and similar) — not a missing/broken asset load. */
+function isAutoplayBlock(e) {
+  return !!(e && e.name === "NotAllowedError");
+}
+
+/**
+ * Arm HTMLAudioElement error → hard-fail (async path after makeAudio).
+ * @param {HTMLAudioElement} el
+ * @param {string} id
+ */
+function armAudioLoadHardFail(el, id) {
+  el.addEventListener(
+    "error",
+    () => {
+      try {
+        const code = el.error && el.error.code;
+        audioLoadFailed(
+          id,
+          code != null ? `media error code ${code}` : "media error",
+        );
+      } catch (_) {
+        /* already surfaced via #status / console */
+      }
+    },
+    { once: true },
+  );
+}
+
+/**
  * @param {string | {ogg:string, mp3:string}} urlOrAlt
  * @param {{loop?: boolean, volume?: number}} opts
  */
@@ -228,11 +280,14 @@ function stopBgm() {
   bgmId = null;
 }
 
+/**
+ * Play BGM by logical id. Missing URL or media load failure hard-fails
+ * (see audioLoadFailed); autoplay policy blocks only warn.
+ */
 function playBgm(id, looped, volume) {
   const url = resolveAudioUrl(id);
   if (!url) {
-    console.warn("audio: no URL for BGM", id);
-    return;
+    audioLoadFailed(id, "no URL for BGM");
   }
   const vol = clampVolume(volume);
   if (bgmId === id && bgmEl && !bgmEl.paused) {
@@ -243,25 +298,50 @@ function playBgm(id, looped, volume) {
   stopBgm();
   ensureAudioUnlocked();
   const el = makeAudio(url, { loop: looped, volume: vol });
+  armAudioLoadHardFail(el, id);
   bgmEl = el;
   bgmId = id;
   const p = el.play();
   if (p && typeof p.catch === "function") {
-    p.catch((e) => console.warn("bgm play blocked/failed", id, e));
+    p.catch((e) => {
+      if (isAutoplayBlock(e)) {
+        console.warn("bgm play blocked/failed", id, e);
+        return;
+      }
+      try {
+        audioLoadFailed(id, e);
+      } catch (_) {
+        /* surfaced */
+      }
+    });
   }
 }
 
+/**
+ * Play SE by logical id. Missing URL or media load failure hard-fails
+ * (see audioLoadFailed); autoplay policy blocks only warn.
+ */
 function playSe(id, volume) {
   const url = resolveAudioUrl(id);
   if (!url) {
-    console.warn("audio: no URL for SE", id);
-    return;
+    audioLoadFailed(id, "no URL for SE");
   }
   ensureAudioUnlocked();
   const el = makeAudio(url, { loop: false, volume: clampVolume(volume) });
+  armAudioLoadHardFail(el, id);
   const p = el.play();
   if (p && typeof p.catch === "function") {
-    p.catch((e) => console.warn("se play blocked/failed", id, e));
+    p.catch((e) => {
+      if (isAutoplayBlock(e)) {
+        console.warn("se play blocked/failed", id, e);
+        return;
+      }
+      try {
+        audioLoadFailed(id, e);
+      } catch (_) {
+        /* surfaced */
+      }
+    });
   }
 }
 

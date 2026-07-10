@@ -23,12 +23,15 @@ fn split_ir_positionals(args : Array[@script.IrValue]) -> Array[@script.IrValue]
 }
 
 ///|
-/// Collect unique string-literal resource ids referenced by host ops:
-/// - `layer.show` — 2nd positional (skip empty `""`)
-/// - `audio.bgm` / `audio.se` — string positional args (skip empty)
-fn collect_literal_resource_refs(ir : @script.IrModule) -> Array[String] {
+/// Collect unique string-literal resource refs with kind from host op:
+/// - `layer.show` → image — 2nd positional (skip empty `""`)
+/// - `audio.bgm` / `audio.se` → audio — string positional args (skip empty)
+/// Returns pairs `(kind, id)` where kind is `"image"` or `"audio"`.
+fn collect_literal_resource_refs(
+  ir : @script.IrModule,
+) -> Array[(String, String)] {
   let seen : Map[String, Bool] = {}
-  let out : Array[String] = []
+  let out : Array[(String, String)] = []
   for _, scene in ir.scenes {
     for op in scene.ops {
       match op {
@@ -37,7 +40,7 @@ fn collect_literal_resource_refs(ir : @script.IrModule) -> Array[String] {
             let pos = split_ir_positionals(args)
             if pos.length() >= 2 {
               match pos[1] {
-                Str(id) => push_resource_id(id, seen, out)
+                Str(id) => push_resource_ref("image", id, seen, out)
                 _ => ()
               }
             }
@@ -45,7 +48,7 @@ fn collect_literal_resource_refs(ir : @script.IrModule) -> Array[String] {
             let pos = split_ir_positionals(args)
             for v in pos {
               match v {
-                Str(id) => push_resource_id(id, seen, out)
+                Str(id) => push_resource_ref("audio", id, seen, out)
                 _ => ()
               }
             }
@@ -59,21 +62,23 @@ fn collect_literal_resource_refs(ir : @script.IrModule) -> Array[String] {
 }
 
 ///|
-fn push_resource_id(
+fn push_resource_ref(
+  kind : String,
   id : String,
   seen : Map[String, Bool],
-  out : Array[String],
+  out : Array[(String, String)],
 ) -> Unit {
   if id == "" || seen.contains(id) {
     return
   }
   seen[id] = true
-  out.push(id)
+  out.push((kind, id))
 }
 
 ///|
 /// Ensure every script-referenced literal resource id exists in `resources` or
-/// `audio` (from on-disk assets). Prints one error per missing id.
+/// `audio` (from on-disk assets). Prints one error per missing id, distinguishing
+/// audio vs image by the host op that referenced it.
 /// Returns `true` when all refs resolve.
 fn validate_literal_resources(
   ir : @script.IrModule,
@@ -81,9 +86,14 @@ fn validate_literal_resources(
   audio : Map[String, String],
 ) -> Bool {
   let mut ok = true
-  for id in collect_literal_resource_refs(ir) {
+  for item in collect_literal_resource_refs(ir) {
+    let (kind, id) = item
     if !resources.contains(id) && !audio.contains(id) {
-      println("error: missing resource `\{id}` referenced by script")
+      if kind == "audio" {
+        println("error: missing audio `\{id}` referenced by script")
+      } else {
+        println("error: missing image `\{id}` referenced by script")
+      }
       ok = false
     }
   }
