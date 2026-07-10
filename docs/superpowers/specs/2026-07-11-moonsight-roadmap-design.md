@@ -1,7 +1,7 @@
 # MoonSight — 12–18 个月产品路线图总览
 
 **日期：** 2026-07-11  
-**状态：** Approved design (roadmap overview; not a single-quarter implementation spec)  
+**状态：** **Superseded** by [多轨路线图 v2](./2026-07-11-moonsight-roadmap-v2-design.md)  
 **仓库：** `moonsight`  
 **前序（已交付）：**  
 - [Phase 1 运行时内核](./2026-07-10-moonsight-runtime-design.md)  
@@ -9,7 +9,9 @@
 - [Phase 3 Screen 语言与系统 UI](./2026-07-10-moonsight-phase3-screen-ui-design.md)  
 - [Phase 4 MoonBit UI 内核](./2026-07-10-moonsight-phase4-ui-kernel-design.md)  
 
-**下一实现入口：** 每季度单独 brainstorm → 写该季 design + implementation plan（首季建议 **Q1 可认真玩**）。本文件**不**直接进入单季 SDD 实现切片。
+> **本文档已废止作为排期权威。** 请改用 [roadmap v2](./2026-07-11-moonsight-roadmap-v2-design.md)（含 Q1 已交付基线、Svelte Host、Fumadocs、Editor stretch 多轨视图）。下文仅作历史参考。
+
+**下一实现入口（历史）：** 每季度单独 brainstorm → 写该季 design + implementation plan（首季建议 **Q1 可认真玩**）。本文件**不**直接进入单季 SDD 实现切片。
 
 ---
 
