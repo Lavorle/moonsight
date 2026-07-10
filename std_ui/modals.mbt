@@ -67,12 +67,8 @@ fn build_game_menu(app : @runtime.UiApp) -> @runtime.UiNode {
 
 ///|
 /// Six fixed slots (default `save_slots`). Two button sets per slot:
-/// - save mode: ModeIs("save") → save_slot(i)
-/// - load mode: ModeIs("load") → load_slot(i)
-///
-/// `VisiblePred` is a single enum (no AND). ModeIs separates modes; empty-slot
-/// load is a no-op in `Engine::load_slot`. Prefer ModeIs over SlotOccupied alone
-/// so save mode does not also show load buttons for occupied slots.
+/// - save mode: ModeIs("save") → save_slot(i) (empty slots remain focusable)
+/// - load mode: ModeIs("load") ∧ SlotOccupied(i) → load_slot(i)
 fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
   let children : Array[@runtime.UiNode] = [
     @runtime.UiNode::Text(
@@ -102,7 +98,10 @@ fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
       @runtime.UiNode::Button(
         label="Slot \{slot}",
         action_id=load_id,
-        visible=@runtime.VisiblePred::ModeIs("load"),
+        visible=@runtime.VisiblePred::And(
+          @runtime.VisiblePred::ModeIs("load"),
+          @runtime.VisiblePred::SlotOccupied(slot),
+        ),
       ),
     )
   }

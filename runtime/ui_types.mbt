@@ -19,6 +19,8 @@ pub(all) enum VisiblePred {
   PrefBool(String)
   SlotOccupied(Int)
   ModeIs(String)
+  /// Short-circuit conjunction of two predicates.
+  And(VisiblePred, VisiblePred)
 } derive(Debug, Eq)
 
 ///|
@@ -153,6 +155,7 @@ pub fn VisiblePred::eval(self : VisiblePred, bind : UiBindCtx) -> Bool {
         Some(mm) => mm == m
         None => false
       }
+    And(a, b) => a.eval(bind) && b.eval(bind)
   }
 }
 

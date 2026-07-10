@@ -455,12 +455,11 @@ fn walk_ui_node(
       (if total_w > zero { total_w } else { ui_btn_w }, max_h)
     }
     UiNode::Fixed(x~, y~, children~, ..) => {
+      // Absolute container: all children share the Fixed origin (no flow stack).
       let ox = Float::from_double(x)
       let oy = Float::from_double(y)
-      let mut cy = oy
       for c in children {
-        let (_w, h) = walk_ui_node(c, ox, cy, st)
-        cy = cy + h
+        ignore(walk_ui_node(c, ox, oy, st))
       }
       (0.0, 0.0)
     }
@@ -486,14 +485,20 @@ fn walk_ui_node(
       (0.0, 0.0)
     }
     UiNode::Text(src~, x~, y~, font_size~, visible~) => {
-      if visible.eval(st.bind) && st.paint {
+      if !visible.eval(st.bind) {
+        return (0.0, 0.0)
+      }
+      // node x/y are offsets from the parent flow origin (0 for modal titles).
+      let px = origin_x + Float::from_double(x)
+      let py = origin_y + Float::from_double(y)
+      if st.paint {
         let label = src.resolve(st.bind)
         st.ops.push(
           {
             kind: 1,
             resource: "",
-            x: Float::from_double(x),
-            y: Float::from_double(y),
+            x: px,
+            y: py,
             w: ui_btn_w,
             h: ui_line_h,
             opacity: 1.0,
@@ -504,7 +509,8 @@ fn walk_ui_node(
           },
         )
       }
-      (0.0, 0.0)
+      // Take a line so VBox/HBox advance past title labels (Phase 3 parity).
+      (ui_btn_w, ui_line_h)
     }
     UiNode::Image(resource~, x~, y~, w~, h~, visible~) => {
       if visible.eval(st.bind) && st.paint {

@@ -452,3 +452,77 @@ test "slot occupied false is not focusable" {
   assert_eq(caps.load_calls.length(), 1)
   assert_eq(caps.load_calls[0], 1)
 }
+
+///|
+test "VisiblePred And short-circuits ModeIs and SlotOccupied" {
+  let bind_load_empty = {
+    ..UiBindCtx::empty(),
+    occupied: [false, true],
+    modal_mode: Some("load"),
+  }
+  let pred = VisiblePred::And(
+    VisiblePred::ModeIs("load"),
+    VisiblePred::SlotOccupied(0),
+  )
+  assert_true(!pred.eval(bind_load_empty))
+  let pred1 = VisiblePred::And(
+    VisiblePred::ModeIs("load"),
+    VisiblePred::SlotOccupied(1),
+  )
+  assert_true(pred1.eval(bind_load_empty))
+  let bind_save = {
+    ..UiBindCtx::empty(),
+    occupied: [true, true],
+    modal_mode: Some("save"),
+  }
+  assert_true(!pred1.eval(bind_save))
+}
+
+///|
+test "text in VBox paints at origin and takes a line of flow" {
+  let app = UiApp::new()
+  app.register_modal(
+    "title",
+    UiNode::VBox(
+      x=Some(760.0),
+      y=Some(360.0),
+      children=[
+        UiNode::Text(
+          src=TextBindSrc::Literal("MoonSight"),
+          x=0.0,
+          y=0.0,
+          font_size=36.0,
+          visible=VisiblePred::Always,
+        ),
+        UiNode::Button(label="Start", action_id=0, visible=VisiblePred::Always),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("title")
+  let ops = rt.paint_modal(
+    canvas_w=1920.0,
+    canvas_h=1080.0,
+    bind=UiBindCtx::empty(),
+  )
+  let mut found_title = false
+  let mut start_y : Float = -1.0
+  for op in ops {
+    match op.text {
+      Some(t) =>
+        if t == "MoonSight" {
+          found_title = true
+          // Title sits at VBox origin, not absolute (0,0).
+          assert_eq(op.x, 760.0)
+          assert_eq(op.y, 360.0)
+        }
+      None => ()
+    }
+    if op.resource == "ui.button" || op.resource == "ui.button_focus" {
+      start_y = op.y
+    }
+  }
+  assert_true(found_title)
+  // Start button is below the title line (~64px).
+  assert_true(start_y >= 360.0 + 56.0 && start_y <= 360.0 + 64.0)
+}
