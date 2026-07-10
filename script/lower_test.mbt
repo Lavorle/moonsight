@@ -49,6 +49,44 @@ test "lower flow.choice to Choose op" {
 }
 
 ///|
+test "lower flow.jump_if equality to JumpIfNot plus flow.jump" {
+  let src =
+    #|- scene "s"
+    #|@flow.jump_if act 0 "talk"
+    #|@flow.jump "leave"
+    #|
+  let ir = @script.compile_to_ir(src, file="jif.yuki")
+  let ops = ir.scenes["s"].ops
+  // var.eq tmp, JumpIfNot, flow.jump talk, Label, flow.jump leave, Return
+  guard ops[0] is Host(name="var.eq", args=eq_args) else { fail("var.eq") }
+  assert_eq(eq_args.length(), 3)
+  guard eq_args[1] is Var("act") else { fail("lhs act") }
+  guard eq_args[2] is Int(0) else { fail("rhs 0") }
+  guard ops[1] is JumpIfNot(cond~, ..) else { fail("JumpIfNot") }
+  guard cond is Var(_) else { fail("cond var") }
+  guard ops[2] is Host(name="flow.jump", args=jargs) else { fail("jump talk") }
+  guard jargs is [Str("talk")] else { fail("talk scene") }
+  guard ops[3] is Label(_) else { fail("Label") }
+  guard ops[4] is Host(name="flow.jump", args=j2) else { fail("jump leave") }
+  guard j2 is [Str("leave")] else { fail("leave") }
+}
+
+///|
+test "lower flow.jump_if_not truthy form" {
+  let src =
+    #|- scene "s"
+    #|@flow.jump_if_not flag "other"
+    #|
+  let ir = @script.compile_to_ir(src, file="jifn.yuki")
+  let ops = ir.scenes["s"].ops
+  guard ops[0] is JumpIf(cond~, ..) else { fail("JumpIf") }
+  guard cond is Var("flag") else { fail("flag") }
+  guard ops[1] is Host(name="flow.jump", args~) else { fail("flow.jump") }
+  guard args is [Str("other")] else { fail("other") }
+  guard ops[2] is Label(_) else { fail("Label") }
+}
+
+///|
 test "lower dialogue with inline command" {
   // wait is not a builtin; file extern required
   // Inline markup is `[cmd args]` (Yukimi-style brackets).

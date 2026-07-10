@@ -24,8 +24,9 @@ fn pick_entry(scenes : Array[SceneDecl]) -> String {
 ///|
 fn lower_scene(scene : SceneDecl) -> IrScene {
   let ops : Array[IrOp] = []
+  let label_id : Ref[Int] = Ref(0)
   for item in scene.items {
-    lower_stmt(item, ops)
+    lower_stmt(item, ops, label_id)
   }
   // Ensure scenes always end cleanly for the VM.
   match ops {
@@ -36,15 +37,99 @@ fn lower_scene(scene : SceneDecl) -> IrScene {
 }
 
 ///|
-fn lower_stmt(stmt : Stmt, ops : Array[IrOp]) -> Unit {
+fn lower_stmt(stmt : Stmt, ops : Array[IrOp], label_id : Ref[Int]) -> Unit {
   match stmt {
     Command(cmd~, args~, ..) =>
       if cmd == "flow.choice" {
         lower_choice(args, ops)
+      } else if cmd == "flow.jump_if" {
+        lower_jump_if(args, ops, label_id, invert=false)
+      } else if cmd == "flow.jump_if_not" {
+        lower_jump_if(args, ops, label_id, invert=true)
       } else {
         ops.push(Host(name=cmd, args=lower_args(args)))
       }
     Dialogue(speaker~, text~, ..) => lower_dialogue(speaker, text, ops)
+  }
+}
+
+///|
+fn next_label(label_id : Ref[Int]) -> Int {
+  let id = label_id.val
+  label_id.val = id + 1
+  id
+}
+
+///|
+/// Lower `@flow.jump_if` / `@flow.jump_if_not` to `JumpIf`/`JumpIfNot` + scene jump.
+///
+/// Forms:
+/// - `@flow.jump_if <cond> "scene"` — jump when `cond` is truthy
+/// - `@flow.jump_if <lhs> <rhs> "scene"` — jump when `lhs == rhs` (via temp + `var.eq`)
+/// - `@flow.jump_if_not …` — inverted condition
+fn lower_jump_if(
+  args : Array[Arg],
+  ops : Array[IrOp],
+  label_id : Ref[Int],
+  invert~ : Bool,
+) -> Unit {
+  // Parser treats `name value` as Named(name, value). Flatten to:
+  //   Named(n, e) → Var(n), lower(e)   so `act 0 "talk"` → act, 0, "talk"
+  //   Positional(e) → lower(e)
+  let pos : Array[IrValue] = []
+  for a in args {
+    match a {
+      Named(name~, e) => {
+        pos.push(Var(name))
+        pos.push(lower_expr(e))
+      }
+      Positional(e) => pos.push(lower_expr(e))
+      Flag(_) => ()
+    }
+  }
+  match pos {
+    [cond, scene_v] => {
+      let scene = scene_name_from_value(scene_v)
+      let skip = next_label(label_id)
+      if invert {
+        // jump_if_not: scene jump when cond is falsey
+        ops.push(JumpIf(cond~, label=skip))
+      } else {
+        ops.push(JumpIfNot(cond~, label=skip))
+      }
+      ops.push(Host(name="flow.jump", args=[Str(scene)]))
+      ops.push(Label(skip))
+    }
+    [lhs, rhs, scene_v] => {
+      let scene = scene_name_from_value(scene_v)
+      let skip = next_label(label_id)
+      let tmp = "__eq_\{skip}"
+      ops.push(Host(name="var.eq", args=[Str(tmp), lhs, rhs]))
+      if invert {
+        ops.push(JumpIf(cond=Var(tmp), label=skip))
+      } else {
+        ops.push(JumpIfNot(cond=Var(tmp), label=skip))
+      }
+      ops.push(Host(name="flow.jump", args=[Str(scene)]))
+      ops.push(Label(skip))
+    }
+    _ =>
+      // Malformed args: leave a host call so the runtime can soft-error.
+      ops.push(
+        Host(
+          name=if invert { "flow.jump_if_not" } else { "flow.jump_if" },
+          args=pos,
+        ),
+      )
+  }
+}
+
+///|
+/// Scene name from a lowered positional (string literal or bare ident → Var).
+fn scene_name_from_value(v : IrValue) -> String {
+  match v {
+    Str(s) | Var(s) => s
+    _ => "_"
   }
 }
 

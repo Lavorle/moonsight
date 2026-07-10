@@ -53,6 +53,7 @@ pub fn dispatch_builtin(
     "layer.hide" => builtin_layer_hide(stage, args)
     "layer.move" => builtin_layer_move(stage, args)
     "var.set" => builtin_var_set(stage, args)
+    "var.eq" => builtin_var_eq(stage, args)
     _ => Error("unknown host op: \{op}")
   }
 }
@@ -102,10 +103,26 @@ fn builtin_text_type(stage : Stage, args : Array[Value]) -> HostResult {
 }
 
 ///|
+/// `text.end` — finish authoring the dialogue block without forcing typewriter complete.
+///
+/// Leaves `complete=false` so the engine can reveal characters via
+/// `tick_typewriter` and Advance complete-first.
 fn builtin_text_end(stage : Stage, args : Array[Value]) -> HostResult {
+  ignore(stage)
   ignore(args)
-  stage.complete_text()
   Ok
+}
+
+///|
+/// `var.eq dest lhs rhs` — set `dest` to `Bool(lhs == rhs)` (used by JumpIf lower).
+fn builtin_var_eq(stage : Stage, args : Array[Value]) -> HostResult {
+  match args {
+    [Str(dest), lhs, rhs, ..] => {
+      stage.set_var(dest, Bool(lhs == rhs))
+      Ok
+    }
+    _ => Error("var.eq: expected dest Str, lhs, rhs")
+  }
 }
 
 ///|

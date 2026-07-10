@@ -2,3 +2,7 @@ import {
   "moonsight/moonsight/script",
   "moonbitlang/core/json",
 }
+
+import {
+  "moonsight/moonsight/std_commands",
+} for "test"

@@ -14,6 +14,10 @@ pub fn cmd_flow_choice(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostRe
 
 pub fn cmd_flow_jump(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
 
+pub fn cmd_flow_jump_if(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_flow_jump_if_not(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
 pub fn cmd_flow_wait(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
 
 pub fn cmd_flow_yield(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult

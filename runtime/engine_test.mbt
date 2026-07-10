@@ -93,10 +93,94 @@ test "toggle auto synthesizes advance on yield" {
   eng.tick(None_)
   guard eng.stage.text is Some(t0) else { fail("first") }
   assert_eq(t0.full_text, "Hi")
+  // Complete typewriter (text.end no longer force-completes).
+  eng.tick(Advance)
+  guard eng.stage.text is Some(t_done) else { fail("complete") }
+  assert_true(t_done.complete)
   eng.tick(ToggleAuto)
   assert_true(eng.auto)
-  // auto + None_ while Yield → Advance (text already complete → next line)
+  // auto + None_ while Yield → Advance to next line
   eng.tick(None_)
   guard eng.stage.text is Some(t1) else { fail("second") }
   assert_eq(t1.full_text, "There")
+}
+
+///|
+test "typewriter reveals chars over ticks without complete_on_end" {
+  let src =
+    #|- scene "s"
+    #|y:Hello
+    #|
+  let ir = @script.compile_to_ir(src, file="tw.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  // dt=0: run to Yield but do not reveal
+  eng.tick(None_, dt=0.0)
+  guard eng.stage.text is Some(t0) else { fail("text") }
+  assert_eq(t0.full_text, "Hello")
+  assert_true(!t0.complete)
+  assert_eq(t0.visible_chars, 0)
+  // One frame at 1/40s → ~1 char (engine floors to at least 1 when dt>0)
+  eng.tick(None_, dt=0.025)
+  guard eng.stage.text is Some(t1) else { fail("tick1") }
+  assert_true(t1.visible_chars >= 1)
+  assert_true(t1.visible_chars < t1.full_text.length() || t1.complete)
+  // Enough ticks to finish
+  for _ in 0..<20 {
+    eng.tick(None_, dt=0.05)
+  }
+  guard eng.stage.text is Some(t2) else { fail("done") }
+  assert_true(t2.complete)
+  assert_eq(t2.visible_chars, t2.full_text.length())
+}
+
+///|
+test "jump_if branches Talk vs Leave to different scenes" {
+  let src =
+    #|- scene "s"
+    #|@flow.choice "Talk" "Leave" --result act
+    #|@flow.jump_if act 0 "talk"
+    #|@flow.jump "leave"
+    #|- scene "talk"
+    #|@var.set "path" 1
+    #|- scene "leave"
+    #|@var.set "path" 2
+    #|
+  let ir = @script.compile_to_ir(src, file="branch.yuki")
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng.tick(None_)
+  eng.tick(Select(0))
+  assert_eq(eng.vm.scene, "talk")
+  assert_true(eng.stage.get_var("path") == Int(1))
+
+  let eng2 = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng2.tick(None_)
+  eng2.tick(Select(1))
+  assert_eq(eng2.vm.scene, "leave")
+  assert_true(eng2.stage.get_var("path") == Int(2))
+}
+
+///|
+test "missing scene sets last_error and halts" {
+  let src =
+    #|- scene "s"
+    #|@flow.jump "nope"
+    #|
+  let ir = @script.compile_to_ir(src, file="miss.yuki")
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng.tick(None_)
+  assert_true(eng.vm.wait == Halted)
+  guard eng.vm.last_error is Some(msg) else { fail("last_error") }
+  assert_true(msg.contains("nope"))
 }

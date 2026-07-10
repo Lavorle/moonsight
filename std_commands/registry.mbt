@@ -2,9 +2,9 @@
 /// Standard VN host command names (must match `script.builtin_externs`).
 pub fn standard_host_names() -> Array[String] {
   [
-    "audio.bgm", "audio.se", "flow.choice", "flow.jump", "flow.wait", "flow.yield",
-    "layer.hide", "layer.move", "layer.show", "sys.save_hint", "text.begin", "text.end",
-    "text.type", "trans.fade", "var.set",
+    "audio.bgm", "audio.se", "flow.choice", "flow.jump", "flow.jump_if", "flow.jump_if_not",
+    "flow.wait", "flow.yield", "layer.hide", "layer.move", "layer.show", "sys.save_hint",
+    "text.begin", "text.end", "text.type", "trans.fade", "var.set",
   ]
 }
 
@@ -21,6 +21,8 @@ pub fn standard_registry() -> @runtime.Director {
   dir.register_fn("layer.hide", cmd_layer_hide)
   dir.register_fn("layer.move", cmd_layer_move)
   dir.register_fn("flow.jump", cmd_flow_jump)
+  dir.register_fn("flow.jump_if", cmd_flow_jump_if)
+  dir.register_fn("flow.jump_if_not", cmd_flow_jump_if_not)
   dir.register_fn("flow.wait", cmd_flow_wait)
   dir.register_fn("flow.yield", cmd_flow_yield)
   dir.register_fn("flow.choice", cmd_flow_choice)

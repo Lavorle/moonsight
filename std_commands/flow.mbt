@@ -60,3 +60,33 @@ pub fn cmd_flow_choice(
   // Host-level choice pauses the interpreter; full Choose wait is IR Choose.
   Yield
 }
+
+///|
+/// Runtime fallback for `@flow.jump_if` (normally lowered to `JumpIf` + `flow.jump`).
+///
+/// Forms: `[cond, scene]` (truthy) or `[lhs, rhs, scene]` (equality).
+pub fn cmd_flow_jump_if(
+  stage : @runtime.Stage,
+  args : Array[@runtime.Value],
+) -> @runtime.HostResult {
+  ignore(stage)
+  match args {
+    [lhs, rhs, Str(scene), ..] => if lhs == rhs { JumpScene(scene) } else { Ok }
+    [cond, Str(scene), ..] => if cond.truthy() { JumpScene(scene) } else { Ok }
+    _ => Error("flow.jump_if: expected cond [value] scene Str")
+  }
+}
+
+///|
+/// Runtime fallback for `@flow.jump_if_not` (normally lowered to `JumpIfNot` + `flow.jump`).
+pub fn cmd_flow_jump_if_not(
+  stage : @runtime.Stage,
+  args : Array[@runtime.Value],
+) -> @runtime.HostResult {
+  ignore(stage)
+  match args {
+    [lhs, rhs, Str(scene), ..] => if lhs == rhs { Ok } else { JumpScene(scene) }
+    [cond, Str(scene), ..] => if cond.truthy() { Ok } else { JumpScene(scene) }
+    _ => Error("flow.jump_if_not: expected cond [value] scene Str")
+  }
+}

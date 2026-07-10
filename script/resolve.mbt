@@ -25,6 +25,8 @@ pub fn builtin_externs() -> Array[ExternDecl] {
     stub_extern("text.type", span~, params=[param("text")]),
     stub_extern("text.end", span~, params=[]),
     stub_extern("flow.jump", span~, params=[param("scene")]),
+    stub_extern("flow.jump_if", span~, params=[]),
+    stub_extern("flow.jump_if_not", span~, params=[]),
     stub_extern("flow.yield", span~, params=[]),
     stub_extern("flow.choice", span~, params=[]),
     stub_extern("flow.wait", span~, params=[param("time")]),
