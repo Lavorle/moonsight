@@ -1,10 +1,21 @@
 ///|
+/// Staging sibling used while assembling a dist. Promoted to `out_dir` only
+/// after the full build succeeds (spec §4.6 — no partial playable out_dir).
+fn build_staging_dir(out_dir : String) -> String {
+  out_dir + ".tmp-moonsight-build"
+}
+
+///|
 /// Build a project directory into `out_dir`:
 /// 1. Read moonsight.json
 /// 2. Compile all `.yuki` → `game.msb`
 /// 3. Copy assets + write manifest.json
 /// 4. Copy host wasm + js_glue
+///
+/// Writes go to a staging directory first; `out_dir` is replaced only on full
+/// success. On failure, staging is deleted and any prior `out_dir` is left intact.
 fn cmd_build(project_dir : String, out_dir : String) -> Int {
+  let staging = build_staging_dir(out_dir)
   try {
     guard path_exists(project_dir) else {
       println("error: project dir not found: \{project_dir}")
@@ -27,15 +38,18 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     let ir = compile_yuki_paths(yuki[:], entry_file=entry_path)
     let bytecode = @script.encode_module(ir)
 
-    ensure_dir(out_dir)
-    let msb_path = join_path(out_dir, "game.msb")
+    // Drop leftover staging from a previous interrupted build.
+    remove_tree_best_effort(staging)
+    ensure_dir(staging)
+
+    let msb_path = join_path(staging, "game.msb")
     write_bytes_to_file(msb_path, bytecode)
     println("wrote \{msb_path} (\{bytecode.length()} bytes, entry=\{ir.entry})")
 
     // Host runtime first (may include a placeholder manifest.json).
     match find_js_glue() {
       Some(glue) => {
-        copy_js_glue(glue, out_dir)
+        copy_js_glue(glue, staging)
         println("copied js_glue from \{glue}")
       }
       None =>
@@ -49,7 +63,7 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     let audio : Map[String, String] = {}
     let assets_src = join_path(project_dir, "assets")
     if path_exists(assets_src) && is_dir(assets_src) {
-      let assets_dst = join_path(out_dir, "assets")
+      let assets_dst = join_path(staging, "assets")
       copy_dir(assets_src, assets_dst)
       collect_asset_manifest(assets_src, "assets", resources, audio)
       println("copied assets → \{assets_dst}")
@@ -57,25 +71,38 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
 
     // Fail build when scripts reference string-literal resources not on disk.
     if !validate_literal_resources(ir, resources, audio) {
+      remove_tree_best_effort(staging)
       return 1
     }
 
     let manifest = build_manifest_json(cfg, resources, audio)
-    let manifest_path = join_path(out_dir, "manifest.json")
+    let manifest_path = join_path(staging, "manifest.json")
     write_string_to_file(manifest_path, manifest)
     println("wrote \{manifest_path}")
 
     // Also ship entry source as demo.yuki so current host_web can load it
     // (MSB binary load not yet wired in host — see Task 12 concerns).
     if path_exists(entry_path) && is_file(entry_path) {
-      copy_file(entry_path, join_path(out_dir, "demo.yuki"))
-      println("copied entry → \{join_path(out_dir, "demo.yuki")}")
+      copy_file(entry_path, join_path(staging, "demo.yuki"))
+      println("copied entry → \{join_path(staging, "demo.yuki")}")
     }
+
+    // Promote staging → out_dir only after full success.
+    if path_exists(out_dir) {
+      remove_tree(out_dir)
+    } else {
+      let parent = dirname(out_dir)
+      if parent != out_dir && parent != "" && parent != "." {
+        ensure_dir(parent)
+      }
+    }
+    rename_path(staging, out_dir)
 
     println("build ok: \{cfg.name} → \{out_dir}")
     0
   } catch {
     IoError(msg) => {
+      remove_tree_best_effort(staging)
       println("error: \{msg}")
       1
     }

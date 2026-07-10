@@ -61,6 +61,18 @@ extern "C" fn create_dir_ffi(path : Bytes) -> Int = "moonbit_create_dir_ffi"
 
 ///|
 #borrow(path)
+extern "C" fn remove_dir_ffi(path : Bytes) -> Int = "moonbit_remove_dir_ffi"
+
+///|
+#borrow(path)
+extern "C" fn remove_file_ffi(path : Bytes) -> Int = "moonbit_remove_file_ffi"
+
+///|
+#borrow(old, new_)
+extern "C" fn rename_ffi(old : Bytes, new_ : Bytes) -> Int = "rename"
+
+///|
+#borrow(path)
 extern "C" fn read_dir_ffi(path : Bytes) -> FileHandle = "moonbit_read_dir_ffi"
 
 ///|
@@ -143,6 +155,55 @@ fn write_string_to_file(path : String, content : String) -> Unit raise IoError {
 ///|
 fn create_dir(path : String) -> Unit raise IoError {
   guard create_dir_ffi(c_path(path)) == 0 else {
+    raise IoError(last_io_error())
+  }
+}
+
+///|
+fn remove_file(path : String) -> Unit raise IoError {
+  guard remove_file_ffi(c_path(path)) == 0 else {
+    raise IoError(last_io_error())
+  }
+}
+
+///|
+/// Remove an empty directory (`rmdir`).
+fn remove_dir(path : String) -> Unit raise IoError {
+  guard remove_dir_ffi(c_path(path)) == 0 else {
+    raise IoError(last_io_error())
+  }
+}
+
+///|
+/// Recursively remove a file or directory tree.
+fn remove_tree(path : String) -> Unit raise IoError {
+  if !path_exists(path) {
+    return
+  }
+  if is_dir(path) {
+    for name in read_dir(path) {
+      remove_tree(join_path(path, name))
+    }
+    remove_dir(path)
+  } else {
+    remove_file(path)
+  }
+}
+
+///|
+/// Best-effort recursive remove (swallows I/O errors).
+fn remove_tree_best_effort(path : String) -> Unit {
+  try {
+    remove_tree(path)
+  } catch {
+    IoError(_) => ()
+  }
+}
+
+///|
+/// Rename/move `old` to `new_` (libc `rename`).
+fn rename_path(old : String, new_ : String) -> Unit raise IoError {
+  guard rename_ffi(c_path(old), c_path(new_)) == 0 else {
     raise IoError(last_io_error())
   }
 }
