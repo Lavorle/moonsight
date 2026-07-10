@@ -665,8 +665,18 @@ function bindInput(canvas) {
 
 function doSave() {
   if (!exports_) return;
-  const json = exports_.save_json(saveSlot);
+  let json = exports_.save_json(saveSlot);
   if (json && json.length) {
+    // Runtime leaves saved_at empty (no wall-clock FFI); stamp ISO time here.
+    try {
+      const obj = JSON.parse(json);
+      if (!obj.saved_at) {
+        obj.saved_at = new Date().toISOString();
+        json = JSON.stringify(obj);
+      }
+    } catch (_) {
+      /* keep raw json */
+    }
     localStorage.setItem(SAVE_KEY(saveSlot), json);
     if (typeof exports_.set_slot_json === "function") {
       exports_.set_slot_json(saveSlot, json);

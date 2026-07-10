@@ -200,12 +200,13 @@ pub fn build_draw_list_with_atlas(
     }
   }
 
-  // Active screen stack (top only): dim under Menu + widget tree.
+  // Active screen stack (top only): dim under Menu / nested Title modals + widgets.
   match screens {
     None => ()
     Some(ss) => {
       if !ss.stack.is_empty() {
-        if ss.mode is @runtime.UiMode::Menu {
+        // Root Title alone stays undimmed; nested Title modals and any Menu dim.
+        if (ss.mode is @runtime.UiMode::Menu) || ss.stack.length() > 1 {
           sprites.push({
             resource: ui_menu_dim,
             x: 0.0,

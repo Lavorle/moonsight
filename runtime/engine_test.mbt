@@ -307,6 +307,44 @@ fn title_start_def() -> @script.ScreenDef {
 }
 
 ///|
+fn title_with_settings_def() -> @script.ScreenDef {
+  {
+    name: "title",
+    root: @script.SNode::VBox(
+      x=None,
+      y=None,
+      children=[
+        @script.SNode::Button(
+          label="Start",
+          action=@script.ScreenAction::StartGame,
+        ),
+        @script.SNode::Button(
+          label="Settings",
+          action=@script.ScreenAction::ShowScreen(name="settings", mode=None),
+        ),
+      ],
+    ),
+  }
+}
+
+///|
+fn settings_back_def() -> @script.ScreenDef {
+  {
+    name: "settings",
+    root: @script.SNode::VBox(
+      x=None,
+      y=None,
+      children=[
+        @script.SNode::Button(
+          label="Back",
+          action=@script.ScreenAction::Return,
+        ),
+      ],
+    ),
+  }
+}
+
+///|
 test "open menu freezes vm ip until continue" {
   let src =
     #|- scene "s"
@@ -429,4 +467,74 @@ test "ui.show host command opens menu and freezes ip" {
   // After menu, still at Yield from ui.show; Advance resumes past it.
   eng.tick(Advance)
   assert_true(eng.stage.get_var("after") == Int(1))
+}
+
+///|
+/// Esc on nested Title modal (e.g. title → settings) pops one layer; root Title ignores Esc.
+test "OpenMenu pops nested Title settings back to title" {
+  let src =
+    #|- scene "s"
+    #|@var.set "started" true
+    #|
+  let ir = @script.compile_to_ir(src, file="title_esc.yuki")
+  let defs : Map[String, @script.ScreenDef] = {
+    "title": title_with_settings_def(),
+    "settings": settings_back_def(),
+  }
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+    screen_defs=defs,
+  )
+  eng.boot_title()
+  assert_true(eng.screens.mode is Title)
+  assert_eq(eng.screens.stack.length(), 1)
+  assert_eq(eng.screens.stack[0].name, "title")
+  // Root Title: Esc is ignored.
+  eng.tick(OpenMenu)
+  assert_eq(eng.screens.stack.length(), 1)
+  assert_eq(eng.screens.stack[0].name, "title")
+  assert_true(eng.screens.mode is Title)
+  // Focus Settings (index 1) and open it.
+  eng.tick(MenuDown)
+  eng.tick(Advance)
+  assert_eq(eng.screens.stack.length(), 2)
+  assert_eq(eng.screens.stack[1].name, "settings")
+  assert_true(eng.screens.mode is Title)
+  // Esc pops settings → back to [title].
+  eng.tick(OpenMenu)
+  assert_eq(eng.screens.stack.length(), 1)
+  assert_eq(eng.screens.stack[0].name, "title")
+  assert_true(eng.screens.mode is Title)
+}
+
+///|
+/// Successful load clears residual modal stack and forces Playing.
+test "load clears screen stack to Playing" {
+  let src =
+    #|- scene "s"
+    #|y:Hello
+    #|
+  let ir = @script.compile_to_ir(src, file="load_clear.yuki")
+  let defs : Map[String, @script.ScreenDef] = {
+    "title": title_start_def(),
+    "game_menu": game_menu_continue_def(),
+  }
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+    screen_defs=defs,
+  )
+  eng.tick(None_, dt=0.0)
+  let blob = eng.save()
+  // Leave residual UI open (title + menu would both clear).
+  eng.boot_title()
+  eng.screens.show("game_menu")
+  assert_true(eng.screens.stack.length() >= 1)
+  assert_true(!(eng.screens.mode is Playing))
+  eng.load(blob)
+  assert_eq(eng.screens.stack.length(), 0)
+  assert_true(eng.screens.mode is Playing)
 }

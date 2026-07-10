@@ -176,6 +176,8 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
 /// wait, choices, and v3 fade/wait remaining fields.
 pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
   apply_save_game(self, parse_save_game(blob))
+  // Spec: load returns to narrative play with no residual modal stack.
+  self.clear_screens_to_playing()
 }
 
 ///|

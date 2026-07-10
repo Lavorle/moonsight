@@ -346,3 +346,30 @@ test "title mode skips dialogue without dim" {
   assert_true(!has_dialogue)
   assert_true(buttons >= 2)
 }
+
+///|
+test "nested title modal dims" {
+  let st = @runtime.Stage::new()
+  let view = @runtime.StageView::from_stage(
+    st,
+    wait=@runtime.WaitKind::Running,
+    auto=false,
+  )
+  let defs : Map[String, @script.ScreenDef] = {
+    "title_like": two_button_def(),
+    "nested": two_button_def(),
+  }
+  let ss = @runtime.ScreenState::new(defs)
+  ss.show("title_like")
+  ss.show("nested")
+  assert_true(ss.mode is @runtime.UiMode::Title)
+  assert_eq(ss.stack.length(), 2)
+  let dl = build_draw_list(view, UiLayout::default_fhd(), screens=ss)
+  let mut has_dim = false
+  for s in dl.sprites {
+    if s.resource == ui_menu_dim {
+      has_dim = true
+    }
+  }
+  assert_true(has_dim)
+}

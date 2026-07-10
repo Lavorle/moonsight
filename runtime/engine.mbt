@@ -145,10 +145,17 @@ impl ScreenHost for Engine with fn load_slot(self, i) {
       self.load(blob) catch {
         _ => return
       }
-      self.screens.stack = []
-      self.screens.mode = Playing
+      // Engine::load already clears screens to Playing; keep explicit for clarity.
+      self.clear_screens_to_playing()
     }
   }
+}
+
+///|
+/// Drop all modal screens and force `Playing` (used after a successful load).
+pub fn Engine::clear_screens_to_playing(self : Engine) -> Unit {
+  self.screens.stack = []
+  self.screens.mode = Playing
 }
 
 ///|
@@ -306,8 +313,8 @@ fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
   let host : &ScreenHost = self
   match intent {
     OpenMenu =>
-      // Esc while modal: pop one level. Title ignores OpenMenu.
-      if self.screens.mode is Title {
+      // Esc while modal: pop one level. Root Title only ignores Esc.
+      if self.screens.mode is Title && self.screens.stack.length() <= 1 {
         ()
       } else if self.screens.stack.length() > 0 {
         self.screens.return_()
