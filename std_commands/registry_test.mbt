@@ -19,6 +19,16 @@ test "layer.show and trans.fade mutate stage" {
 }
 
 ///|
+test "layer.show single-arg empty resource" {
+  let stage = @runtime.Stage::new()
+  let reg = @std_commands.standard_registry()
+  assert_true(reg.call("layer.show", stage, [Str("solo")]) == Ok)
+  assert_eq(stage.layers[0].id, "solo")
+  assert_eq(stage.layers[0].resource, "")
+  assert_true(stage.layers[0].kind == @runtime.LayerKind::Character)
+}
+
+///|
 test "layer.show respects kind and duration opacity" {
   let reg = @std_commands.standard_registry()
   let stage = @runtime.Stage::new()

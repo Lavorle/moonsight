@@ -163,15 +163,36 @@ fn load_scene_ops(ir : @script.IrModule, name : String) -> Array[@script.IrOp]? 
 }
 
 ///|
+/// Resolve host-call arguments only.
+/// Unbound identifiers become string keywords (`kind=background` → Str("background"))
+/// so bare named keywords work; bound vars still pass their runtime value.
 fn resolve_args(args : Array[@script.IrValue], stage : Stage) -> Array[Value] {
   let out : Array[Value] = []
   for v in args {
-    out.push(resolve_ir_value(v, stage))
+    out.push(resolve_host_arg(v, stage))
   }
   out
 }
 
 ///|
+/// Host-arg resolution: unbound `Var` → `Str(name)` keyword; bound → actual value.
+fn resolve_host_arg(v : @script.IrValue, stage : Stage) -> Value {
+  match v {
+    Int(n) => Int(n)
+    Float(f) => Float(f)
+    Bool(b) => Bool(b)
+    Str(s) => Str(s)
+    Var(name) =>
+      match stage.vars.get(name) {
+        Some(val) => val
+        None => Str(name)
+      }
+    None_ => None_
+  }
+}
+
+///|
+/// Condition/value resolution for JumpIf etc.: unbound vars → `None_`.
 fn resolve_ir_value(v : @script.IrValue, stage : Stage) -> Value {
   match v {
     Int(n) => Int(n)

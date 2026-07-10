@@ -78,10 +78,12 @@ pub fn cmd_layer_show(
     [Str(s), ..] => s
     _ => return Error("layer.show: expected id Str and resource Str")
   }
+  // Two-arg+: resource is Str at pos[1]. Single-arg form: empty resource.
+  // Note: `[_, ..]` would also match `[Str(id)]`, so single-arg must be first.
   let resource = match pos {
     [_, Str(s), ..] => s
+    [_] => ""
     [_, ..] => return Error("layer.show: expected id Str and resource Str")
-    // Single-arg form: empty resource.
     _ => ""
   }
 

@@ -189,6 +189,23 @@ test "missing scene sets last_error and halts" {
 }
 
 ///|
+test "layer.show bare kind keyword via script" {
+  let src =
+    #|- scene "s"
+    #|@layer.show "bg" "bg_room" kind=background
+    #|
+  let ir = @script.compile_to_ir(src, file="kind.yuki")
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng.tick(None_, dt=0.0)
+  assert_eq(eng.stage.layers.length(), 1)
+  assert_true(eng.stage.layers[0].kind == Background)
+}
+
+///|
 test "flow.wait duration resumes after real time" {
   let src =
     #|- scene "s"
