@@ -15,6 +15,7 @@
 
 import * as Gpu from "./webgpu_bridge.js";
 import * as Slug from "./slug/index.js";
+import * as SlugGpu from "./slug/slug_gpu.js";
 
 const PACK_HEADER = 4;
 const SPRITE_STRIDE = 7;
@@ -559,26 +560,37 @@ export async function boot(options = {}) {
     bindInput(canvas);
 
     const params = new URLSearchParams(location.search);
-    // Load Noto so canvas fillText matches layout metrics (Noto advances table).
-    // Slug-style outline stamp is opt-in: ?outline=1
+    // Font + Slug GPU (https://github.com/diffusionstudio/slug-webgpu).
+    // Modes: ?glyph=slug (default) | canvas | cpu-outline
     const fontUrl =
       options.fontUrl || params.get("font") || "./fonts/NotoSans-Regular.ttf";
+    const glyphMode = options.glyphMode || params.get("glyph") || "slug";
     try {
       setStatus("load font…");
+      const fontRes = await fetch(fontUrl);
+      if (!fontRes.ok) throw new Error(`font HTTP ${fontRes.status}`);
+      const fontBuf = await fontRes.arrayBuffer();
+
       if (typeof FontFace !== "undefined") {
-        const face = new FontFace("Noto Sans", `url(${fontUrl})`);
+        const face = new FontFace("Noto Sans", fontBuf.slice(0));
         await face.load();
         document.fonts.add(face);
         await document.fonts.ready;
       }
-      await Slug.loadFont(fontUrl);
+
+      const dev = Gpu.getDevice();
+      if (dev) {
+        await SlugGpu.initSlugGpu(dev, "rgba8unorm");
+        SlugGpu.loadFontBuffer(fontBuf);
+        Gpu.setSlugGpu(SlugGpu);
+      }
+      await Slug.loadFont(fontUrl).catch(() => {});
       Gpu.setOutlineRasterizer(Slug);
-      const wantOutline =
-        options.outline === true || params.get("outline") === "1";
-      Gpu.setPreferOutlineRaster(wantOutline);
-      setStatus(wantOutline ? "font ready (outline)" : "font ready");
-    } catch (fe) {
-      console.warn("font load failed; using system sans", fe);
+      Gpu.setGlyphRasterMode(glyphMode);
+      setStatus(`font ready (${glyphMode})`);
+    } catch (e) {
+      console.warn("font/slug init failed; canvas glyphs", e);
+      Gpu.setGlyphRasterMode("canvas");
     }
 
     const wasmUrl =

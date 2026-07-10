@@ -1,40 +1,52 @@
-# Outline text (Slug-inspired)
+# Outline text (Slug / WebGPU)
 
-MoonSight Phase 1 stamps glyphs into a shared atlas, then draws textured
-quads. The host no longer relies on `canvas.fillText` alone for the demo
-font path.
+MoonSight stamps dialogue glyphs into a shared atlas, then draws textured
+quads. Glyph **stamping** can use three modes (query `?glyph=`):
 
-## Pipeline
+| Mode | Description |
+|------|-------------|
+| **`slug`** (default) | GPU Slug algorithm — banded quadratic Béziers in WGSL |
+| `canvas` | Canvas2D `fillText` (reliable fallback) |
+| `cpu-outline` | CPU multi-sample winding (experimental) |
 
-1. **MoonBit** (`render`) lays out dialogue / choices with proportional
-   advances (`approximate_measure`) and shelf-packs **rectangular** atlas
-   cells (`advance+pad` × `font_size`).
-2. **JS host** loads `fonts/NotoSans-Regular.ttf`, parses TrueType `glyf`
-   outlines, and rasterizes each pending glyph with a multi-sample
-   **winding / coverage** pass over quadratic Béziers.
-3. Coverage is uploaded into the atlas; draw-list UVs sample those cells.
-   Screen size is the layout advance × font size (not the shelf cell).
+## Slug GPU path
 
-## Slug algorithm credit
+Based on:
 
-The outline coverage approach is inspired by the **Slug** algorithm by
-Eric Lengyel:
+1. **Eric Lengyel** — Slug algorithm ([paper](https://jcgt.org/published/0006/02/02/),
+   [reference HLSL](https://github.com/EricLengyel/Slug), patent public domain)
+2. **diffusionstudio/slug-webgpu** — WebGPU/WGSL port and band packing
+   ([github.com/diffusionstudio/slug-webgpu](https://github.com/diffusionstudio/slug-webgpu), MIT)
 
-- Paper: [GPU-Centered Font Rendering Directly from Glyph Outlines](https://jcgt.org/published/0006/02/02/)
-- Reference shaders (MIT / Apache-2.0): [github.com/EricLengyel/Slug](https://github.com/EricLengyel/Slug)
-- Local copy: `third_party/slug/` (+ `NOTICE`)
+### Host files
 
-Phase 1 uses a **CPU** winding raster for atlas stamps (simpler FFI than a
-full band-texture GPU path). A future revision can port the reference
-pixel shader to WGSL and evaluate curves directly on the GPU.
+```
+host_web/js_glue/slug/
+  SlugVertexShader.wgsl   # from slug-webgpu
+  SlugPixelShader.wgsl    # from slug-webgpu
+  slug_pack.js            # curves + bands (adapted from slug-webgpu/src/slug.ts)
+  slug_gpu.js             # pipeline + stamp into atlas sub-rect
+  ttf.js                  # minimal TrueType glyf loader
+  …
+third_party/slug/         # Lengyel reference HLSL + NOTICE
+```
+
+### Pipeline
+
+1. MoonBit lays out runs with **Noto advance metrics** (`noto_advance_em`) and
+   shelf-packs rectangular atlas cells.
+2. JS loads `fonts/NotoSans-Regular.ttf`.
+3. For each pending glyph, **Slug GPU** renders coverage into the atlas cell
+   (viewport/scissor on the atlas texture).
+4. Existing textured-quad path draws the atlas.
 
 ## Letterboxing
 
-The canvas backbuffer stays **1920×1080**. CSS **letterboxes** to the
-window (uniform scale). Stretching with `width:100vw; height:100vh` made
-glyphs look unnaturally wide on non-16:9 windows.
+Canvas backbuffer is always **1920×1080**; CSS letterboxes the element so
+non-16:9 windows do not stretch glyphs.
 
-## Fallback
+## Credits
 
-If the TTF fails to load, the host falls back to `canvas.fillText` with
-left-aligned placement in the proportional cell.
+- Eric Lengyel — Slug algorithm  
+- Konstantin Paulus / diffusionstudio — slug-webgpu WGSL port  
+- Noto Sans — Google (OFL; font file under `host_web/js_glue/fonts/`)

@@ -387,6 +387,16 @@ export async function init(canvas) {
   return { device, format };
 }
 
+/** @returns {GPUDevice | null} */
+export function getDevice() {
+  return device;
+}
+
+/** @returns {GPUTextureFormat} */
+export function getFormat() {
+  return format;
+}
+
 function writeUniforms() {
   ensureGpu();
   const data = new Float32Array([canvasW, canvasH, 0, 0]);
@@ -712,16 +722,16 @@ export function endFrame() {
 }
 
 /**
- * Rasterize a single glyph into the atlas texture at pixel rect.
- * Phase 1 helper used by boot.js (canvas 2d → rgba upload region).
- * Full atlas re-upload is acceptable for smoke.
- *
- * @param {string} ch
-/**
- * Optional outline rasterizer (`js_glue/slug/`). Set via `setOutlineRasterizer`.
+ * Optional CPU outline rasterizer (`js_glue/slug/index.js`).
  * @type {null | { rasterizeCodepoint: (cp:number,w:number,h:number)=>Uint8ClampedArray|null, hasFont: ()=>boolean }}
  */
 let outlineRaster = null;
+
+/**
+ * GPU Slug stamper (`js_glue/slug/slug_gpu.js`) — preferred when ready.
+ * @type {null | { hasFont: ()=>boolean, stampGlyphToAtlas: Function, initSlugGpu?: Function, loadFontBuffer?: Function }}
+ */
+let slugGpu = null;
 
 /**
  * @param {typeof outlineRaster} mod
@@ -731,19 +741,55 @@ export function setOutlineRasterizer(mod) {
 }
 
 /**
- * Shared offscreen canvas for glyph stamps (fillText is the reliable path).
- * Outline/Slug raster is opt-in via `?outline=1` after setOutlineRasterizer.
+ * @param {typeof slugGpu} mod
  */
+export function setSlugGpu(mod) {
+  slugGpu = mod;
+}
+
 let glyphCanvas = null;
 let glyphCtx = null;
-/** @type {boolean} */
-let preferOutline = false;
+/** "slug" | "cpu-outline" | "canvas" */
+let glyphMode = "canvas";
 
 /**
- * @param {boolean} on
+ * @param {"slug"|"cpu-outline"|"canvas"} mode
  */
-export function setPreferOutlineRaster(on) {
-  preferOutline = !!on;
+export function setGlyphRasterMode(mode) {
+  glyphMode = mode || "canvas";
+}
+
+/**
+ * Write a sub-rect into the atlas GPU texture (256-byte row align).
+ * @param {GPUTexture} texture
+ * @param {number} x
+ * @param {number} y
+ * @param {number} w
+ * @param {number} h
+ * @param {Uint8Array|Uint8ClampedArray} rgba
+ */
+function writeAtlasSubrect(texture, x, y, w, h, rgba) {
+  const align = 256;
+  const bytesPerPixel = 4;
+  const unpadded = w * bytesPerPixel;
+  const bytesPerRow = Math.ceil(unpadded / align) * align;
+  let data = rgba;
+  if (bytesPerRow !== unpadded) {
+    const padded = new Uint8Array(bytesPerRow * h);
+    for (let row = 0; row < h; row++) {
+      padded.set(
+        rgba.subarray(row * unpadded, row * unpadded + unpadded),
+        row * bytesPerRow,
+      );
+    }
+    data = padded;
+  }
+  device.queue.writeTexture(
+    { texture, origin: { x, y, z: 0 } },
+    data,
+    { bytesPerRow, rowsPerImage: h },
+    { width: w, height: h, depthOrArrayLayers: 1 },
+  );
 }
 
 export function rasterizeGlyphToAtlas(
@@ -757,64 +803,76 @@ export function rasterizeGlyphToAtlas(
 ) {
   ensureGpu();
   let entry = textures.get("atlas");
-  if (!entry || entry.width < atlasSize || !entry.cpu) {
+  if (!entry || entry.width < atlasSize) {
     const pixels = new Uint8Array(atlasSize * atlasSize * 4);
     uploadRgbaTexture("atlas", atlasSize, atlasSize, pixels);
     entry = textures.get("atlas");
-    entry.cpu = pixels;
   }
   if (atlasW <= 0 || atlasH <= 0) return;
-
-  /** @type {Uint8ClampedArray} */
-  let src;
   const cp = ch.codePointAt(0) || 0;
-  const useOutline =
-    preferOutline && outlineRaster && outlineRaster.hasFont();
-  if (useOutline) {
-    const pix = outlineRaster.rasterizeCodepoint(cp, atlasW, atlasH);
-    src = pix || new Uint8ClampedArray(atlasW * atlasH * 4);
-  } else {
-    // Reliable path: Canvas fillText with the same Noto face we metric against.
-    if (!glyphCanvas) {
-      glyphCanvas = document.createElement("canvas");
-      glyphCtx = glyphCanvas.getContext("2d", {
-        willReadFrequently: true,
-        alpha: true,
+
+  // Clear cell (transparent) then stamp.
+  const zeros = new Uint8Array(atlasW * atlasH * 4);
+  writeAtlasSubrect(entry.texture, atlasX, atlasY, atlasW, atlasH, zeros);
+
+  // 1) Preferred: GPU Slug (diffusionstudio/slug-webgpu WGSL)
+  if (glyphMode === "slug" && slugGpu && slugGpu.hasFont()) {
+    try {
+      const ok = slugGpu.stampGlyphToAtlas({
+        atlasTexture: entry.texture,
+        codepoint: cp,
+        atlasX,
+        atlasY,
+        atlasW,
+        atlasH,
+        fontSize: size,
       });
+      if (ok) return;
+    } catch (e) {
+      console.warn("slug stamp failed, falling back to canvas", ch, e);
     }
-    if (glyphCanvas.width < atlasW) glyphCanvas.width = atlasW;
-    if (glyphCanvas.height < atlasH) glyphCanvas.height = atlasH;
-    const ctx = glyphCtx;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, atlasW, atlasH);
-    // Pixel size ≈ cell height; slight shrink avoids clipping descenders.
-    const fontPx = Math.max(8, Math.floor(atlasH * 0.82));
-    ctx.font = `${fontPx}px "Noto Sans", "NotoSans", sans-serif`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "#ffffff";
-    // Baseline: place capital height roughly in the upper 70% of the cell.
-    const baseline = Math.floor(atlasH * 0.72);
-    ctx.fillText(ch, 1, baseline);
-    src = ctx.getImageData(0, 0, atlasW, atlasH).data;
   }
 
-  const cpu = entry.cpu;
-  for (let y = 0; y < atlasH; y++) {
-    for (let x = 0; x < atlasW; x++) {
-      const si = (y * atlasW + x) * 4;
-      const di = ((atlasY + y) * entry.width + (atlasX + x)) * 4;
-      cpu[di] = src[si];
-      cpu[di + 1] = src[si + 1];
-      cpu[di + 2] = src[si + 2];
-      cpu[di + 3] = src[si + 3];
-    }
+  // 2) CPU outline (experimental)
+  if (
+    glyphMode === "cpu-outline" &&
+    outlineRaster &&
+    outlineRaster.hasFont()
+  ) {
+    const pix =
+      outlineRaster.rasterizeCodepoint(cp, atlasW, atlasH) ||
+      new Uint8ClampedArray(atlasW * atlasH * 4);
+    writeAtlasSubrect(entry.texture, atlasX, atlasY, atlasW, atlasH, pix);
+    return;
   }
-  device.queue.writeTexture(
-    { texture: entry.texture },
-    cpu,
-    { bytesPerRow: entry.width * 4 },
-    [entry.width, entry.height],
+
+  // 3) Canvas fillText (always works; matches Noto when FontFace loaded)
+  if (!glyphCanvas) {
+    glyphCanvas = document.createElement("canvas");
+    glyphCtx = glyphCanvas.getContext("2d", {
+      willReadFrequently: true,
+      alpha: true,
+    });
+  }
+  if (glyphCanvas.width < atlasW) glyphCanvas.width = atlasW;
+  if (glyphCanvas.height < atlasH) glyphCanvas.height = atlasH;
+  const ctx = glyphCtx;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, atlasW, atlasH);
+  const fontPx = Math.max(8, Math.floor(atlasH * 0.82));
+  ctx.font = `${fontPx}px "Noto Sans", "NotoSans", sans-serif`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(ch, 1, Math.floor(atlasH * 0.72));
+  const img = ctx.getImageData(0, 0, atlasW, atlasH);
+  writeAtlasSubrect(
+    entry.texture,
+    atlasX,
+    atlasY,
+    atlasW,
+    atlasH,
+    img.data,
   );
 }
 
@@ -831,7 +889,10 @@ const api = {
   endFrame,
   rasterizeGlyphToAtlas,
   setOutlineRasterizer,
-  setPreferOutlineRaster,
+  setSlugGpu,
+  setGlyphRasterMode,
+  getDevice,
+  getFormat,
   /** @private test aid */
   _textures: textures,
 };
