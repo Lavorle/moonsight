@@ -1,0 +1,8 @@
+# Fixture: references assets that are not present under assets/.
+# moonsightc build must exit 1 with missing resource errors.
+
+- scene "entrypoint"
+@layer.show "bg" "no_such_bg"
+@audio.bgm "missing_bgm"
+@audio.se "missing_se"
+@flow.yield

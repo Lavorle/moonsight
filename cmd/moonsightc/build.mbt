@@ -55,6 +55,11 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
       println("copied assets → \{assets_dst}")
     }
 
+    // Fail build when scripts reference string-literal resources not on disk.
+    if !validate_literal_resources(ir, resources, audio) {
+      return 1
+    }
+
     let manifest = build_manifest_json(cfg, resources, audio)
     let manifest_path = join_path(out_dir, "manifest.json")
     write_string_to_file(manifest_path, manifest)
