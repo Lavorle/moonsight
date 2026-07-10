@@ -255,6 +255,37 @@ test "audio.bgm volume and fade named args" {
 }
 
 ///|
+test "ui.show and ui.hide queue stage ops" {
+  let stage = @runtime.Stage::new()
+  let reg = @std_commands.standard_registry()
+  assert_true(reg.call("ui.show", stage, [Str("game_menu")]) == Yield)
+  assert_eq(stage.ui_ops.length(), 1)
+  assert_true(
+    stage.ui_ops[0] == @runtime.UiHostOp::Show(name="game_menu", mode=None),
+  )
+  assert_true(
+    reg.call(
+      "ui.show",
+      stage,
+      [Str("save_load"), Str("#:mode"), Str("load")],
+    ) ==
+    Yield,
+  )
+  assert_eq(stage.ui_ops.length(), 2)
+  assert_true(
+    stage.ui_ops[1] ==
+    @runtime.UiHostOp::Show(name="save_load", mode=Some("load")),
+  )
+  assert_true(reg.call("ui.hide", stage, []) == Ok)
+  assert_eq(stage.ui_ops.length(), 3)
+  assert_true(stage.ui_ops[2] == @runtime.UiHostOp::Hide(name=None))
+  assert_true(reg.call("ui.hide", stage, [Str("settings")]) == Ok)
+  assert_true(
+    stage.ui_ops[3] == @runtime.UiHostOp::Hide(name=Some("settings")),
+  )
+}
+
+///|
 test "registry keys match script.builtin_externs exactly" {
   let reg = @std_commands.standard_registry()
   let reg_names = reg.registered_names()

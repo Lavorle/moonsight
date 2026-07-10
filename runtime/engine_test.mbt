@@ -252,3 +252,143 @@ test "layer opacity tween advances on engine tick" {
   eng.tick(None_, dt=0.5)
   assert_eq(eng.stage.layers[0].opacity, 0.5)
 }
+
+///|
+fn game_menu_continue_def() -> @script.ScreenDef {
+  {
+    name: "game_menu",
+    root: @script.SNode::VBox(
+      x=None,
+      y=None,
+      children=[
+        @script.SNode::Button(
+          label="Continue",
+          action=@script.ScreenAction::Return,
+        ),
+      ],
+    ),
+  }
+}
+
+///|
+fn title_start_def() -> @script.ScreenDef {
+  {
+    name: "title",
+    root: @script.SNode::VBox(
+      x=None,
+      y=None,
+      children=[
+        @script.SNode::Button(
+          label="Start",
+          action=@script.ScreenAction::StartGame,
+        ),
+      ],
+    ),
+  }
+}
+
+///|
+test "open menu freezes vm ip until continue" {
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|y:There
+    #|
+  let ir = @script.compile_to_ir(src, file="menu_gate.yuki")
+  let defs : Map[String, @script.ScreenDef] = {
+    "game_menu": game_menu_continue_def(),
+  }
+  let eng = @runtime.Engine::from_ir(ir, entry="s", screen_defs=defs)
+  eng.tick(None_, dt=0.0)
+  assert_true(eng.vm.wait == Yield)
+  let ip0 = eng.vm.ip
+  eng.tick(OpenMenu)
+  assert_eq(eng.screens.stack.length(), 1)
+  assert_eq(eng.screens.stack[0].name, "game_menu")
+  assert_true(eng.screens.mode is Menu)
+  assert_eq(eng.vm.ip, ip0)
+  // Narrative frozen while menu open.
+  eng.tick(None_, dt=0.05)
+  assert_eq(eng.vm.ip, ip0)
+  assert_eq(eng.screens.stack.length(), 1)
+  // Advance activates Continue (Return) → back to Playing; IP still frozen.
+  eng.tick(Advance)
+  assert_eq(eng.screens.stack.length(), 0)
+  assert_true(eng.screens.mode is Playing)
+  assert_eq(eng.vm.ip, ip0)
+  assert_true(eng.vm.wait == Yield)
+  // Resume narrative: complete typewriter then advance line.
+  eng.tick(Advance)
+  guard eng.stage.text is Some(t) else { fail("text") }
+  assert_true(t.complete)
+  eng.tick(Advance)
+  guard eng.stage.text is Some(t2) else { fail("second line") }
+  assert_eq(t2.full_text, "There")
+}
+
+///|
+test "boot_title then start_game enters playing" {
+  let src =
+    #|- scene "s"
+    #|@var.set "started" true
+    #|
+  let ir = @script.compile_to_ir(src, file="title_boot.yuki")
+  let defs : Map[String, @script.ScreenDef] = {
+    "title": title_start_def(),
+  }
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+    screen_defs=defs,
+  )
+  eng.boot_title()
+  assert_true(eng.screens.mode is Title)
+  assert_eq(eng.screens.stack.length(), 1)
+  assert_eq(eng.screens.stack[0].name, "title")
+  // Narrative must not run on Title.
+  eng.tick(None_)
+  assert_true(eng.stage.get_var("started") == None_)
+  // Activate Start → start_game
+  eng.tick(Advance)
+  assert_true(eng.screens.mode is Playing)
+  assert_eq(eng.screens.stack.length(), 0)
+  // Now Playing runs VM.
+  eng.tick(None_)
+  assert_true(eng.stage.get_var("started") == Bool(true))
+}
+
+///|
+test "ui.show host command opens menu and freezes ip" {
+  let src =
+    #|- scene "s"
+    #|y:Line
+    #|@ui.show "game_menu"
+    #|@var.set "after" 1
+    #|
+  let ir = @script.compile_to_ir(src, file="ui_show.yuki")
+  let defs : Map[String, @script.ScreenDef] = {
+    "game_menu": game_menu_continue_def(),
+  }
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+    screen_defs=defs,
+  )
+  // Reach first yield on text.
+  eng.tick(None_, dt=0.0)
+  eng.tick(Advance) // complete typewriter
+  eng.tick(Advance) // resume → text.end path → ui.show yields
+  assert_eq(eng.screens.stack.length(), 1)
+  assert_eq(eng.screens.stack[0].name, "game_menu")
+  assert_true(eng.stage.get_var("after") == None_)
+  let ip_menu = eng.vm.ip
+  eng.tick(None_)
+  assert_eq(eng.vm.ip, ip_menu)
+  eng.tick(Advance) // Continue
+  assert_eq(eng.screens.stack.length(), 0)
+  // After menu, still at Yield from ui.show; Advance resumes past it.
+  eng.tick(Advance)
+  assert_true(eng.stage.get_var("after") == Int(1))
+}

@@ -25,7 +25,7 @@ pub(all) struct ScreenState {
   mut prefs : Prefs
   /// Number of save slots (default 6).
   save_slots : Int
-}
+} derive(Debug)
 
 ///|
 /// Engine/host callbacks used by screen action dispatch.
@@ -183,6 +183,12 @@ fn ScreenState::dispatch_action(
     }
     @script.ScreenAction::Noop => ()
   }
+}
+
+///|
+/// Hide by name (remove matching stack entries) or pop top when name is omitted/`None`.
+pub fn ScreenState::hide(self : ScreenState, name? : String) -> Unit {
+  self.hide_screen(name)
 }
 
 ///|

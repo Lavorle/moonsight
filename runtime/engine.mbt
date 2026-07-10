@@ -22,16 +22,27 @@ pub(all) struct Engine {
   mut stage : Stage
   /// When true, a bare `None_` intent while waiting on Yield advances dialogue.
   mut auto : Bool
+  /// Modal screen stack, UiMode, prefs, and screen defs.
+  mut screens : ScreenState
+  /// Entry scene name for `start_game` / restart.
+  ir_entry : String
+  /// In-memory multi-slot save blobs (host may mirror to localStorage).
+  mut slot_blobs : Array[String?]
 } derive(Debug)
 
 ///|
 /// Load IR into an engine with built-in host handlers.
 ///
 /// Pass `director` to inject a full registry (e.g. `@std_commands.standard_registry()`).
+/// Pass `screen_defs` to register Screen DSL definitions (title / game_menu / …).
+///
+/// Starts in **Playing** with an empty screen stack for backward-compatible scene
+/// tests. Call `boot_title` for cold-start Title mode.
 pub fn Engine::from_ir(
   ir : @script.IrModule,
   entry~ : String,
   director? : Director,
+  screen_defs? : Map[String, @script.ScreenDef],
 ) -> Engine {
   let stage = Stage::new()
   stage.scene = entry
@@ -39,7 +50,116 @@ pub fn Engine::from_ir(
     Some(d) => d
     None => Director::with_builtins()
   }
-  { vm: Vm::from_module(ir, entry~), director: dir, stage, auto: false }
+  let defs = match screen_defs {
+    Some(d) => d
+    None => ({} : Map[String, @script.ScreenDef])
+  }
+  let screens = ScreenState::new(defs)
+  // Scene-first construction: Playing + empty stack (Title via `boot_title`).
+  screens.mode = Playing
+  let n = screens.save_slots
+  let slot_blobs : Array[String?] = []
+  for _ in 0..<n {
+    slot_blobs.push(None)
+  }
+  {
+    vm: Vm::from_module(ir, entry~),
+    director: dir,
+    stage,
+    auto: false,
+    screens,
+    ir_entry: entry,
+    slot_blobs,
+  }
+}
+
+///|
+/// Cold start: `Title` mode and push `title` if a def is registered.
+pub fn Engine::boot_title(self : Engine) -> Unit {
+  self.screens.stack = []
+  self.screens.mode = Title
+  if self.screens.defs.contains("title") {
+    self.screens.show("title")
+  }
+}
+
+///|
+/// Start (or restart) narrative at `ir_entry`: clear stack, `Playing`, fresh stage/VM.
+pub fn Engine::start_game(self : Engine) -> Unit {
+  self.screens.stack = []
+  self.screens.mode = Playing
+  let stage = Stage::new()
+  stage.scene = self.ir_entry
+  self.stage = stage
+  self.vm = Vm::from_module(self.vm.ir, entry=self.ir_entry)
+  self.auto = self.screens.prefs.auto_mode
+}
+
+///|
+/// Tear down narrative, clear stack, enter Title and show `title` when defined.
+pub fn Engine::quit_to_title(self : Engine) -> Unit {
+  self.screens.stack = []
+  self.screens.mode = Title
+  let stage = Stage::new()
+  stage.scene = self.ir_entry
+  self.stage = stage
+  self.vm = Vm::from_module(self.vm.ir, entry=self.ir_entry)
+  self.auto = self.screens.prefs.auto_mode
+  if self.screens.defs.contains("title") {
+    self.screens.show("title")
+  }
+}
+
+///|
+impl ScreenHost for Engine with fn start_game(self) {
+  self.start_game()
+}
+
+///|
+impl ScreenHost for Engine with fn quit_to_title(self) {
+  self.quit_to_title()
+}
+
+///|
+impl ScreenHost for Engine with fn save_slot(self, i) {
+  if i < 0 {
+    return
+  }
+  while self.slot_blobs.length() <= i {
+    self.slot_blobs.push(None)
+  }
+  self.slot_blobs[i] = Some(self.save(slot=i))
+}
+
+///|
+impl ScreenHost for Engine with fn load_slot(self, i) {
+  if i < 0 || i >= self.slot_blobs.length() {
+    return
+  }
+  match self.slot_blobs[i] {
+    None => ()
+    Some(blob) => {
+      self.load(blob) catch {
+        _ => return
+      }
+      self.screens.stack = []
+      self.screens.mode = Playing
+    }
+  }
+}
+
+///|
+impl ScreenHost for Engine with fn slot_occupied(self, i) {
+  if i < 0 || i >= self.slot_blobs.length() {
+    false
+  } else {
+    self.slot_blobs[i] is Some(_)
+  }
+}
+
+///|
+impl ScreenHost for Engine with fn apply_prefs(self, p) {
+  self.auto = p.auto_mode
 }
 
 ///|
@@ -47,15 +167,31 @@ pub fn Engine::from_ir(
 ///
 /// `dt` is frame delta in seconds (default ≈ 1/60) for fade, tweens, wait, typewriter.
 ///
-/// Tick order (spec §4): effective intent → gate while timed-wait → apply_intent →
-/// tick_wait → run_until_wait if Running → tick_transitions → tick_layer_tweens →
-/// BGM fade → tick_typewriter.
+/// Tick order (Phase 3): UI intents when stack/Title → else Playing narrative path;
+/// layer tweens only while Playing; always tick BGM fade.
 pub fn Engine::tick(
   self : Engine,
   intent : Intent,
   dt? : Double = 1.0 / 60.0,
 ) -> Unit {
+  let ui_active =
+    self.screens.stack.length() > 0 || (self.screens.mode is Title)
+  if ui_active {
+    self.tick_ui(intent)
+    @audio.global_mixer().tick(dt)
+    self.drain_ui_ops()
+    return
+  }
+
+  // Playing (no modal stack): OpenMenu opens game_menu without advancing narrative.
   let effective = self.effective_intent(intent)
+  if effective is OpenMenu {
+    self.screens.show("game_menu")
+    @audio.global_mixer().tick(dt)
+    self.drain_ui_ops()
+    return
+  }
+
   // Timed wait: swallow Advance/Select/SkipTyping so the countdown cannot be skipped.
   let gated =
     if self.stage.wait_remaining > 0.0 {
@@ -71,11 +207,66 @@ pub fn Engine::tick(
   if self.vm.wait is Running {
     self.vm.run_until_wait(self.director, self.stage)
   }
-  self.tick_transitions(dt)
-  self.stage.tick_layer_tweens(dt)
-  // Fire-and-forget linear BGM fade (global mixer; host installs QueueBackend).
+  self.drain_ui_ops()
+  // If @ui.show opened a modal this frame, freeze narrative presentation.
+  let playing =
+    self.screens.stack.is_empty() && !(self.screens.mode is Title)
+  if playing {
+    self.tick_transitions(dt)
+    self.stage.tick_layer_tweens(dt)
+    self.tick_typewriter(dt)
+  }
   @audio.global_mixer().tick(dt)
-  self.tick_typewriter(dt)
+}
+
+///|
+/// Screen / Title input path: no narrative VM, typewriter, or wait skip.
+fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
+  let host : &ScreenHost = self
+  match intent {
+    OpenMenu =>
+      // Esc while modal: pop one level. Title ignores OpenMenu.
+      if self.screens.mode is Title {
+        ()
+      } else if self.screens.stack.length() > 0 {
+        self.screens.return_()
+      }
+    Advance | SkipTyping => self.screens.activate(host)
+    MenuUp => self.screens.focus_delta(host, -1)
+    MenuDown => self.screens.focus_delta(host, 1)
+    ToggleAuto => {
+      self.auto = !self.auto
+      self.screens.prefs = self.screens.prefs.set("auto_mode", Bool(self.auto))
+    }
+    Select(n) => {
+      // Optional: jump focus to index n when in range.
+      if !self.screens.stack.is_empty() {
+        let items = self.screens.focusables(host)
+        if n >= 0 && n < items.length() {
+          let i = self.screens.stack.length() - 1
+          let cur = self.screens.stack[i]
+          self.screens.stack[i] = { ..cur, focus: n }
+        }
+      }
+    }
+    None_ => ()
+  }
+}
+
+///|
+/// Apply queued `@ui.*` host ops from Stage onto `screens`.
+fn Engine::drain_ui_ops(self : Engine) -> Unit {
+  if self.stage.ui_ops.is_empty() {
+    return
+  }
+  let ops = self.stage.ui_ops
+  self.stage.ui_ops = []
+  for op in ops {
+    match op {
+      UiHostOp::Show(name~, mode~) => self.screens.show(name, mode?)
+      UiHostOp::Hide(name~) => self.screens.hide(name?)
+    }
+  }
 }
 
 ///|
@@ -148,7 +339,12 @@ fn Engine::apply_intent(self : Engine, intent : Intent) -> Unit {
             Some({ complete: false, .. }) => self.stage.complete_text()
             _ => self.vm.wait = Running
           }
-        None_ | Select(_) | OpenMenu | ToggleAuto => ()
+        None_
+        | Select(_)
+        | OpenMenu
+        | ToggleAuto
+        | MenuUp
+        | MenuDown => ()
       }
     Choose =>
       match intent {
@@ -194,11 +390,12 @@ fn Engine::tick_transitions(self : Engine, dt : Double) -> Unit {
 }
 
 ///|
-/// Gradual typewriter reveal when text is incomplete (chars/sec ≈ 40).
+/// Gradual typewriter reveal when text is incomplete (base chars/sec ≈ 40 × prefs).
 fn Engine::tick_typewriter(self : Engine, dt : Double) -> Unit {
   match self.stage.text {
     Some({ complete: false, .. }) => {
-      let n = (40.0 * dt).to_int()
+      let speed = self.screens.prefs.text_speed
+      let n = (40.0 * speed * dt).to_int()
       let chars = if n < 1 { 1 } else { n }
       // Only advance when dt is positive; skip zero-dt frames.
       if dt > 0.0 {

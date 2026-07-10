@@ -10,4 +10,8 @@ pub(all) enum Intent {
   SkipTyping
   OpenMenu
   ToggleAuto
+  /// Move screen focus up (previous focusable).
+  MenuUp
+  /// Move screen focus down (next focusable).
+  MenuDown
 } derive(Debug, Eq)

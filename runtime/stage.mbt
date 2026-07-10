@@ -67,6 +67,13 @@ pub(all) struct ChoiceState {
 } derive(Debug)
 
 ///|
+/// Pending `@ui.show` / `@ui.hide` host ops (drained by Engine onto `ScreenState`).
+pub(all) enum UiHostOp {
+  Show(name~ : String, mode~ : String?)
+  Hide(name~ : String?)
+} derive(Debug, Eq)
+
+///|
 /// Authoritative theater state: layers, text, choices, variables, scene name.
 ///
 /// Renderer must only read snapshots; play logic mutates Stage via Director/VM.
@@ -89,6 +96,8 @@ pub(all) struct Stage {
   mut se : String?
   /// Set by `sys.save_hint` until consumed by save flow (Task 9).
   mut save_hint : Bool
+  /// Queued UI host ops from `@ui.show` / `@ui.hide` (not part of save).
+  mut ui_ops : Array[UiHostOp]
 } derive(Debug)
 
 ///|
@@ -107,6 +116,7 @@ pub fn Stage::new() -> Stage {
     bgm: None,
     se: None,
     save_hint: false,
+    ui_ops: [],
   }
 }
 

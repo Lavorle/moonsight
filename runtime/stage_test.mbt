@@ -142,8 +142,10 @@ test "Intent variants are constructible" {
     @runtime.Intent::SkipTyping,
     @runtime.Intent::OpenMenu,
     @runtime.Intent::ToggleAuto,
+    @runtime.Intent::MenuUp,
+    @runtime.Intent::MenuDown,
   ]
-  assert_eq(intents.length(), 6)
+  assert_eq(intents.length(), 8)
   assert_true(intents[2] == @runtime.Intent::Select(0))
 }
 

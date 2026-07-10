@@ -39,6 +39,8 @@ pub fn builtin_externs() -> Array[ExternDecl] {
     stub_extern("audio.bgm", span~, params=[param("resource")]),
     stub_extern("audio.se", span~, params=[param("resource")]),
     stub_extern("sys.save_hint", span~, params=[]),
+    stub_extern("ui.show", span~, params=[param("name")]),
+    stub_extern("ui.hide", span~, params=[]),
   ]
 }
 
