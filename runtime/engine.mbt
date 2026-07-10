@@ -22,27 +22,28 @@ pub(all) struct Engine {
   mut stage : Stage
   /// When true, a bare `None_` intent while waiting on Yield advances dialogue.
   mut auto : Bool
-  /// Modal screen stack, UiMode, prefs, and screen defs.
-  mut screens : ScreenState
+  /// Modal UI stack, UiMode, prefs, and retained UiApp trees.
+  mut ui : UiRuntime
   /// Entry scene name for `start_game` / restart.
   ir_entry : String
   /// In-memory multi-slot save blobs (host may mirror to localStorage).
   mut slot_blobs : Array[String?]
-} derive(Debug)
+}
 
 ///|
 /// Load IR into an engine with built-in host handlers.
 ///
 /// Pass `director` to inject a full registry (e.g. `@std_commands.standard_registry()`).
-/// Pass `screen_defs` to register Screen DSL definitions (title / game_menu / …).
+/// Pass `app` to register retained UI modals/HUD (title / game_menu / …).
 ///
-/// Starts in **Playing** with an empty screen stack for backward-compatible scene
+/// Starts in **Playing** with an empty modal stack for backward-compatible scene
 /// tests. Call `boot_title` for cold-start Title mode.
 pub fn Engine::from_ir(
   ir : @script.IrModule,
   entry~ : String,
   director? : Director,
-  screen_defs? : Map[String, @script.ScreenDef],
+  app~ : UiApp = UiApp::new(),
+  save_slots~ : Int = 6,
 ) -> Engine {
   let stage = Stage::new()
   stage.scene = entry
@@ -50,14 +51,10 @@ pub fn Engine::from_ir(
     Some(d) => d
     None => Director::with_builtins()
   }
-  let defs = match screen_defs {
-    Some(d) => d
-    None => ({} : Map[String, @script.ScreenDef])
-  }
-  let screens = ScreenState::new(defs)
+  let ui = UiRuntime::from_app(app, save_slots~)
   // Scene-first construction: Playing + empty stack (Title via `boot_title`).
-  screens.mode = Playing
-  let n = screens.save_slots
+  ui.mode = Playing
+  let n = ui.save_slots
   let slot_blobs : Array[String?] = []
   for _ in 0..<n {
     slot_blobs.push(None)
@@ -67,64 +64,79 @@ pub fn Engine::from_ir(
     director: dir,
     stage,
     auto: false,
-    screens,
+    ui,
     ir_entry: entry,
     slot_blobs,
   }
 }
 
 ///|
-/// Cold start: enter `Title` and push `title` only when a def is registered.
-/// Without a `title` screen, leave mode as `Playing` (scene-first fallback).
+/// Cold start: enter `Title` and push `title` only when a modal is registered.
+/// Without a `title` modal, leave mode as `Playing` (scene-first fallback).
 pub fn Engine::boot_title(self : Engine) -> Unit {
-  self.screens.stack = []
-  if self.screens.defs.contains("title") {
-    self.screens.mode = Title
-    self.screens.show("title")
+  self.ui.stack = []
+  if self.ui.app.modals.contains("title") {
+    self.ui.mode = Title
+    self.ui.show_modal("title")
   } else {
-    self.screens.mode = Playing
+    self.ui.mode = Playing
   }
 }
 
 ///|
 /// Start (or restart) narrative at `ir_entry`: clear stack, `Playing`, fresh stage/VM.
 pub fn Engine::start_game(self : Engine) -> Unit {
-  self.screens.stack = []
-  self.screens.mode = Playing
+  self.ui.stack = []
+  self.ui.mode = Playing
   let stage = Stage::new()
   stage.scene = self.ir_entry
   self.stage = stage
   self.vm = Vm::from_module(self.vm.ir, entry=self.ir_entry)
-  self.auto = self.screens.prefs.auto_mode
+  self.auto = self.ui.prefs.auto_mode
 }
 
 ///|
 /// Tear down narrative, clear stack, enter Title and show `title` when defined.
 pub fn Engine::quit_to_title(self : Engine) -> Unit {
-  self.screens.stack = []
-  self.screens.mode = Title
+  self.ui.stack = []
+  self.ui.mode = Title
   let stage = Stage::new()
   stage.scene = self.ir_entry
   self.stage = stage
   self.vm = Vm::from_module(self.vm.ir, entry=self.ir_entry)
-  self.auto = self.screens.prefs.auto_mode
-  if self.screens.defs.contains("title") {
-    self.screens.show("title")
+  self.auto = self.ui.prefs.auto_mode
+  if self.ui.app.modals.contains("title") {
+    self.ui.show_modal("title")
   }
 }
 
 ///|
-impl ScreenHost for Engine with fn start_game(self) {
+impl Capabilities for Engine with fn start_game(self) {
   self.start_game()
 }
 
 ///|
-impl ScreenHost for Engine with fn quit_to_title(self) {
+impl Capabilities for Engine with fn quit_to_title(self) {
   self.quit_to_title()
 }
 
 ///|
-impl ScreenHost for Engine with fn save_slot(self, i) {
+impl Capabilities for Engine with fn show_modal(self, name, mode~) {
+  self.ui.show_modal(name, mode?)
+}
+
+///|
+impl Capabilities for Engine with fn return_modal(self) {
+  self.ui.return_modal()
+}
+
+///|
+impl Capabilities for Engine with fn hide_modal(self, name~) {
+  self.ui.hide_modal(name?)
+}
+
+///|
+impl Capabilities for Engine with fn save_slot(self, i) {
   if i < 0 {
     return
   }
@@ -135,7 +147,7 @@ impl ScreenHost for Engine with fn save_slot(self, i) {
 }
 
 ///|
-impl ScreenHost for Engine with fn load_slot(self, i) {
+impl Capabilities for Engine with fn load_slot(self, i) {
   if i < 0 || i >= self.slot_blobs.length() {
     return
   }
@@ -145,7 +157,7 @@ impl ScreenHost for Engine with fn load_slot(self, i) {
       self.load(blob) catch {
         _ => return
       }
-      // Engine::load already clears screens to Playing; keep explicit for clarity.
+      // Engine::load already clears UI to Playing; keep explicit for clarity.
       self.clear_screens_to_playing()
     }
   }
@@ -154,12 +166,12 @@ impl ScreenHost for Engine with fn load_slot(self, i) {
 ///|
 /// Drop all modal screens and force `Playing` (used after a successful load).
 pub fn Engine::clear_screens_to_playing(self : Engine) -> Unit {
-  self.screens.stack = []
-  self.screens.mode = Playing
+  self.ui.stack = []
+  self.ui.mode = Playing
 }
 
 ///|
-impl ScreenHost for Engine with fn slot_occupied(self, i) {
+impl Capabilities for Engine with fn slot_occupied(self, i) {
   if i < 0 || i >= self.slot_blobs.length() {
     false
   } else {
@@ -168,24 +180,78 @@ impl ScreenHost for Engine with fn slot_occupied(self, i) {
 }
 
 ///|
-impl ScreenHost for Engine with fn apply_prefs(self, p) {
-  self.auto = p.auto_mode
-  self.screens.prefs = p
+impl Capabilities for Engine with fn slot_label(self, i) {
+  if i < 0 || i >= self.slot_blobs.length() {
+    return slot_label(None)
+  }
+  match self.slot_blobs[i] {
+    None => slot_label(None)
+    Some(blob) =>
+      try {
+        slot_label(Some(parse_save_game(blob)))
+      } catch {
+        _ => "Slot \{i}"
+      }
+  }
 }
 
 ///|
-/// Install screen defs (from host `screens.json`) and optional save_slots.
-///
-/// Preserves UiMode / stack / prefs. Resizes `slot_blobs` when slot count grows.
+impl Capabilities for Engine with fn set_pref_f(self, key, value) {
+  self.ui.prefs = self.ui.prefs.set(key, Float(value))
+  self.auto = self.ui.prefs.auto_mode
+}
+
+///|
+impl Capabilities for Engine with fn set_pref_b(self, key, value) {
+  self.ui.prefs = self.ui.prefs.set(key, Bool(value))
+  self.auto = self.ui.prefs.auto_mode
+}
+
+///|
+impl Capabilities for Engine with fn adjust_pref(self, key, delta) {
+  self.ui.prefs = self.ui.prefs.adjust(key, delta)
+  self.auto = self.ui.prefs.auto_mode
+}
+
+///|
+impl Capabilities for Engine with fn confirm_choice(self, index) {
+  self.confirm_choice(index)
+}
+
+///|
+impl Capabilities for Engine with fn advance(self) {
+  self.apply_intent(Advance)
+}
+
+///|
+impl Capabilities for Engine with fn prefs(self) {
+  self.ui.prefs
+}
+
+///|
+/// Update save slot count (and grow `slot_blobs`). ScreenDef path is retired;
+/// retained UI trees come from `UiApp` at `from_ir` time. Kept for host_web
+/// `load_screens_json` which still ships `screens.json` save_slots.
 pub fn Engine::install_screens(
   self : Engine,
-  defs : Map[String, @script.ScreenDef],
+  _defs : Map[String, @script.ScreenDef],
   save_slots? : Int,
 ) -> Unit {
-  self.screens = self.screens.with_defs(defs, save_slots?)
-  let n = self.screens.save_slots
-  while self.slot_blobs.length() < n {
-    self.slot_blobs.push(None)
+  match save_slots {
+    None => ()
+    Some(s) => {
+      let n = if s < 1 {
+        1
+      } else if s > 20 {
+        20
+      } else {
+        s
+      }
+      self.ui.save_slots = n
+      while self.slot_blobs.length() < n {
+        self.slot_blobs.push(None)
+      }
+    }
   }
 }
 
@@ -217,7 +283,7 @@ pub fn Engine::set_slot_blob(self : Engine, i : Int, blob : String) -> Unit {
 ///|
 /// Current prefs as JSON string.
 pub fn Engine::prefs_json(self : Engine) -> String {
-  self.screens.prefs.to_json_string()
+  self.ui.prefs.to_json_string()
 }
 
 ///|
@@ -225,7 +291,7 @@ pub fn Engine::prefs_json(self : Engine) -> String {
 pub fn Engine::set_prefs_json(self : Engine, json : String) -> Int {
   try {
     let p = Prefs::from_json_string(json)
-    self.screens.prefs = p
+    self.ui.prefs = p
     self.auto = p.auto_mode
     0
   } catch {
@@ -234,9 +300,9 @@ pub fn Engine::set_prefs_json(self : Engine, json : String) -> Int {
 }
 
 ///|
-/// Occupancy flags for each save slot (length = `screens.save_slots`).
+/// Occupancy flags for each save slot (length = `ui.save_slots`).
 pub fn Engine::occupied_slots(self : Engine) -> Array[Bool] {
-  let n = self.screens.save_slots
+  let n = self.ui.save_slots
   let out : Array[Bool] = []
   for i in 0..<n {
     out.push(
@@ -255,7 +321,7 @@ pub fn Engine::occupied_slots(self : Engine) -> Array[Bool] {
 ///
 /// `dt` is frame delta in seconds (default ≈ 1/60) for fade, tweens, wait, typewriter.
 ///
-/// Tick order (Phase 3): UI intents when stack/Title → else Playing narrative path;
+/// Tick order (Phase 4): UI intents when stack/Title → else Playing narrative path;
 /// layer tweens only while Playing; always tick BGM fade.
 pub fn Engine::tick(
   self : Engine,
@@ -263,7 +329,7 @@ pub fn Engine::tick(
   dt? : Double = 1.0 / 60.0,
 ) -> Unit {
   let ui_active =
-    self.screens.stack.length() > 0 || (self.screens.mode is Title)
+    self.ui.stack_depth() > 0 || (self.ui.mode is Title)
   if ui_active {
     self.tick_ui(intent)
     @audio.global_mixer().tick(dt)
@@ -274,7 +340,7 @@ pub fn Engine::tick(
   // Playing (no modal stack): OpenMenu opens game_menu without advancing narrative.
   let effective = self.effective_intent(intent)
   if effective is OpenMenu {
-    self.screens.show("game_menu")
+    self.ui.show_modal("game_menu")
     @audio.global_mixer().tick(dt)
     self.drain_ui_ops()
     return
@@ -298,7 +364,7 @@ pub fn Engine::tick(
   self.drain_ui_ops()
   // If @ui.show opened a modal this frame, freeze narrative presentation.
   let playing =
-    self.screens.stack.is_empty() && !(self.screens.mode is Title)
+    self.ui.stack.is_empty() && !(self.ui.mode is Title)
   if playing {
     self.tick_transitions(dt)
     self.stage.tick_layer_tweens(dt)
@@ -308,29 +374,71 @@ pub fn Engine::tick(
 }
 
 ///|
+/// Build UiBindCtx from stage + prefs + slots and store on UiRuntime.
+fn Engine::sync_ui_bind(self : Engine) -> Unit {
+  let occupied = self.occupied_slots()
+  let (has_text, dialogue_name, dialogue_body) = match self.stage.text {
+    None => (false, "", "")
+    Some(t) => {
+      let name = match t.speaker {
+        Some(s) => s
+        None => ""
+      }
+      (true, name, t.full_text)
+    }
+  }
+  let (has_choices, choice_labels) = match self.stage.choices {
+    None => {
+      let empty : Array[String] = []
+      (false, empty)
+    }
+    Some(c) => (true, c.options.copy())
+  }
+  let modal_mode = if self.ui.stack.is_empty() {
+    None
+  } else {
+    self.ui.stack[self.ui.stack.length() - 1].mode
+  }
+  self.ui.sync_bind(
+    {
+      has_text,
+      has_choices,
+      prefs: self.ui.prefs,
+      occupied,
+      modal_mode,
+      vars: {},
+      choice_labels,
+      dialogue_name,
+      dialogue_body,
+    },
+  )
+}
+
+///|
 /// Screen / Title input path: no narrative VM, typewriter, or wait skip.
 fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
-  let host : &ScreenHost = self
+  self.sync_ui_bind()
+  let caps : &Capabilities = self
   match intent {
     OpenMenu =>
       // Esc while modal: pop one level. Root Title only ignores Esc.
-      if self.screens.mode is Title && self.screens.stack.length() <= 1 {
+      if self.ui.mode is Title && self.ui.stack_depth() <= 1 {
         ()
-      } else if self.screens.stack.length() > 0 {
-        self.screens.return_()
+      } else if self.ui.stack_depth() > 0 {
+        self.ui.return_modal()
       }
-    Advance | SkipTyping => self.screens.activate(host)
-    MenuUp => self.screens.focus_delta(host, -1)
-    MenuDown => self.screens.focus_delta(host, 1)
+    Advance | SkipTyping => self.ui.activate(caps)
+    MenuUp => self.ui.focus_delta(caps, -1)
+    MenuDown => self.ui.focus_delta(caps, 1)
     ToggleAuto => self.apply_intent(ToggleAuto)
     Select(n) => {
       // Optional: jump focus to index n when in range.
-      if !self.screens.stack.is_empty() {
-        let items = self.screens.focusables(host)
+      if !self.ui.stack.is_empty() {
+        let items = self.ui.focusables_top(self.ui.bind)
         if n >= 0 && n < items.length() {
-          let i = self.screens.stack.length() - 1
-          let cur = self.screens.stack[i]
-          self.screens.stack[i] = { ..cur, focus: n }
+          let i = self.ui.stack.length() - 1
+          let cur = self.ui.stack[i]
+          self.ui.stack[i] = { ..cur, focus: n }
         }
       }
     }
@@ -339,7 +447,7 @@ fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
 }
 
 ///|
-/// Apply queued `@ui.*` host ops from Stage onto `screens`.
+/// Apply queued `@ui.*` host ops from Stage onto `ui`.
 fn Engine::drain_ui_ops(self : Engine) -> Unit {
   if self.stage.ui_ops.is_empty() {
     return
@@ -348,8 +456,8 @@ fn Engine::drain_ui_ops(self : Engine) -> Unit {
   self.stage.ui_ops = []
   for op in ops {
     match op {
-      UiHostOp::Show(name~, mode~) => self.screens.show(name, mode?)
-      UiHostOp::Hide(name~) => self.screens.hide(name?)
+      UiHostOp::Show(name~, mode~) => self.ui.show_modal(name, mode?)
+      UiHostOp::Hide(name~) => self.ui.hide_modal(name?)
     }
   }
 }
@@ -414,7 +522,7 @@ fn Engine::apply_intent(self : Engine, intent : Intent) -> Unit {
   match intent {
     ToggleAuto => {
       self.auto = !self.auto
-      self.screens.prefs = self.screens.prefs.set("auto_mode", Bool(self.auto))
+      self.ui.prefs = self.ui.prefs.set("auto_mode", Bool(self.auto))
     }
     _ => ()
   }
@@ -510,7 +618,7 @@ fn Engine::tick_transitions(self : Engine, dt : Double) -> Unit {
 fn Engine::tick_typewriter(self : Engine, dt : Double) -> Unit {
   match self.stage.text {
     Some({ complete: false, .. }) => {
-      let speed = self.screens.prefs.text_speed
+      let speed = self.ui.prefs.text_speed
       let n = (40.0 * speed * dt).to_int()
       let chars = if n < 1 { 1 } else { n }
       // Only advance when dt is positive; skip zero-dt frames.

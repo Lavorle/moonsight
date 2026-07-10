@@ -196,7 +196,7 @@ pub fn set_prefs_json(json : String) -> Int {
 pub fn save_slot_count() -> Int {
   match session.val.engine {
     None => 0
-    Some(eng) => eng.screens.save_slots
+    Some(eng) => eng.ui.save_slots
   }
 }
 
@@ -248,11 +248,12 @@ pub fn export_frame(intent_code : Int, dt_ms : Float) -> Int {
       let view = eng.view()
       let occ = eng.occupied_slots()
       // Screen-aware draw list (menu dim + widgets; skips dialogue in Title/Menu).
+      // Phase 4 Task 3: Engine owns UiRuntime (not ScreenState). Screen DSL
+      // paint path is retired for the host; Task 4 migrates to UiDrawOp.
       let dl = @render.build_draw_list_with_atlas(
         view,
         s.layout,
         s.atlas,
-        screens=eng.screens,
         occupied_slots=occ,
       )
       s.frame = @render.pack_draw_list(dl, s.resources)

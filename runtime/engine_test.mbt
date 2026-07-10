@@ -120,7 +120,7 @@ test "toggle auto synthesizes advance on yield" {
   assert_true(t_done.complete)
   eng.tick(ToggleAuto)
   assert_true(eng.auto)
-  assert_true(eng.screens.prefs.auto_mode)
+  assert_true(eng.ui.prefs.auto_mode)
   // auto + None_ while Yield → Advance to next line
   eng.tick(None_)
   guard eng.stage.text is Some(t1) else { fail("second") }
@@ -136,13 +136,13 @@ test "playing ToggleAuto syncs prefs.auto_mode" {
   let ir = @script.compile_to_ir(src, file="auto_prefs.yuki")
   let eng = @runtime.Engine::from_ir(ir, entry="s")
   assert_true(!eng.auto)
-  assert_true(!eng.screens.prefs.auto_mode)
+  assert_true(!eng.ui.prefs.auto_mode)
   eng.tick(ToggleAuto)
   assert_true(eng.auto)
-  assert_true(eng.screens.prefs.auto_mode)
+  assert_true(eng.ui.prefs.auto_mode)
   eng.tick(ToggleAuto)
   assert_true(!eng.auto)
-  assert_true(!eng.screens.prefs.auto_mode)
+  assert_true(!eng.ui.prefs.auto_mode)
 }
 
 ///|
@@ -291,75 +291,95 @@ test "layer opacity tween advances on engine tick" {
 }
 
 ///|
-fn game_menu_continue_def() -> @script.ScreenDef {
-  {
-    name: "game_menu",
-    root: @script.SNode::VBox(
+/// UiApp: game_menu with Continue → return_modal.
+fn app_game_menu_continue() -> @runtime.UiApp {
+  let app = @runtime.UiApp::new()
+  app.register_modal(
+    "game_menu",
+    @runtime.UiNode::VBox(
       x=None,
       y=None,
       children=[
-        @script.SNode::Button(
-          label="Continue",
-          action=@script.ScreenAction::Return,
-        ),
+        app.button("Continue", fn(c : &@runtime.Capabilities) { c.return_modal() }),
       ],
     ),
-  }
+  )
+  app
 }
 
 ///|
-fn title_start_def() -> @script.ScreenDef {
-  {
-    name: "title",
-    root: @script.SNode::VBox(
+/// UiApp: title with Start → start_game.
+fn app_title_start() -> @runtime.UiApp {
+  let app = @runtime.UiApp::new()
+  app.register_modal(
+    "title",
+    @runtime.UiNode::VBox(
       x=None,
       y=None,
       children=[
-        @script.SNode::Button(
-          label="Start",
-          action=@script.ScreenAction::StartGame,
-        ),
+        app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
       ],
     ),
-  }
+  )
+  app
 }
 
 ///|
-fn title_with_settings_def() -> @script.ScreenDef {
-  {
-    name: "title",
-    root: @script.SNode::VBox(
+/// UiApp: title (Start + Settings) and settings (Back).
+fn app_title_with_settings() -> @runtime.UiApp {
+  let app = @runtime.UiApp::new()
+  app.register_modal(
+    "title",
+    @runtime.UiNode::VBox(
       x=None,
       y=None,
       children=[
-        @script.SNode::Button(
-          label="Start",
-          action=@script.ScreenAction::StartGame,
-        ),
-        @script.SNode::Button(
-          label="Settings",
-          action=@script.ScreenAction::ShowScreen(name="settings", mode=None),
+        app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
+        app.button(
+          "Settings",
+          fn(c : &@runtime.Capabilities) { c.show_modal("settings", mode=None) },
         ),
       ],
     ),
-  }
+  )
+  app.register_modal(
+    "settings",
+    @runtime.UiNode::VBox(
+      x=None,
+      y=None,
+      children=[
+        app.button("Back", fn(c : &@runtime.Capabilities) { c.return_modal() }),
+      ],
+    ),
+  )
+  app
 }
 
 ///|
-fn settings_back_def() -> @script.ScreenDef {
-  {
-    name: "settings",
-    root: @script.SNode::VBox(
+/// Combined title + game_menu for load-clear tests.
+fn app_title_and_menu() -> @runtime.UiApp {
+  let app = @runtime.UiApp::new()
+  app.register_modal(
+    "title",
+    @runtime.UiNode::VBox(
       x=None,
       y=None,
       children=[
-        @script.SNode::Button(
-          label="Back",
-          action=@script.ScreenAction::Return,
-        ),
+        app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
       ],
     ),
-  }
+  )
+  app.register_modal(
+    "game_menu",
+    @runtime.UiNode::VBox(
+      x=None,
+      y=None,
+      children=[
+        app.button("Continue", fn(c : &@runtime.Capabilities) { c.return_modal() }),
+      ],
+    ),
+  )
+  app
 }
 
 ///|
@@ -370,26 +390,23 @@ test "open menu freezes vm ip until continue" {
     #|y:There
     #|
   let ir = @script.compile_to_ir(src, file="menu_gate.yuki")
-  let defs : Map[String, @script.ScreenDef] = {
-    "game_menu": game_menu_continue_def(),
-  }
-  let eng = @runtime.Engine::from_ir(ir, entry="s", screen_defs=defs)
+  let eng = @runtime.Engine::from_ir(ir, entry="s", app=app_game_menu_continue())
   eng.tick(None_, dt=0.0)
   assert_true(eng.vm.wait == Yield)
   let ip0 = eng.vm.ip
   eng.tick(OpenMenu)
-  assert_eq(eng.screens.stack.length(), 1)
-  assert_eq(eng.screens.stack[0].name, "game_menu")
-  assert_true(eng.screens.mode is Menu)
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "game_menu")
+  assert_true(eng.ui.mode is Menu)
   assert_eq(eng.vm.ip, ip0)
   // Narrative frozen while menu open.
   eng.tick(None_, dt=0.05)
   assert_eq(eng.vm.ip, ip0)
-  assert_eq(eng.screens.stack.length(), 1)
-  // Advance activates Continue (Return) → back to Playing; IP still frozen.
+  assert_eq(eng.ui.stack_depth(), 1)
+  // Advance activates Continue (return_modal) → back to Playing; IP still frozen.
   eng.tick(Advance)
-  assert_eq(eng.screens.stack.length(), 0)
-  assert_true(eng.screens.mode is Playing)
+  assert_eq(eng.ui.stack_depth(), 0)
+  assert_true(eng.ui.mode is Playing)
   assert_eq(eng.vm.ip, ip0)
   assert_true(eng.vm.wait == Yield)
   // Resume narrative: complete typewriter then advance line.
@@ -408,26 +425,23 @@ test "boot_title then start_game enters playing" {
     #|@var.set "started" true
     #|
   let ir = @script.compile_to_ir(src, file="title_boot.yuki")
-  let defs : Map[String, @script.ScreenDef] = {
-    "title": title_start_def(),
-  }
   let eng = @runtime.Engine::from_ir(
     ir,
     entry="s",
     director=@std_commands.standard_registry(),
-    screen_defs=defs,
+    app=app_title_start(),
   )
   eng.boot_title()
-  assert_true(eng.screens.mode is Title)
-  assert_eq(eng.screens.stack.length(), 1)
-  assert_eq(eng.screens.stack[0].name, "title")
+  assert_true(eng.ui.mode is Title)
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "title")
   // Narrative must not run on Title.
   eng.tick(None_)
   assert_true(eng.stage.get_var("started") == None_)
   // Activate Start → start_game
   eng.tick(Advance)
-  assert_true(eng.screens.mode is Playing)
-  assert_eq(eng.screens.stack.length(), 0)
+  assert_true(eng.ui.mode is Playing)
+  assert_eq(eng.ui.stack_depth(), 0)
   // Now Playing runs VM.
   eng.tick(None_)
   assert_true(eng.stage.get_var("started") == Bool(true))
@@ -446,10 +460,52 @@ test "boot_title without title def stays Playing" {
     director=@std_commands.standard_registry(),
   )
   eng.boot_title()
-  assert_true(eng.screens.mode is Playing)
-  assert_eq(eng.screens.stack.length(), 0)
+  assert_true(eng.ui.mode is Playing)
+  assert_eq(eng.ui.stack_depth(), 0)
   eng.tick(None_)
   assert_true(eng.stage.get_var("ran") == Bool(true))
+}
+
+///|
+test "boot_title shows title modal via UiRuntime" {
+  let src =
+    #|- scene "entrypoint"
+    #|@var.set "x" 1
+    #|
+  let ir = @script.compile_to_ir(src, file="t.yuki")
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="entrypoint",
+    director=@std_commands.standard_registry(),
+    app=app_title_start(),
+  )
+  eng.boot_title()
+  assert_true(eng.ui.mode is Title)
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "title")
+}
+
+///|
+test "menu open pauses narrative advance" {
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|y:There
+    #|
+  let ir = @script.compile_to_ir(src, file="menu_pause.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", app=app_game_menu_continue())
+  eng.tick(None_, dt=0.0)
+  eng.tick(Advance) // complete typewriter
+  assert_true(eng.vm.wait == Yield)
+  let ip0 = eng.vm.ip
+  eng.tick(OpenMenu)
+  assert_eq(eng.ui.stack_depth(), 1)
+  // Advance while menu open must not consume dialogue yield.
+  eng.tick(Advance)
+  assert_eq(eng.ui.stack_depth(), 0)
+  assert_eq(eng.vm.ip, ip0)
+  guard eng.stage.text is Some(t) else { fail("text") }
+  assert_eq(t.full_text, "Hi")
 }
 
 ///|
@@ -461,27 +517,24 @@ test "ui.show host command opens menu and freezes ip" {
     #|@var.set "after" 1
     #|
   let ir = @script.compile_to_ir(src, file="ui_show.yuki")
-  let defs : Map[String, @script.ScreenDef] = {
-    "game_menu": game_menu_continue_def(),
-  }
   let eng = @runtime.Engine::from_ir(
     ir,
     entry="s",
     director=@std_commands.standard_registry(),
-    screen_defs=defs,
+    app=app_game_menu_continue(),
   )
   // Reach first yield on text.
   eng.tick(None_, dt=0.0)
   eng.tick(Advance) // complete typewriter
   eng.tick(Advance) // resume → text.end path → ui.show yields
-  assert_eq(eng.screens.stack.length(), 1)
-  assert_eq(eng.screens.stack[0].name, "game_menu")
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "game_menu")
   assert_true(eng.stage.get_var("after") == None_)
   let ip_menu = eng.vm.ip
   eng.tick(None_)
   assert_eq(eng.vm.ip, ip_menu)
   eng.tick(Advance) // Continue
-  assert_eq(eng.screens.stack.length(), 0)
+  assert_eq(eng.ui.stack_depth(), 0)
   // After menu, still at Yield from ui.show; Advance resumes past it.
   eng.tick(Advance)
   assert_true(eng.stage.get_var("after") == Int(1))
@@ -495,36 +548,32 @@ test "OpenMenu pops nested Title settings back to title" {
     #|@var.set "started" true
     #|
   let ir = @script.compile_to_ir(src, file="title_esc.yuki")
-  let defs : Map[String, @script.ScreenDef] = {
-    "title": title_with_settings_def(),
-    "settings": settings_back_def(),
-  }
   let eng = @runtime.Engine::from_ir(
     ir,
     entry="s",
     director=@std_commands.standard_registry(),
-    screen_defs=defs,
+    app=app_title_with_settings(),
   )
   eng.boot_title()
-  assert_true(eng.screens.mode is Title)
-  assert_eq(eng.screens.stack.length(), 1)
-  assert_eq(eng.screens.stack[0].name, "title")
+  assert_true(eng.ui.mode is Title)
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "title")
   // Root Title: Esc is ignored.
   eng.tick(OpenMenu)
-  assert_eq(eng.screens.stack.length(), 1)
-  assert_eq(eng.screens.stack[0].name, "title")
-  assert_true(eng.screens.mode is Title)
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "title")
+  assert_true(eng.ui.mode is Title)
   // Focus Settings (index 1) and open it.
   eng.tick(MenuDown)
   eng.tick(Advance)
-  assert_eq(eng.screens.stack.length(), 2)
-  assert_eq(eng.screens.stack[1].name, "settings")
-  assert_true(eng.screens.mode is Title)
+  assert_eq(eng.ui.stack_depth(), 2)
+  assert_eq(eng.ui.stack[1].name, "settings")
+  assert_true(eng.ui.mode is Title)
   // Esc pops settings → back to [title].
   eng.tick(OpenMenu)
-  assert_eq(eng.screens.stack.length(), 1)
-  assert_eq(eng.screens.stack[0].name, "title")
-  assert_true(eng.screens.mode is Title)
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "title")
+  assert_true(eng.ui.mode is Title)
 }
 
 ///|
@@ -535,24 +584,20 @@ test "load clears screen stack to Playing" {
     #|y:Hello
     #|
   let ir = @script.compile_to_ir(src, file="load_clear.yuki")
-  let defs : Map[String, @script.ScreenDef] = {
-    "title": title_start_def(),
-    "game_menu": game_menu_continue_def(),
-  }
   let eng = @runtime.Engine::from_ir(
     ir,
     entry="s",
     director=@std_commands.standard_registry(),
-    screen_defs=defs,
+    app=app_title_and_menu(),
   )
   eng.tick(None_, dt=0.0)
   let blob = eng.save()
   // Leave residual UI open (title + menu would both clear).
   eng.boot_title()
-  eng.screens.show("game_menu")
-  assert_true(eng.screens.stack.length() >= 1)
-  assert_true(!(eng.screens.mode is Playing))
+  eng.ui.show_modal("game_menu")
+  assert_true(eng.ui.stack_depth() >= 1)
+  assert_true(!(eng.ui.mode is Playing))
   eng.load(blob)
-  assert_eq(eng.screens.stack.length(), 0)
-  assert_true(eng.screens.mode is Playing)
+  assert_eq(eng.ui.stack_depth(), 0)
+  assert_true(eng.ui.mode is Playing)
 }
