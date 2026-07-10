@@ -177,14 +177,96 @@ function bindGroupFor(view) {
 }
 
 /**
+ * Human-readable WebGPU availability check (Linux Brave/Firefox often need flags).
+ * @returns {{ ok: boolean, message: string }}
+ */
+export function diagnoseWebGpu() {
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isBrave =
+    typeof navigator !== "undefined" &&
+    (!!navigator.brave || /Brave/i.test(ua));
+  const isFirefox = /Firefox\//i.test(ua);
+  const isChromium = /Chrome\//i.test(ua) || /Chromium\//i.test(ua);
+  const isLinux = /Linux/i.test(ua) && !/Android/i.test(ua);
+  const secure =
+    typeof window === "undefined" ||
+    window.isSecureContext === true ||
+    location.protocol === "https:" ||
+    location.hostname === "localhost" ||
+    location.hostname === "127.0.0.1" ||
+    location.hostname === "[::1]";
+
+  if (!secure) {
+    return {
+      ok: false,
+      message:
+        "WebGPU requires a secure context. Serve over http://localhost (not file://) or https.",
+    };
+  }
+  if (!navigator.gpu) {
+    const lines = [
+      "WebGPU not available (navigator.gpu is missing).",
+      "",
+      "Recommended for Phase 1: Chrome / Chromium / Edge (latest).",
+    ];
+    if (isBrave || (isChromium && isLinux)) {
+      lines.push(
+        "",
+        "Brave / Chromium on Linux:",
+        "  1. Open brave://flags  (or chrome://flags)",
+        "  2. Enable: Unsafe WebGPU Support  (#enable-unsafe-webgpu)",
+        "  3. Enable: Vulkan  (#enable-vulkan)  — often required on Linux",
+        "  4. Optional: Ignore GPU blocklist  (#ignore-gpu-blocklist)",
+        "  5. Relaunch the browser",
+        "  6. Check brave://gpu  — WebGPU should not say Disabled",
+        "",
+        "CLI alternative:",
+        "  brave-browser --enable-unsafe-webgpu --enable-features=Vulkan --use-angle=vulkan",
+      );
+    }
+    if (isFirefox) {
+      lines.push(
+        "",
+        "Firefox:",
+        "  WebGPU on Linux is still experimental (Windows/macOS ship more broadly).",
+        "  about:config → set to true:",
+        "    dom.webgpu.enabled",
+        "    gfx.webgpu.force-enabled   (or gfx.webgpu.ignore-blocklist)",
+        "  Prefer Firefox Nightly/Beta if Stable still has no navigator.gpu.",
+        "  Restart Firefox, then open about:support and search WebGPU.",
+      );
+    }
+    if (!isBrave && !isFirefox && !isChromium) {
+      lines.push(
+        "",
+        "Install a recent Chromium-based browser, or enable WebGPU flags if present.",
+      );
+    }
+    lines.push("", `UA: ${ua.slice(0, 120)}`);
+    return { ok: false, message: lines.join("\n") };
+  }
+  return { ok: true, message: "navigator.gpu present" };
+}
+
+/**
  * @param {HTMLCanvasElement} canvas
  */
 export async function init(canvas) {
-  if (!navigator.gpu) {
-    throw new Error("WebGPU not available in this browser");
+  const diag = diagnoseWebGpu();
+  if (!diag.ok) {
+    throw new Error(diag.message);
   }
   const adapter = await navigator.gpu.requestAdapter();
-  if (!adapter) throw new Error("No WebGPU adapter");
+  if (!adapter) {
+    throw new Error(
+      [
+        "No WebGPU adapter (navigator.gpu exists but requestAdapter() returned null).",
+        "GPU may be blocklisted or drivers missing.",
+        "Chromium: enable #enable-unsafe-webgpu + #enable-vulkan, check chrome://gpu / brave://gpu.",
+        "Firefox: gfx.webgpu.force-enabled / ignore-blocklist; try Nightly on Linux.",
+      ].join("\n"),
+    );
+  }
   device = await adapter.requestDevice();
   context = canvas.getContext("webgpu");
   format = navigator.gpu.getPreferredCanvasFormat();
