@@ -1,0 +1,77 @@
+# MoonSight demo (host cold-starts title, then Start → entrypoint).
+# Builtins cover std host commands — no file-level - extern required.
+# scenes/intro.yuki adds multi-file scene "side_room" (merged into game.msb).
+# Phase 2+: kind=, duration tweens, layer.set, real @flow.wait with trans.fade.
+# Phase 3: title / game_menu / save_load / settings via Screen DSL; named negatives ok.
+# Q2: trans.dissolve dual-phase veil + layer scale= presentation beat.
+
+- scene "entrypoint"
+@flow.jump "intro"
+
+- scene "intro"
+@layer.show "bg" "bg_room" kind=background
+# Off-screen start via named negatives (x=-200); then tween in.
+@layer.show "y" "char_y" kind=character z=10 x=-200 y=0 opacity=0
+@layer.set "y" x=200 opacity=1.0 duration=0.5
+@audio.bgm "bgm_soft"
+@trans.fade 1.0 0.0 0.5
+@flow.wait 0.5
+y:Welcome to MoonSight.
+y:This demo uses MoonYuki.
+y:Tips: H opens history; hold Ctrl to skip.
+y:Watch a dissolve and scale beat.
+@trans.dissolve 0.8
+@flow.wait 0.4
+@layer.set "y" scale=0.85 duration=0.3
+@flow.wait 0.4
+@layer.set "y" scale=1.0 duration=0.3
+@flow.wait 0.3
+@sys.save_hint
+y:Shall we talk, or leave for the garden?
+@flow.choice "Talk" "Leave" --result act
+@var.set "demo_choice" act
+@audio.se "se_click"
+@flow.jump_if act 0 "talk"
+@flow.jump "leave"
+
+- scene "talk"
+y:Nice to meet you. I'm Y.
+@var.set "met_y" true
+y:MoonSight compiles MoonYuki into a tiny VN runtime.
+y:Press Esc for the system menu (save, load, settings).
+y:You saw dissolve and scale just now — pair them with flow.wait.
+@flow.jump "ending"
+
+- scene "leave"
+@layer.hide "y" duration=0.3
+@flow.wait 0.3
+y:You step out toward the garden.
+@var.set "left_room" true
+@flow.jump "garden"
+
+- scene "garden"
+@layer.show "bg" "bg_room" kind=background
+@trans.dissolve 0.8
+@flow.wait 0.8
+y:A quiet garden. Placeholder art; BGM still looping.
+@var.set "saw_garden" true
+y:A path curves toward a low stone bench.
+@flow.jump "bench"
+
+- scene "bench"
+# Extra short scene so play time is clearly longer than Q1.
+@layer.show "bg" "bg_room" kind=background
+y:You sit on the bench for a moment.
+y:The air is still. Birds somewhere beyond the wall.
+@var.set "sat_bench" true
+@trans.dissolve 0.6
+@flow.wait 0.6
+y:Time to head back.
+@flow.jump "ending"
+
+- scene "ending"
+@trans.fade 0.0 1.0 0.5
+@flow.wait 0.5
+y:Thanks for playing the MoonSight demo.
+y:A save hint was set earlier for host snapshot tests.
+@flow.yield

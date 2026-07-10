@@ -1,0 +1,14 @@
+{
+  "name": "moonsight-demo",
+  "logical_width": 1920,
+  "logical_height": 1080,
+  "save_slots": 6,
+  "resources": {
+    "bg_room": "assets/bg_room.png",
+    "char_y": "assets/char_y.png"
+  },
+  "audio": {
+    "bgm_soft": "assets/bgm_soft.ogg",
+    "se_click": "assets/se_click.ogg"
+  }
+}

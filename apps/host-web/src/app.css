@@ -1,4 +1,12 @@
-/* Mirror host_web/js_glue/index.html shell styles (no Noto yet — Task 8). */
+/* Mirror host_web/js_glue/index.html shell styles + Noto Sans. */
+@font-face {
+  font-family: "Noto Sans";
+  src: url("/fonts/NotoSans-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
 html,
 body {
   margin: 0;
@@ -23,15 +31,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Session letterboxes canvas via margin; avoid flex centering fight. */
+  position: relative;
 }
 
-/* Logical 1920×1080 backbuffer; letterbox sizing comes later with boot. */
+/* Logical 1920×1080 backbuffer; JS letterboxes CSS size (no stretch). */
 #game {
   display: block;
   touch-action: none;
   background: #0a0b0e;
-  max-width: 100%;
-  max-height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
 }
 
 #status {
