@@ -84,3 +84,119 @@ pub(all) struct UiDrawOp {
   font_size : Float
   focused : Bool
 } derive(Debug)
+
+///|
+/// One modal instance on the UiRuntime stack.
+pub(all) struct ModalInstance {
+  name : String
+  /// Optional mode for multi-mode modals (e.g. save_load: "save" | "load").
+  mode : String?
+  /// Index into the current focusable list.
+  focus : Int
+} derive(Debug)
+
+///|
+/// Focusable target collected during layout (button action or choice row).
+pub(all) enum UiFocusTarget {
+  Button(Int)
+  Choice(Int)
+} derive(Debug, Eq)
+
+///|
+/// Bind context for VisiblePred, TextBindSrc, and ChoiceList expansion.
+pub(all) struct UiBindCtx {
+  has_text : Bool
+  has_choices : Bool
+  prefs : Prefs
+  occupied : Array[Bool]
+  modal_mode : String?
+  vars : Map[String, String]
+  choice_labels : Array[String]
+  dialogue_name : String
+  dialogue_body : String
+} derive(Debug)
+
+///|
+/// Empty bind context (no text, no choices, default prefs).
+pub fn UiBindCtx::empty() -> UiBindCtx {
+  {
+    has_text: false,
+    has_choices: false,
+    prefs: Prefs::default(),
+    occupied: [],
+    modal_mode: None,
+    vars: {},
+    choice_labels: [],
+    dialogue_name: "",
+    dialogue_body: "",
+  }
+}
+
+///|
+/// Evaluate a visibility predicate against bind context.
+pub fn VisiblePred::eval(self : VisiblePred, bind : UiBindCtx) -> Bool {
+  match self {
+    Always => true
+    Never => false
+    HasText => bind.has_text
+    HasChoices => bind.has_choices
+    PrefBool(key) => pref_bool(bind.prefs, key)
+    SlotOccupied(i) => {
+      if i < 0 || i >= bind.occupied.length() {
+        false
+      } else {
+        bind.occupied[i]
+      }
+    }
+    ModeIs(m) =>
+      match bind.modal_mode {
+        Some(mm) => mm == m
+        None => false
+      }
+  }
+}
+
+///|
+fn pref_bool(prefs : Prefs, key : String) -> Bool {
+  match key {
+    "auto_mode" => prefs.auto_mode
+    _ => false
+  }
+}
+
+///|
+/// Resolve bound text for paint.
+pub fn TextBindSrc::resolve(self : TextBindSrc, bind : UiBindCtx) -> String {
+  match self {
+    Literal(s) => s
+    DialogueName => bind.dialogue_name
+    DialogueBody => bind.dialogue_body
+    Pref(key) => format_pref_bind(bind.prefs, key)
+    SlotLabel(i) => {
+      if i < 0 || i >= bind.occupied.length() {
+        "Slot \{i}"
+      } else if bind.occupied[i] {
+        "Slot \{i}"
+      } else {
+        "Slot \{i} (empty)"
+      }
+    }
+    Var(name) =>
+      match bind.vars.get(name) {
+        Some(s) => s
+        None => ""
+      }
+  }
+}
+
+///|
+fn format_pref_bind(prefs : Prefs, key : String) -> String {
+  match key {
+    "text_speed" => "\{prefs.text_speed}"
+    "auto_mode" => if prefs.auto_mode { "on" } else { "off" }
+    "master_volume" => "\{prefs.master_volume}"
+    "bgm_volume" => "\{prefs.bgm_volume}"
+    "se_volume" => "\{prefs.se_volume}"
+    _ => ""
+  }
+}

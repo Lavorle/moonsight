@@ -1,16 +1,33 @@
 ///|
-/// Minimal `Capabilities` double for UiApp handler tests.
+/// Minimal `Capabilities` double for UiApp / UiRuntime tests.
 struct FakeCaps {
+  mut started : Bool
   mut start_game_n : Int
+  slots : Array[Bool]
+  mut prefs : Prefs
+  mut confirmed_choice : Int?
+  save_calls : Array[Int]
+  load_calls : Array[Int]
+  mut advance_n : Int
 } derive(Debug)
 
 ///|
-fn FakeCaps::new() -> FakeCaps {
-  { start_game_n: 0 }
+fn FakeCaps::new(slots~ : Array[Bool] = []) -> FakeCaps {
+  {
+    started: false,
+    start_game_n: 0,
+    slots,
+    prefs: Prefs::default(),
+    confirmed_choice: None,
+    save_calls: [],
+    load_calls: [],
+    advance_n: 0,
+  }
 }
 
 ///|
 impl Capabilities for FakeCaps with fn start_game(self) {
+  self.started = true
   self.start_game_n = self.start_game_n + 1
 }
 
@@ -35,18 +52,22 @@ impl Capabilities for FakeCaps with fn hide_modal(_self, name~) {
 }
 
 ///|
-impl Capabilities for FakeCaps with fn save_slot(_self, _i) {
-  ()
+impl Capabilities for FakeCaps with fn save_slot(self, i) {
+  self.save_calls.push(i)
 }
 
 ///|
-impl Capabilities for FakeCaps with fn load_slot(_self, _i) {
-  ()
+impl Capabilities for FakeCaps with fn load_slot(self, i) {
+  self.load_calls.push(i)
 }
 
 ///|
-impl Capabilities for FakeCaps with fn slot_occupied(_self, _i) {
-  false
+impl Capabilities for FakeCaps with fn slot_occupied(self, i) {
+  if i < 0 || i >= self.slots.length() {
+    false
+  } else {
+    self.slots[i]
+  }
 }
 
 ///|
@@ -55,33 +76,33 @@ impl Capabilities for FakeCaps with fn slot_label(_self, i) {
 }
 
 ///|
-impl Capabilities for FakeCaps with fn set_pref_f(_self, _k, _v) {
-  ()
+impl Capabilities for FakeCaps with fn set_pref_f(self, k, v) {
+  self.prefs = self.prefs.set(k, Float(v))
 }
 
 ///|
-impl Capabilities for FakeCaps with fn set_pref_b(_self, _k, _v) {
-  ()
+impl Capabilities for FakeCaps with fn set_pref_b(self, k, v) {
+  self.prefs = self.prefs.set(k, Bool(v))
 }
 
 ///|
-impl Capabilities for FakeCaps with fn adjust_pref(_self, _k, _delta) {
-  ()
+impl Capabilities for FakeCaps with fn adjust_pref(self, k, delta) {
+  self.prefs = self.prefs.adjust(k, delta)
 }
 
 ///|
-impl Capabilities for FakeCaps with fn confirm_choice(_self, _i) {
-  ()
+impl Capabilities for FakeCaps with fn confirm_choice(self, i) {
+  self.confirmed_choice = Some(i)
 }
 
 ///|
-impl Capabilities for FakeCaps with fn advance(_self) {
-  ()
+impl Capabilities for FakeCaps with fn advance(self) {
+  self.advance_n = self.advance_n + 1
 }
 
 ///|
-impl Capabilities for FakeCaps with fn prefs(_self) {
-  Prefs::default()
+impl Capabilities for FakeCaps with fn prefs(self) {
+  self.prefs
 }
 
 ///|
@@ -127,4 +148,307 @@ test "button allocates monotonic action ids" {
   let a = app.alloc_action(fn(_c : &Capabilities) { () })
   let b = app.alloc_action(fn(_c : &Capabilities) { () })
   assert_true(b == a + 1)
+}
+
+///|
+test "modal show return and activate start_game" {
+  let app = UiApp::new()
+  let start_id = app.alloc_action(fn(c : &Capabilities) { c.start_game() })
+  app.register_modal(
+    "title",
+    UiNode::VBox(
+      x=Some(0.0),
+      y=Some(0.0),
+      children=[
+        UiNode::Button(
+          label="Start",
+          action_id=start_id,
+          visible=VisiblePred::Always,
+        ),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  let caps = FakeCaps::new()
+  let c : &Capabilities = caps
+  rt.show_modal("title")
+  assert_eq(rt.stack_depth(), 1)
+  rt.activate(c)
+  assert_true(caps.started)
+  rt.return_modal()
+  assert_eq(rt.stack_depth(), 0)
+}
+
+///|
+test "vbox layout stacks buttons vertically" {
+  let app = UiApp::new()
+  app.register_modal(
+    "m",
+    UiNode::VBox(
+      x=Some(100.0),
+      y=Some(200.0),
+      children=[
+        UiNode::Button(label="A", action_id=0, visible=VisiblePred::Always),
+        UiNode::Button(label="B", action_id=1, visible=VisiblePred::Always),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("m")
+  let ops = rt.paint_modal(
+    canvas_w=1920.0,
+    canvas_h=1080.0,
+    bind=UiBindCtx::empty(),
+  )
+  // Expect two button panels with y increasing by line height (~56-64)
+  assert_true(ops.length() >= 2)
+  let buttons : Array[UiDrawOp] = []
+  for op in ops {
+    if op.resource == "ui.button" || op.resource == "ui.button_focus" {
+      buttons.push(op)
+    }
+  }
+  assert_eq(buttons.length(), 2)
+  assert_eq(buttons[0].x, 100.0)
+  assert_eq(buttons[0].y, 200.0)
+  assert_eq(buttons[0].w, 400.0)
+  assert_eq(buttons[0].h, 52.0)
+  let dy = buttons[1].y - buttons[0].y
+  assert_true(dy >= 56.0 && dy <= 64.0)
+  // First button focused by default
+  assert_true(buttons[0].focused)
+  assert_eq(buttons[0].resource, "ui.button_focus")
+  assert_false(buttons[1].focused)
+  assert_eq(buttons[1].resource, "ui.button")
+}
+
+///|
+test "focus_delta wraps and activate invokes focused button" {
+  let app = UiApp::new()
+  let mut a_n = 0
+  let mut b_n = 0
+  let a_id = app.alloc_action(fn(_c : &Capabilities) { a_n = a_n + 1 })
+  let b_id = app.alloc_action(fn(_c : &Capabilities) { b_n = b_n + 1 })
+  app.register_modal(
+    "m",
+    UiNode::VBox(
+      x=Some(0.0),
+      y=Some(0.0),
+      children=[
+        UiNode::Button(label="A", action_id=a_id, visible=VisiblePred::Always),
+        UiNode::Button(label="B", action_id=b_id, visible=VisiblePred::Always),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  let caps = FakeCaps::new()
+  let c : &Capabilities = caps
+  rt.show_modal("m")
+  rt.focus_delta(c, 1)
+  rt.activate(c)
+  assert_eq(a_n, 0)
+  assert_eq(b_n, 1)
+  rt.focus_delta(c, 1) // wrap to A
+  rt.activate(c)
+  assert_eq(a_n, 1)
+}
+
+///|
+test "menu mode paint_modal prepends dim" {
+  let app = UiApp::new()
+  app.register_modal(
+    "game_menu",
+    UiNode::Button(label="Back", action_id=0, visible=VisiblePred::Always),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.mode = Playing
+  rt.show_modal("game_menu")
+  assert_true(rt.mode is Menu)
+  let ops = rt.paint_modal(
+    canvas_w=1920.0,
+    canvas_h=1080.0,
+    bind=UiBindCtx::empty(),
+  )
+  assert_true(ops.length() >= 2)
+  assert_eq(ops[0].resource, "ui.menu_dim")
+  assert_eq(ops[0].w, 1920.0)
+  assert_eq(ops[0].h, 1080.0)
+}
+
+///|
+test "title root modal has no dim; nested modal dims" {
+  let app = UiApp::new()
+  app.register_modal(
+    "title",
+    UiNode::Button(label="Start", action_id=0, visible=VisiblePred::Always),
+  )
+  app.register_modal(
+    "settings",
+    UiNode::Button(label="Back", action_id=1, visible=VisiblePred::Always),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("title")
+  assert_true(rt.mode is Title)
+  let ops1 = rt.paint_modal(
+    canvas_w=1920.0,
+    canvas_h=1080.0,
+    bind=UiBindCtx::empty(),
+  )
+  assert_true(ops1.length() >= 1)
+  assert_false(ops1[0].resource == "ui.menu_dim")
+  rt.show_modal("settings")
+  let ops2 = rt.paint_modal(
+    canvas_w=1920.0,
+    canvas_h=1080.0,
+    bind=UiBindCtx::empty(),
+  )
+  assert_eq(ops2[0].resource, "ui.menu_dim")
+}
+
+///|
+test "choice list expands and activate confirms index" {
+  let app = UiApp::new()
+  app.set_hud(
+    UiNode::ChoiceList(
+      x=100.0,
+      y=400.0,
+      w=500.0,
+      line_h=48.0,
+      visible=VisiblePred::HasChoices,
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.mode = Playing
+  let bind = {
+    ..UiBindCtx::empty(),
+    has_choices: true,
+    choice_labels: ["Yes", "No"],
+  }
+  rt.sync_bind(bind)
+  let ops = rt.paint_hud(canvas_w=1920.0, canvas_h=1080.0, bind~)
+  let mut rows = 0
+  for op in ops {
+    if op.resource == "ui.button" || op.resource == "ui.button_focus" {
+      rows = rows + 1
+    }
+  }
+  assert_eq(rows, 2)
+  let caps = FakeCaps::new()
+  let c : &Capabilities = caps
+  // Focus second choice and activate
+  rt.focus_delta(c, 1)
+  rt.activate(c)
+  guard caps.confirmed_choice is Some(1) else { fail("expected choice 1") }
+}
+
+///|
+test "handle_pointer hits button and activates" {
+  let app = UiApp::new()
+  let mut n = 0
+  let id = app.alloc_action(fn(_c : &Capabilities) { n = n + 1 })
+  app.register_modal(
+    "m",
+    UiNode::VBox(
+      x=Some(100.0),
+      y=Some(200.0),
+      children=[
+        UiNode::Button(label="Hit", action_id=id, visible=VisiblePred::Always),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  let caps = FakeCaps::new()
+  let c : &Capabilities = caps
+  rt.show_modal("m")
+  rt.sync_bind(UiBindCtx::empty())
+  // Miss
+  rt.handle_pointer(c, 10.0, 10.0)
+  assert_eq(n, 0)
+  // Hit button rect [100,200]–[500,252]
+  rt.handle_pointer(c, 150.0, 220.0)
+  assert_eq(n, 1)
+}
+
+///|
+test "return_modal restores Playing when stack empties from Menu" {
+  let app = UiApp::new()
+  app.register_modal(
+    "game_menu",
+    UiNode::Button(label="Back", action_id=0, visible=VisiblePred::Always),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.mode = Playing
+  rt.show_modal("game_menu")
+  assert_true(rt.mode is Menu)
+  rt.return_modal()
+  assert_eq(rt.stack_depth(), 0)
+  assert_true(rt.mode is Playing)
+}
+
+///|
+test "hide_modal removes by name" {
+  let app = UiApp::new()
+  app.register_modal(
+    "a",
+    UiNode::Button(label="A", action_id=0, visible=VisiblePred::Always),
+  )
+  app.register_modal(
+    "b",
+    UiNode::Button(label="B", action_id=1, visible=VisiblePred::Always),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.mode = Playing
+  rt.show_modal("a")
+  rt.show_modal("b")
+  assert_eq(rt.stack_depth(), 2)
+  rt.hide_modal(name="a")
+  assert_eq(rt.stack_depth(), 1)
+  assert_eq(rt.stack[0].name, "b")
+}
+
+///|
+test "slot occupied false is not focusable" {
+  let app = UiApp::new()
+  let mut load_n = 0
+  let id0 = app.alloc_action(fn(c : &Capabilities) {
+    c.load_slot(0)
+    load_n = load_n + 1
+  })
+  let id1 = app.alloc_action(fn(c : &Capabilities) {
+    c.load_slot(1)
+    load_n = load_n + 1
+  })
+  app.register_modal(
+    "save_load",
+    UiNode::VBox(
+      x=Some(0.0),
+      y=Some(0.0),
+      children=[
+        UiNode::Button(
+          label="Slot 0",
+          action_id=id0,
+          visible=VisiblePred::SlotOccupied(0),
+        ),
+        UiNode::Button(
+          label="Slot 1",
+          action_id=id1,
+          visible=VisiblePred::Always,
+        ),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  let caps = FakeCaps::new(slots=[false, true])
+  let c : &Capabilities = caps
+  rt.show_modal("save_load", mode="load")
+  let bind = {
+    ..UiBindCtx::empty(),
+    occupied: [false, true],
+    modal_mode: Some("load"),
+  }
+  rt.sync_bind(bind)
+  // Only Slot 1 is focusable; activate should hit id1
+  rt.activate(c)
+  assert_eq(caps.load_calls.length(), 1)
+  assert_eq(caps.load_calls[0], 1)
 }
