@@ -18,4 +18,10 @@ pub(open) trait Capabilities {
   fn confirm_choice(Self, Int) -> Unit
   fn advance(Self) -> Unit
   fn prefs(Self) -> Prefs
+  /// Confirm pending overwrite/quit (Yes).
+  fn confirm_yes(Self) -> Unit
+  /// Cancel pending overwrite/quit (No).
+  fn confirm_no(Self) -> Unit
+  /// Ask before tearing down to title (shows confirm modal).
+  fn request_quit_to_title(Self) -> Unit
 }

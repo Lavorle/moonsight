@@ -32,6 +32,8 @@ pub(all) struct Engine {
   mut backlog : BacklogStore
   /// Last recorded speaker+text key; avoids double-recording the same line.
   mut backlog_last_key : String
+  /// Pending overwrite / quit confirm (None when no dialog active).
+  mut pending_confirm : ConfirmKind?
 }
 
 ///|
@@ -73,6 +75,7 @@ pub fn Engine::from_ir(
     slot_blobs,
     backlog: BacklogStore::new(),
     backlog_last_key: "",
+    pending_confirm: None,
   }
   eng.sync_mixer_prefs()
   eng
@@ -107,6 +110,7 @@ pub fn Engine::boot_title(self : Engine) -> Unit {
 pub fn Engine::start_game(self : Engine) -> Unit {
   self.ui.stack = []
   self.ui.mode = Playing
+  self.pending_confirm = None
   let stage = Stage::new()
   stage.scene = self.ir_entry
   self.stage = stage
@@ -121,6 +125,7 @@ pub fn Engine::start_game(self : Engine) -> Unit {
 pub fn Engine::quit_to_title(self : Engine) -> Unit {
   self.ui.stack = []
   self.ui.mode = Title
+  self.pending_confirm = None
   let stage = Stage::new()
   stage.scene = self.ir_entry
   self.stage = stage
@@ -159,7 +164,8 @@ pub impl Capabilities for Engine with fn hide_modal(self, name~) {
 }
 
 ///|
-pub impl Capabilities for Engine with fn save_slot(self, i) {
+/// Write `i` immediately (no confirm). Used by empty-slot save and confirm_yes.
+fn Engine::write_slot(self : Engine, i : Int) -> Unit {
   if i < 0 {
     return
   }
@@ -167,6 +173,32 @@ pub impl Capabilities for Engine with fn save_slot(self, i) {
     self.slot_blobs.push(None)
   }
   self.slot_blobs[i] = Some(self.save(slot=i))
+}
+
+///|
+/// Pop confirm modal when it is on top of the stack.
+fn Engine::pop_confirm_if_top(self : Engine) -> Unit {
+  if self.ui.stack_depth() > 0 &&
+    self.ui.stack[self.ui.stack_depth() - 1].name == "confirm" {
+    self.ui.return_modal()
+  }
+}
+
+///|
+pub impl Capabilities for Engine with fn save_slot(self, i) {
+  if i < 0 {
+    return
+  }
+  while self.slot_blobs.length() <= i {
+    self.slot_blobs.push(None)
+  }
+  // Occupied → confirm; empty → write immediately.
+  if self.slot_blobs[i] is Some(_) {
+    self.pending_confirm = Some(OverwriteSave(i))
+    self.ui.show_modal("confirm")
+    return
+  }
+  self.write_slot(i)
 }
 
 ///|
@@ -252,6 +284,35 @@ pub impl Capabilities for Engine with fn advance(self) {
 ///|
 pub impl Capabilities for Engine with fn prefs(self) {
   self.ui.prefs
+}
+
+///|
+pub impl Capabilities for Engine with fn confirm_yes(self) {
+  let kind = self.pending_confirm
+  self.pending_confirm = None
+  match kind {
+    Some(OverwriteSave(i)) => {
+      self.write_slot(i)
+      self.pop_confirm_if_top()
+    }
+    Some(QuitToTitle) => {
+      // Teardown clears stack and enters Title.
+      self.quit_to_title()
+    }
+    None => self.pop_confirm_if_top()
+  }
+}
+
+///|
+pub impl Capabilities for Engine with fn confirm_no(self) {
+  self.pending_confirm = None
+  self.pop_confirm_if_top()
+}
+
+///|
+pub impl Capabilities for Engine with fn request_quit_to_title(self) {
+  self.pending_confirm = Some(QuitToTitle)
+  self.ui.show_modal("confirm")
 }
 
 ///|

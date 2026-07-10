@@ -1,5 +1,5 @@
 ///|
-/// Standard system modals: title, game_menu, save_load, settings.
+/// Standard system modals: title, game_menu, save_load, settings, confirm.
 ///
 /// Labels and actions for system modals on `UiApp` + `Capabilities`.
 
@@ -59,7 +59,40 @@ fn build_game_menu(app : @runtime.UiApp) -> @runtime.UiNode {
       ),
       app.button(
         "Title",
-        fn(c : &@runtime.Capabilities) { c.quit_to_title() },
+        fn(c : &@runtime.Capabilities) { c.request_quit_to_title() },
+      ),
+    ],
+  )
+}
+
+///|
+/// Confirm modal: default focus is No (registered first).
+fn build_confirm(app : @runtime.UiApp) -> @runtime.UiNode {
+  @runtime.UiNode::VBox(
+    x=Some(760.0),
+    y=Some(400.0),
+    children=[
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::Literal("Confirm"),
+        x=0.0,
+        y=0.0,
+        font_size=30.0,
+        visible=@runtime.VisiblePred::Always,
+      ),
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::Literal("Are you sure?"),
+        x=0.0,
+        y=0.0,
+        font_size=24.0,
+        visible=@runtime.VisiblePred::Always,
+      ),
+      app.button(
+        "No",
+        fn(c : &@runtime.Capabilities) { c.confirm_no() },
+      ),
+      app.button(
+        "Yes",
+        fn(c : &@runtime.Capabilities) { c.confirm_yes() },
       ),
     ],
   )

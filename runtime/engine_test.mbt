@@ -776,6 +776,117 @@ test "skip_held burst max is 8 yields per tick" {
 }
 
 ///|
+/// First save on empty slot writes immediately; second on occupied opens confirm.
+test "save_slot occupied opens confirm without overwriting" {
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let ir = @script.compile_to_ir(src, file="confirm_save.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.stage.set_var("marker", Int(1))
+  let caps : &@runtime.Capabilities = eng
+  caps.save_slot(0)
+  assert_true(eng.pending_confirm is None)
+  guard eng.get_slot_blob(0) is Some(first) else { fail("first save") }
+  let g1 = @runtime.parse_save_game(first)
+  assert_true(g1.vars.get("marker") == Some(Int(1)))
+  // Mutate stage; re-save must open confirm and leave first blob intact.
+  eng.stage.set_var("marker", Int(2))
+  caps.save_slot(0)
+  assert_true(eng.pending_confirm == Some(OverwriteSave(0)))
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "confirm")
+  guard eng.get_slot_blob(0) is Some(still) else { fail("still first") }
+  let g2 = @runtime.parse_save_game(still)
+  assert_true(g2.vars.get("marker") == Some(Int(1)))
+}
+
+///|
+test "confirm_yes overwrites save" {
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let ir = @script.compile_to_ir(src, file="confirm_yes.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.stage.set_var("marker", Int(1))
+  let caps : &@runtime.Capabilities = eng
+  caps.save_slot(0)
+  eng.stage.set_var("marker", Int(2))
+  caps.save_slot(0)
+  assert_true(eng.pending_confirm == Some(OverwriteSave(0)))
+  caps.confirm_yes()
+  assert_true(eng.pending_confirm is None)
+  assert_eq(eng.ui.stack_depth(), 0)
+  guard eng.get_slot_blob(0) is Some(blob) else { fail("overwritten") }
+  let g = @runtime.parse_save_game(blob)
+  assert_true(g.vars.get("marker") == Some(Int(2)))
+}
+
+///|
+test "confirm_no cancels" {
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let ir = @script.compile_to_ir(src, file="confirm_no.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.stage.set_var("marker", Int(1))
+  let caps : &@runtime.Capabilities = eng
+  caps.save_slot(0)
+  eng.stage.set_var("marker", Int(2))
+  caps.save_slot(0)
+  assert_true(eng.pending_confirm == Some(OverwriteSave(0)))
+  caps.confirm_no()
+  assert_true(eng.pending_confirm is None)
+  assert_eq(eng.ui.stack_depth(), 0)
+  guard eng.get_slot_blob(0) is Some(blob) else { fail("kept") }
+  let g = @runtime.parse_save_game(blob)
+  assert_true(g.vars.get("marker") == Some(Int(1)))
+}
+
+///|
+test "request_quit_to_title requires confirm_yes" {
+  let app = @runtime.UiApp::new()
+  app.register_modal(
+    "title",
+    @runtime.UiNode::Text(
+      src=@runtime.TextBindSrc::Literal("Title"),
+      x=0.0,
+      y=0.0,
+      font_size=24.0,
+      visible=@runtime.VisiblePred::Always,
+    ),
+  )
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let ir = @script.compile_to_ir(src, file="confirm_quit.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", app~)
+  eng.ui.mode = Playing
+  let caps : &@runtime.Capabilities = eng
+  caps.request_quit_to_title()
+  assert_true(eng.pending_confirm == Some(QuitToTitle))
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "confirm")
+  assert_true(!(eng.ui.mode is Title))
+  // No: cancel, still not title.
+  caps.confirm_no()
+  assert_true(eng.pending_confirm is None)
+  assert_eq(eng.ui.stack_depth(), 0)
+  assert_true(!(eng.ui.mode is Title))
+  // Yes: tear down to title.
+  caps.request_quit_to_title()
+  caps.confirm_yes()
+  assert_true(eng.pending_confirm is None)
+  assert_true(eng.ui.mode is Title)
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "title")
+}
+
+///|
 /// Pref volume mutations must multiply into global mixer output gains.
 test "set_pref volume updates global mixer gains" {
   @audio.reset_global_mixer()

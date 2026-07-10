@@ -106,6 +106,21 @@ impl Capabilities for FakeCaps with fn prefs(self) {
 }
 
 ///|
+impl Capabilities for FakeCaps with fn confirm_yes(_self) {
+  ()
+}
+
+///|
+impl Capabilities for FakeCaps with fn confirm_no(_self) {
+  ()
+}
+
+///|
+impl Capabilities for FakeCaps with fn request_quit_to_title(_self) {
+  ()
+}
+
+///|
 test "ui app registers modal and hud" {
   let app = UiApp::new()
   app.set_hud(

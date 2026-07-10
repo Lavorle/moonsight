@@ -1,4 +1,11 @@
 ///|
+/// Pending confirm dialog kind (overwrite save or quit to title).
+pub(all) enum ConfirmKind {
+  OverwriteSave(Int)
+  QuitToTitle
+} derive(Debug, Eq)
+
+///|
 /// Source for bound text widgets (literal or runtime fields).
 pub(all) enum TextBindSrc {
   Literal(String)
