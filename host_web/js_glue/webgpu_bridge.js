@@ -879,20 +879,17 @@ export function rasterizeGlyphToAtlas(
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#ffffff";
-  // Measure real ink extents so g/y/p descenders fit inside the cell.
+  // Shared baseline for ALL glyphs of this size (do NOT use per-char ascent —
+  // that made letters jump vertically: "Moonyuki" looked broken).
+  // Cell height is ~1.4em; put alphabetic baseline at 0.78em from top so
+  // ascenders and descenders (g/y/p) both fit with AA margin.
+  const baseline = Math.min(
+    atlasH - Math.max(6, Math.ceil(fontPx * 0.28)),
+    Math.floor(fontPx * 0.78),
+  );
+  // Only horizontal bearing is per-glyph.
   const metrics = ctx.measureText(ch);
   const left = Math.ceil(metrics.actualBoundingBoxLeft || 0);
-  const ascent = Math.ceil(
-    metrics.actualBoundingBoxAscent || fontPx * 0.8,
-  );
-  const descent = Math.ceil(
-    metrics.actualBoundingBoxDescent || fontPx * 0.25,
-  );
-  // 1px AA pad above ascent and below descent.
-  let baseline = ascent + 1;
-  if (baseline + descent + 1 > atlasH) {
-    baseline = Math.max(ascent + 1, atlasH - descent - 1);
-  }
   const xPen = Math.max(0, left) + 1;
   ctx.fillText(ch, xPen, baseline);
   const img = ctx.getImageData(0, 0, atlasW, atlasH);

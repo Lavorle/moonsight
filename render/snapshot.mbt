@@ -200,9 +200,10 @@ fn emit_text_glyphs(
       }
       // Cell / screen / pen MUST share the same width (avoid glyph overlap).
       let adv_i = adv.to_int()
-      // +2px for left bearing; +~40% height for descenders + AA (g/y/p/q/j).
+      // +2px for left bearing; ~1.35em height so a shared baseline can fit
+      // both capitals and descenders (g/y/p) without per-glyph vertical shifts.
       let cell_w = if adv_i < 1 { 3 } else { adv_i + 2 }
-      let cell_h = size + (size * 2) / 5 + 2
+      let cell_h = size + size / 3 + 4
       let entry = atlas.get_or_queue(ch, size, cell_w=cell_w, cell_h=cell_h)
       let sw = Float::from_int(entry.atlas_w)
       let sh = Float::from_int(entry.atlas_h)
