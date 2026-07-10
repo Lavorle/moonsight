@@ -85,6 +85,9 @@ pub fn ResourceTable::count(self : ResourceTable) -> Int {
 /// - `4` ToggleAuto
 /// - `5` MenuUp
 /// - `6` MenuDown
+/// - `7` MenuLeft
+/// - `8` MenuRight
+/// - `9` OpenBacklog
 /// - `10 + n` Select(n)
 pub fn intent_from_code(code : Int) -> @runtime.Intent {
   if code >= 10 {
@@ -97,6 +100,9 @@ pub fn intent_from_code(code : Int) -> @runtime.Intent {
       4 => @runtime.Intent::ToggleAuto
       5 => @runtime.Intent::MenuUp
       6 => @runtime.Intent::MenuDown
+      7 => @runtime.Intent::MenuLeft
+      8 => @runtime.Intent::MenuRight
+      9 => @runtime.Intent::OpenBacklog
       _ => @runtime.Intent::None_
     }
   }
@@ -113,6 +119,9 @@ pub fn intent_to_code(intent : @runtime.Intent) -> Int {
     ToggleAuto => 4
     MenuUp => 5
     MenuDown => 6
+    MenuLeft => 7
+    MenuRight => 8
+    OpenBacklog => 9
     Select(n) => 10 + n
   }
 }

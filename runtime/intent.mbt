@@ -14,4 +14,10 @@ pub(all) enum Intent {
   MenuUp
   /// Move screen focus down (next focusable).
   MenuDown
+  /// Move screen focus / slider left (previous value).
+  MenuLeft
+  /// Move screen focus / slider right (next value).
+  MenuRight
+  /// Open the dialogue backlog modal while Playing.
+  OpenBacklog
 } derive(Debug, Eq)

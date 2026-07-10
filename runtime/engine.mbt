@@ -437,10 +437,17 @@ pub fn Engine::tick(
     return
   }
 
-  // Playing (no modal stack): OpenMenu opens game_menu without advancing narrative.
+  // Playing (no modal stack): OpenMenu / OpenBacklog open system modals
+  // without advancing narrative.
   let effective = self.effective_intent(intent)
   if effective is OpenMenu {
     self.ui.show_modal("game_menu")
+    @audio.global_mixer().tick(dt)
+    self.drain_ui_ops()
+    return
+  }
+  if effective is OpenBacklog {
+    self.ui.show_modal("backlog")
     @audio.global_mixer().tick(dt)
     self.drain_ui_ops()
     return
@@ -572,6 +579,8 @@ pub fn Engine::sync_ui_bind(self : Engine) -> Unit {
   } else {
     self.ui.stack[self.ui.stack.length() - 1].mode
   }
+  // Last 12 backlog lines (oldest first among the window; newest last).
+  let backlog_lines = format_backlog_lines(self.backlog, 12)
   self.ui.sync_bind(
     {
       has_text,
@@ -583,8 +592,26 @@ pub fn Engine::sync_ui_bind(self : Engine) -> Unit {
       choice_labels,
       dialogue_name,
       dialogue_body,
+      backlog_lines,
     },
   )
+}
+
+///|
+/// Preformat the last `max` backlog entries as "Name: text" (or bare text).
+fn format_backlog_lines(store : BacklogStore, max : Int) -> Array[String] {
+  let n = store.len()
+  let start = if n > max { n - max } else { 0 }
+  let out : Array[String] = []
+  for i in start..<n {
+    let e = store.get(i)
+    let line = match e.speaker {
+      Some(s) => "\{s}: \{e.text}"
+      None => e.text
+    }
+    out.push(line)
+  }
+  out
 }
 
 ///|
@@ -608,6 +635,10 @@ fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
     Advance | SkipTyping => self.ui.activate(caps)
     MenuUp => self.ui.focus_delta(caps, -1)
     MenuDown => self.ui.focus_delta(caps, 1)
+    // Reserved for Task 7 Slider; no-op until sliders exist.
+    MenuLeft | MenuRight => ()
+    // OpenBacklog is handled on the Playing path (empty stack).
+    OpenBacklog => ()
     ToggleAuto => self.apply_intent(ToggleAuto)
     Select(n) => {
       // Optional: jump focus to index n when in range.
@@ -719,9 +750,12 @@ fn Engine::apply_intent(self : Engine, intent : Intent) -> Unit {
         None_
         | Select(_)
         | OpenMenu
+        | OpenBacklog
         | ToggleAuto
         | MenuUp
-        | MenuDown => ()
+        | MenuDown
+        | MenuLeft
+        | MenuRight => ()
       }
     Choose =>
       match intent {

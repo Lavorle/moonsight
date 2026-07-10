@@ -219,6 +219,42 @@ test "completed dialogue line is recorded in backlog" {
 }
 
 ///|
+test "OpenBacklog pushes modal name backlog" {
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|
+  let ir = @script.compile_to_ir(src, file="bl_open.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", app=app_backlog_close())
+  eng.tick(None_, dt=0.0)
+  assert_true(eng.vm.wait == Yield)
+  eng.tick(OpenBacklog)
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "backlog")
+  assert_true(eng.ui.mode is Menu)
+}
+
+///|
+test "sync_ui_bind fills backlog_lines after dialogue complete" {
+  let src =
+    #|- scene "s"
+    #|Hero:Hello
+    #|
+  let ir = @script.compile_to_ir(src, file="bl_bind.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.tick(None_, dt=0.0)
+  eng.tick(Advance)
+  eng.sync_ui_bind()
+  assert_true(eng.ui.bind.backlog_lines.length() >= 1)
+  assert_eq(eng.ui.bind.backlog_lines[0], "Hero: Hello")
+  assert_eq(
+    @runtime.TextBindSrc::BacklogLine(0).resolve(eng.ui.bind),
+    "Hero: Hello",
+  )
+  assert_eq(@runtime.TextBindSrc::BacklogLine(99).resolve(eng.ui.bind), "")
+}
+
+///|
 test "jump_if branches Talk vs Leave to different scenes" {
   let src =
     #|- scene "s"
@@ -346,6 +382,23 @@ fn app_game_menu_continue() -> @runtime.UiApp {
       y=None,
       children=[
         app.button("Continue", fn(c : &@runtime.Capabilities) { c.return_modal() }),
+      ],
+    ),
+  )
+  app
+}
+
+///|
+/// UiApp: backlog with Close → return_modal.
+fn app_backlog_close() -> @runtime.UiApp {
+  let app = @runtime.UiApp::new()
+  app.register_modal(
+    "backlog",
+    @runtime.UiNode::VBox(
+      x=None,
+      y=None,
+      children=[
+        app.button("Close", fn(c : &@runtime.Capabilities) { c.return_modal() }),
       ],
     ),
   )

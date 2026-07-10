@@ -1,5 +1,5 @@
 ///|
-test "register sets hud and five modals" {
+test "register sets hud and six modals" {
   let app = @runtime.UiApp::new()
   register(app)
   assert_true(app.hud is Some(_))
@@ -8,6 +8,7 @@ test "register sets hud and five modals" {
   assert_true(app.modals.contains("save_load"))
   assert_true(app.modals.contains("settings"))
   assert_true(app.modals.contains("confirm"))
+  assert_true(app.modals.contains("backlog"))
 }
 
 ///|

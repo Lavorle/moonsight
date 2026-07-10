@@ -1,5 +1,5 @@
 ///|
-/// Standard system modals: title, game_menu, save_load, settings, confirm.
+/// Standard system modals: title, game_menu, save_load, settings, confirm, backlog.
 ///
 /// Labels and actions for system modals on `UiApp` + `Capabilities`.
 
@@ -42,6 +42,10 @@ fn build_game_menu(app : @runtime.UiApp) -> @runtime.UiNode {
         fn(c : &@runtime.Capabilities) { c.return_modal() },
       ),
       app.button(
+        "History",
+        fn(c : &@runtime.Capabilities) { c.show_modal("backlog", mode=None) },
+      ),
+      app.button(
         "Save",
         fn(c : &@runtime.Capabilities) {
           c.show_modal("save_load", mode=Some("save"))
@@ -63,6 +67,35 @@ fn build_game_menu(app : @runtime.UiApp) -> @runtime.UiNode {
       ),
     ],
   )
+}
+
+///|
+/// Backlog modal: title + up to 12 bound lines + Close.
+fn build_backlog(app : @runtime.UiApp) -> @runtime.UiNode {
+  let children : Array[@runtime.UiNode] = [
+    @runtime.UiNode::Text(
+      src=@runtime.TextBindSrc::Literal("History"),
+      x=0.0,
+      y=0.0,
+      font_size=30.0,
+      visible=@runtime.VisiblePred::Always,
+    ),
+  ]
+  for i in 0..<12 {
+    children.push(
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::BacklogLine(i),
+        x=0.0,
+        y=0.0,
+        font_size=22.0,
+        visible=@runtime.VisiblePred::Always,
+      ),
+    )
+  }
+  children.push(
+    app.button("Close", fn(c : &@runtime.Capabilities) { c.return_modal() }),
+  )
+  @runtime.UiNode::VBox(x=Some(400.0), y=Some(80.0), children~)
 }
 
 ///|

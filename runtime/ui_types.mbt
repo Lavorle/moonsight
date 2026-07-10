@@ -14,6 +14,8 @@ pub(all) enum TextBindSrc {
   Pref(String)
   SlotLabel(Int)
   Var(String)
+  /// Preformatted backlog line at index `i` (0 = oldest of the last 12).
+  BacklogLine(Int)
 } derive(Debug, Eq)
 
 ///|
@@ -123,6 +125,8 @@ pub(all) struct UiBindCtx {
   choice_labels : Array[String]
   dialogue_name : String
   dialogue_body : String
+  /// Last 12 backlog lines preformatted as "Name: text" (or bare text); newest last.
+  backlog_lines : Array[String]
 } derive(Debug)
 
 ///|
@@ -138,6 +142,7 @@ pub fn UiBindCtx::empty() -> UiBindCtx {
     choice_labels: [],
     dialogue_name: "",
     dialogue_body: "",
+    backlog_lines: [],
   }
 }
 
@@ -196,6 +201,13 @@ pub fn TextBindSrc::resolve(self : TextBindSrc, bind : UiBindCtx) -> String {
         Some(s) => s
         None => ""
       }
+    BacklogLine(i) => {
+      if i < 0 || i >= bind.backlog_lines.length() {
+        ""
+      } else {
+        bind.backlog_lines[i]
+      }
+    }
   }
 }
 

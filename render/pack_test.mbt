@@ -105,7 +105,22 @@ test "intent code mapping" {
   assert_eq(intent_to_code(intent_from_code(0)), 0)
   assert_eq(intent_to_code(intent_from_code(1)), 1)
   assert_eq(intent_to_code(intent_from_code(4)), 4)
+  assert_eq(intent_to_code(intent_from_code(7)), 7)
+  assert_eq(intent_to_code(intent_from_code(8)), 8)
+  assert_eq(intent_to_code(intent_from_code(9)), 9)
   assert_eq(intent_to_code(intent_from_code(12)), 12)
+  match intent_from_code(7) {
+    MenuLeft => ()
+    _ => fail("expected MenuLeft")
+  }
+  match intent_from_code(8) {
+    MenuRight => ()
+    _ => fail("expected MenuRight")
+  }
+  match intent_from_code(9) {
+    OpenBacklog => ()
+    _ => fail("expected OpenBacklog")
+  }
   match intent_from_code(12) {
     Select(n) => assert_eq(n, 2)
     _ => fail("expected Select(2)")
