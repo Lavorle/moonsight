@@ -164,7 +164,7 @@ Preferred entry:
 | `@flow.yield` | Implemented |
 | `@flow.wait [time]` | Implemented (yield; duration reserved for engine) |
 | `@flow.choice …` | Implemented → IR `Choose` |
-| Conditional jump / JumpIf | **Not** in source yet (choice index is stored in a var) |
+| Conditional jump / JumpIf | `@flow.jump_if` / `@flow.jump_if_not` → IR `JumpIf`/`JumpIfNot` |
 | `@menu` sugar | Not implemented; use `@flow.choice` |
 
 ### Choice
@@ -172,14 +172,16 @@ Preferred entry:
 ```yuki
 @flow.choice "Talk" "Leave" --result act
 @var.set "demo_choice" act
+@flow.jump_if act 0 "talk"
+@flow.jump "leave"
 ```
 
 - Positional strings/idents are option labels (0-based index on select).
 - Result variable: `--result name`, `result=name`, or `result="name"`.
   Default result var is `"_"`.
 - On select, the VM stores an **Int** option index in that variable and resumes.
-- Without JumpIf, authors must continue linearly or always jump to a fixed
-  next scene (demo records the choice then always jumps to `"talk"`).
+- Branch with `@flow.jump_if <var> <value> "scene"` (equality) or
+  `@flow.jump_if <cond> "scene"` (truthy). `_not` inverts the condition.
 
 ## Variables
 
