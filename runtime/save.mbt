@@ -38,6 +38,7 @@ pub(all) struct AudioLogicState {
 /// Human-debuggable save payload (JSON via `ToJson`/`FromJson`).
 ///
 /// Format v3: full `LayerState` (tweens + pending_hide) and timed fade/wait fields.
+/// Additive `saved_at` (ISO timestamp or empty) is tolerated when missing on load.
 pub(all) struct SaveGame {
   format_version : Int
   module_id : String
@@ -63,6 +64,8 @@ pub(all) struct SaveGame {
   fade_remaining : Double
   /// Seconds left for timed `@flow.wait` (0 = not in timed wait).
   wait_remaining : Double
+  /// Host-supplied save timestamp (ISO-8601 or empty when no clock FFI).
+  saved_at : String
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
@@ -159,6 +162,8 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
     fade_to: self.stage.fade_to,
     fade_remaining: self.stage.fade_remaining,
     wait_remaining: self.stage.wait_remaining,
+    // No wall-clock FFI in pure runtime; host may patch `saved_at` if needed.
+    saved_at: "",
   }
   game.to_json().stringify()
 }
@@ -191,6 +196,8 @@ pub fn parse_save_game(blob : String) -> SaveGame raise SaveError {
     }
     return save_game_from_v2(v2)
   }
+  // Old v3 blobs omit `saved_at`; inject empty default so FromJson succeeds.
+  let json = ensure_saved_at_default(json)
   let game : SaveGame = @json.from_json(json) catch {
     err => raise SaveError::DecodeFailed(message=err.to_string())
   }
@@ -198,6 +205,36 @@ pub fn parse_save_game(blob : String) -> SaveGame raise SaveError {
     raise SaveError::UnsupportedVersion(version=game.format_version)
   }
   game
+}
+
+///|
+/// Ensure `saved_at` is present (default `""`) for additive load compatibility.
+fn ensure_saved_at_default(json : Json) -> Json {
+  match json {
+    Object(map) => {
+      if map.get("saved_at") is None {
+        map["saved_at"] = Json::string("")
+      }
+      json
+    }
+    _ => json
+  }
+}
+
+///|
+/// UI label for a save slot: `"Empty"` or `"\{scene} · \{saved_at}"`.
+///
+/// When `saved_at` is empty, returns just the scene name.
+pub fn slot_label(saved : SaveGame?) -> String {
+  match saved {
+    None => "Empty"
+    Some(game) =>
+      if game.saved_at == "" {
+        game.scene
+      } else {
+        "\{game.scene} · \{game.saved_at}"
+      }
+  }
 }
 
 ///|
@@ -261,6 +298,7 @@ fn save_game_from_v2(v2 : SaveGameV2) -> SaveGame {
     fade_to: 0.0,
     fade_remaining: 0.0,
     wait_remaining: 0.0,
+    saved_at: "",
   }
 }
 

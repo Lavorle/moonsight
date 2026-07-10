@@ -185,6 +185,56 @@ test "save roundtrip restores bgm_volume" {
 }
 
 ///|
+test "save header saved_at roundtrip and missing defaults empty" {
+  let eng = load_min_demo_engine()
+  eng.tick(None_)
+  let blob = eng.save()
+  let game = @runtime.parse_save_game(blob)
+  assert_eq(game.format_version, 3)
+  assert_eq(game.saved_at, "")
+  // Explicit saved_at survives round-trip through JSON.
+  let with_ts =
+    #|{"format_version":3,"module_id":"","scene":"s","ip":0,"call_stack":[],"vars":{},"layers":[],"overlay_opacity":0,"audio":{},"wait":"Running","auto":false,"fade_to":0,"fade_remaining":0,"wait_remaining":0,"saved_at":"2026-07-10T12:00:00Z"}
+  let g2 = @runtime.parse_save_game(with_ts)
+  assert_eq(g2.saved_at, "2026-07-10T12:00:00Z")
+  assert_eq(g2.scene, "s")
+  // Old v3 blob without saved_at still loads (default "").
+  let legacy =
+    #|{"format_version":3,"module_id":"","scene":"s","ip":0,"call_stack":[],"vars":{},"layers":[],"overlay_opacity":0,"audio":{},"wait":"Running","auto":false,"fade_to":0,"fade_remaining":0,"wait_remaining":0}
+  let g3 = @runtime.parse_save_game(legacy)
+  assert_eq(g3.saved_at, "")
+  assert_eq(g3.scene, "s")
+}
+
+///|
+test "slot_label empty and filled" {
+  assert_eq(slot_label(None), "Empty")
+  let bare : SaveGame = {
+    format_version: 3,
+    module_id: "",
+    scene: "chapter1",
+    ip: 0,
+    call_stack: [],
+    vars: {},
+    layers: [],
+    text: None,
+    overlay_opacity: 0.0,
+    audio: { bgm: None, se: None, bgm_volume: None, bgm_fade_to: None, bgm_fade_remaining: None, bgm_fade_stop: None },
+    wait: Running,
+    choices: None,
+    choose_result_var: None,
+    auto: false,
+    fade_to: 0.0,
+    fade_remaining: 0.0,
+    wait_remaining: 0.0,
+    saved_at: "",
+  }
+  assert_eq(slot_label(Some(bare)), "chapter1")
+  let stamped = { ..bare, saved_at: "2026-07-10T12:00:00Z" }
+  assert_eq(slot_label(Some(stamped)), "chapter1 · 2026-07-10T12:00:00Z")
+}
+
+///|
 test "save mid fade-out restores audible fade toward stop" {
   @audio.reset_global_mixer()
   let q = @audio.QueueBackend::new()
