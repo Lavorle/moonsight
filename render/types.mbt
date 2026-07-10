@@ -83,6 +83,17 @@ pub(all) struct UiLayout {
   text_color : Color
   name_color : Color
   choice_color : Color
+  /// Screen DSL root origin when vbox/hbox omit x/y.
+  screen_origin_x : Float
+  screen_origin_y : Float
+  /// Vertical / horizontal step for button and text widgets.
+  screen_line_h : Float
+  screen_button_w : Float
+  screen_button_h : Float
+  screen_font_size : Float
+  screen_text_color : Color
+  /// Full-screen menu dim opacity (Menu mode only).
+  screen_dim_opacity : Float
 } derive(Debug)
 
 ///|
@@ -123,6 +134,15 @@ pub fn UiLayout::default_fhd() -> UiLayout {
     text_color: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
     name_color: { r: 1.0, g: 0.92, b: 0.7, a: 1.0 },
     choice_color: { r: 0.85, g: 0.95, b: 1.0, a: 1.0 },
+    // Center-ish column for title / menu stacks on 1920-wide canvas.
+    screen_origin_x: 760.0,
+    screen_origin_y: 200.0,
+    screen_line_h: 64.0,
+    screen_button_w: 400.0,
+    screen_button_h: 52.0,
+    screen_font_size: 30.0,
+    screen_text_color: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
+    screen_dim_opacity: 0.55,
   }
 }
 

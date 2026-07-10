@@ -225,3 +225,124 @@ test "glyph atlas oversized cell is zero placeholder" {
   assert_eq(e2.atlas_w, 0)
   assert_eq(atlas.pending_queue.length(), 1)
 }
+
+///|
+fn two_button_def() -> @script.ScreenDef {
+  {
+    name: "test_menu",
+    root: @script.SNode::VBox(
+      x=None,
+      y=None,
+      children=[
+        @script.SNode::Button(
+          label="One",
+          action=@script.ScreenAction::Noop,
+        ),
+        @script.SNode::Button(
+          label="Two",
+          action=@script.ScreenAction::Noop,
+        ),
+      ],
+    ),
+  }
+}
+
+///|
+test "screen with two buttons emits quads and glyphs" {
+  let st = @runtime.Stage::new()
+  let view = @runtime.StageView::from_stage(
+    st,
+    wait=@runtime.WaitKind::Halted,
+    auto=false,
+  )
+  let defs : Map[String, @script.ScreenDef] = { "test_menu": two_button_def() }
+  let ss = @runtime.ScreenState::new(defs)
+  ss.show("test_menu")
+  let layout = UiLayout::default_fhd()
+  let dl = build_draw_list(view, layout, screens=ss)
+  let mut buttons = 0
+  let mut focus_buttons = 0
+  for s in dl.sprites {
+    if s.resource == ui_button || s.resource == ui_button_focus {
+      buttons = buttons + 1
+    }
+    if s.resource == ui_button_focus {
+      focus_buttons = focus_buttons + 1
+    }
+  }
+  assert_true(buttons >= 2)
+  assert_eq(focus_buttons, 1)
+  // "One" + "Two" → at least 2 glyph quads
+  assert_true(dl.glyphs.length() >= 2)
+}
+
+///|
+test "menu mode dims and skips dialogue" {
+  let st = @runtime.Stage::new()
+  st.begin_text(speaker="Y")
+  st.type_more("Hello hidden")
+  st.complete_text()
+  let view = @runtime.StageView::from_stage(
+    st,
+    wait=@runtime.WaitKind::Yield,
+    auto=false,
+  )
+  let defs : Map[String, @script.ScreenDef] = { "test_menu": two_button_def() }
+  let ss = @runtime.ScreenState::new(defs)
+  ss.mode = @runtime.UiMode::Playing
+  ss.stack = []
+  ss.show("test_menu")
+  assert_true(ss.mode is @runtime.UiMode::Menu)
+  let layout = UiLayout::default_fhd()
+  let dl = build_draw_list(view, layout, screens=ss)
+  let mut has_dim = false
+  let mut has_dialogue = false
+  for s in dl.sprites {
+    if s.resource == ui_menu_dim {
+      has_dim = true
+      assert_eq(s.w, layout.canvas_w)
+      assert_eq(s.h, layout.canvas_h)
+    }
+    if s.resource == ui_dialogue_box {
+      has_dialogue = true
+    }
+  }
+  assert_true(has_dim)
+  assert_true(!has_dialogue)
+}
+
+///|
+test "title mode skips dialogue without dim" {
+  let st = @runtime.Stage::new()
+  st.begin_text()
+  st.type_more("No title dialogue")
+  st.complete_text()
+  let view = @runtime.StageView::from_stage(
+    st,
+    wait=@runtime.WaitKind::Yield,
+    auto=false,
+  )
+  let defs : Map[String, @script.ScreenDef] = { "test_menu": two_button_def() }
+  let ss = @runtime.ScreenState::new(defs)
+  // ScreenState::new starts Title; push title-like screen
+  ss.show("test_menu")
+  assert_true(ss.mode is @runtime.UiMode::Title)
+  let dl = build_draw_list(view, UiLayout::default_fhd(), screens=ss)
+  let mut has_dim = false
+  let mut has_dialogue = false
+  let mut buttons = 0
+  for s in dl.sprites {
+    if s.resource == ui_menu_dim {
+      has_dim = true
+    }
+    if s.resource == ui_dialogue_box {
+      has_dialogue = true
+    }
+    if s.resource == ui_button || s.resource == ui_button_focus {
+      buttons = buttons + 1
+    }
+  }
+  assert_true(!has_dim)
+  assert_true(!has_dialogue)
+  assert_true(buttons >= 2)
+}
