@@ -119,10 +119,15 @@ test "choices set select and clear" {
   guard st.choices is Some(c0) else { fail("set_choices") }
   assert_eq(c0.options.length(), 2)
   assert_eq(c0.options[0], "Yes")
-  assert_true(c0.selected is None)
+  // Focus starts on the first row for keyboard/mouse confirmation.
+  guard c0.selected is Some(0) else { fail("default focus 0") }
   st.select_choice(1)
   guard st.choices is Some(c1) else { fail("select") }
   guard c1.selected is Some(1) else { fail("selected 1") }
+  st.move_choice_focus(1)
+  guard st.choices is Some(c2) else { fail("move") }
+  // 1 + 1 wraps to 0 with two options.
+  guard c2.selected is Some(0) else { fail("wrap to 0") }
   st.clear_choices()
   assert_true(st.choices is None)
 }

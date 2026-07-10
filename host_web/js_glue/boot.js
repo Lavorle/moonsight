@@ -591,6 +591,58 @@ function frame(ts) {
   }
 }
 
+/**
+ * FHD choice strip geometry — must match `UiLayout::default_fhd` in render/types.mbt.
+ * Used only for pointer hit-tests (engine owns focus / commit).
+ */
+const CHOICE_LAYOUT = (() => {
+  const canvas_w = 1920;
+  const canvas_h = 1080;
+  const dialogue_h = canvas_h * 0.3;
+  const dialogue_y = canvas_h - dialogue_h;
+  const margin = 48;
+  const pad = 32;
+  return {
+    x: margin + pad,
+    y: dialogue_y - 200,
+    w: canvas_w - margin * 2 - pad * 2,
+    lineH: 48,
+    maxRows: 9,
+  };
+})();
+
+/**
+ * Map canvas client coords → logical 1920×1080 pixels.
+ * @param {HTMLCanvasElement} canvas
+ * @param {PointerEvent} ev
+ * @returns {{x:number,y:number}}
+ */
+function pointerToLogical(canvas, ev) {
+  const rect = canvas.getBoundingClientRect();
+  const rw = rect.width || 1;
+  const rh = rect.height || 1;
+  return {
+    x: ((ev.clientX - rect.left) / rw) * LOGICAL_W,
+    y: ((ev.clientY - rect.top) / rh) * LOGICAL_H,
+  };
+}
+
+/**
+ * If pointer is over a choice row, return index 0..maxRows-1; else -1.
+ * @param {number} lx
+ * @param {number} ly
+ */
+function choiceRowAt(lx, ly) {
+  const L = CHOICE_LAYOUT;
+  if (lx < L.x || lx > L.x + L.w || ly < L.y) return -1;
+  const i = Math.floor((ly - L.y) / L.lineH);
+  if (i < 0 || i >= L.maxRows) return -1;
+  // Only the painted bar height counts (lineH - 8 in snapshot).
+  const rowTop = L.y + i * L.lineH;
+  if (ly > rowTop + L.lineH - 8) return -1;
+  return i;
+}
+
 function bindInput(canvas) {
   // First pointer/key unlocks autoplay policy for BGM/SE.
   const unlock = () => ensureAudioUnlocked();
@@ -603,6 +655,7 @@ function bindInput(canvas) {
       case " ":
       case "z":
       case "Z":
+        // Advance: during Choose, engine commits the focused row.
         pendingIntent = INTENT_ADVANCE;
         ev.preventDefault();
         break;
@@ -613,6 +666,7 @@ function bindInput(canvas) {
       case "ArrowUp":
       case "w":
       case "W":
+        // System menus OR narrative choice focus.
         pendingIntent = INTENT_MENU_UP;
         ev.preventDefault();
         break;
@@ -658,8 +712,15 @@ function bindInput(canvas) {
     }
   });
 
-  canvas.addEventListener("pointerdown", () => {
-    pendingIntent = INTENT_ADVANCE;
+  canvas.addEventListener("pointerdown", (ev) => {
+    const { x, y } = pointerToLogical(canvas, ev);
+    const row = choiceRowAt(x, y);
+    if (row >= 0) {
+      // Select(row) — engine ignores when not in Choose; commits when it is.
+      pendingIntent = 10 + row;
+    } else {
+      pendingIntent = INTENT_ADVANCE;
+    }
   });
 }
 

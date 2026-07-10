@@ -46,6 +46,24 @@ test "choice named result form lowers and selects" {
 }
 
 ///|
+test "choice Advance commits focused row; MenuDown moves focus" {
+  let src =
+    #|- scene "s"
+    #|@flow.choice "Talk" "Leave" --result act
+    #|
+  let ir = @script.compile_to_ir(src, file="choice_adv.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.tick(None_)
+  assert_true(eng.vm.wait == Choose)
+  guard eng.stage.choice_focus() is Some(0) else { fail("focus 0") }
+  eng.tick(MenuDown)
+  guard eng.stage.choice_focus() is Some(1) else { fail("focus Leave") }
+  eng.tick(Advance)
+  assert_true(eng.stage.get_var("act") == Int(1))
+  assert_true(eng.stage.choices is None)
+}
+
+///|
 test "engine view snapshots stage for render" {
   let src =
     #|- scene "s"

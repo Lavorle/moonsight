@@ -493,18 +493,70 @@ pub fn Stage::reveal_chars(self : Stage, n : Int) -> Unit {
 }
 
 ///|
-/// Present choice options; selection starts as `None`.
+/// Present choice options; keyboard/mouse focus starts on the first row.
 pub fn Stage::set_choices(self : Stage, options : Array[String]) -> Unit {
-  self.choices = Some({ options: options.copy(), selected: None })
+  let focus : Int? = if options.length() > 0 { Some(0) } else { None }
+  self.choices = Some({ options: options.copy(), selected: focus })
 }
 
 ///|
-/// Record the selected option index (does not clear the choice UI).
+/// Record the focused / confirmed option index (does not clear the choice UI).
 pub fn Stage::select_choice(self : Stage, index : Int) -> Unit {
   match self.choices {
     None => ()
+    Some(c) => {
+      if c.options.length() == 0 {
+        return
+      }
+      let mut i = index
+      if i < 0 {
+        i = 0
+      } else if i >= c.options.length() {
+        i = c.options.length() - 1
+      }
+      self.choices = Some({ options: c.options, selected: Some(i) })
+    }
+  }
+}
+
+///|
+/// Move focus among choice rows (wraps). No-op when no choices.
+pub fn Stage::move_choice_focus(self : Stage, delta : Int) -> Unit {
+  match self.choices {
+    None => ()
+    Some(c) => {
+      let n = c.options.length()
+      if n == 0 {
+        return
+      }
+      let cur = match c.selected {
+        Some(i) => i
+        None => 0
+      }
+      // Positive-modulo wrap (MoonBit `%` follows dividend sign).
+      let mut next = (cur + delta) % n
+      if next < 0 {
+        next = next + n
+      }
+      self.choices = Some({ options: c.options, selected: Some(next) })
+    }
+  }
+}
+
+///|
+/// Focused choice index, or `None` when no active choices.
+pub fn Stage::choice_focus(self : Stage) -> Int? {
+  match self.choices {
+    None => None
     Some(c) =>
-      self.choices = Some({ options: c.options, selected: Some(index) })
+      if c.options.length() == 0 {
+        None
+      } else {
+        match c.selected {
+          Some(i) => Some(i)
+          None => Some(0)
+        }
+      }
   }
 }
 

@@ -436,19 +436,47 @@ fn Engine::apply_intent(self : Engine, intent : Intent) -> Unit {
       }
     Choose =>
       match intent {
-        Select(index) => {
-          self.stage.select_choice(index)
-          match self.vm.choose_result_var {
-            Some(name) => self.stage.set_var(name, Int(index))
+        // Number keys / click on a row: commit that index.
+        Select(index) => self.confirm_choice(index)
+        // Enter / Space / click canvas (Advance): commit focused row.
+        Advance | SkipTyping =>
+          match self.stage.choice_focus() {
+            Some(i) => self.confirm_choice(i)
             None => ()
           }
-          self.stage.clear_choices()
-          self.vm.choose_result_var = None
-          self.vm.wait = Running
-        }
+        // ↑↓ move focus while waiting on narrative choices (not system screens).
+        MenuUp => self.stage.move_choice_focus(-1)
+        MenuDown => self.stage.move_choice_focus(1)
         _ => ()
       }
     Running | Halted => ()
+  }
+}
+
+///|
+/// Commit a narrative choice by index and resume the VM.
+fn Engine::confirm_choice(self : Engine, index : Int) -> Unit {
+  match self.stage.choices {
+    None => ()
+    Some(c) => {
+      if c.options.length() == 0 {
+        return
+      }
+      let mut i = index
+      if i < 0 {
+        i = 0
+      } else if i >= c.options.length() {
+        i = c.options.length() - 1
+      }
+      self.stage.select_choice(i)
+      match self.vm.choose_result_var {
+        Some(name) => self.stage.set_var(name, Int(i))
+        None => ()
+      }
+      self.stage.clear_choices()
+      self.vm.choose_result_var = None
+      self.vm.wait = Running
+    }
   }
 }
 

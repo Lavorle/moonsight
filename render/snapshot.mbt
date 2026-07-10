@@ -161,22 +161,27 @@ pub fn build_draw_list_with_atlas(
       }
     }
 
-    // Choices (above dialogue box).
+    // Choices (above dialogue box). Focused row is brighter.
     match view.choices {
       None => ()
       Some(ch) => {
         let ui_z = 1100
+        let focus = match ch.selected {
+          Some(s) => s
+          None => 0
+        }
         let mut i = 0
         while i < ch.options.length() {
           let label = ch.options[i]
           let row_y = layout.choice_y + Float::from_int(i) * layout.choice_line_h
+          let focused = i == focus
           sprites.push({
             resource: ui_choice_row,
             x: layout.choice_x,
             y: row_y,
             w: layout.choice_w,
             h: layout.choice_line_h - 8.0,
-            opacity: 0.85,
+            opacity: if focused { 1.0 } else { 0.65 },
             z: ui_z,
           })
           let m_choice = match measure {
