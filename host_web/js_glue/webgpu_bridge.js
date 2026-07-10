@@ -717,13 +717,19 @@ export function endFrame() {
  * Full atlas re-upload is acceptable for smoke.
  *
  * @param {string} ch
- * @param {number} size
- * @param {number} atlasX
- * @param {number} atlasY
- * @param {number} atlasW
- * @param {number} atlasH
- * @param {number} atlasSize
+/**
+ * Optional outline rasterizer (`js_glue/slug/`). Set via `setOutlineRasterizer`.
+ * @type {null | { rasterizeCodepoint: (cp:number,w:number,h:number)=>Uint8ClampedArray|null, hasFont: ()=>boolean }}
  */
+let outlineRaster = null;
+
+/**
+ * @param {typeof outlineRaster} mod
+ */
+export function setOutlineRasterizer(mod) {
+  outlineRaster = mod;
+}
+
 export function rasterizeGlyphToAtlas(
   ch,
   size,
@@ -744,36 +750,42 @@ export function rasterizeGlyphToAtlas(
   }
   if (atlasW <= 0 || atlasH <= 0) return;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = atlasW;
-  canvas.height = atlasH;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.clearRect(0, 0, atlasW, atlasH);
-  // White ink; alpha from coverage. Scale font so glyphs fit the cell with
-  // a small margin (avoids clipping descenders / wide CJK).
-  // Fit glyph inside the shelf cell (square ≈ font size) with a small margin.
-  const fontPx = Math.max(1, Math.floor(Math.min(size, atlasW, atlasH) * 0.78));
-  ctx.font = `${fontPx}px "Segoe UI","Noto Sans CJK SC","Noto Sans","DejaVu Sans",sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText(ch, atlasW * 0.5, atlasH * 0.5);
-  const img = ctx.getImageData(0, 0, atlasW, atlasH);
+  /** @type {Uint8ClampedArray | ImageData | {data: Uint8ClampedArray}} */
+  let img;
+  const cp = ch.codePointAt(0) || 0;
+  if (outlineRaster && outlineRaster.hasFont()) {
+    const pix = outlineRaster.rasterizeCodepoint(cp, atlasW, atlasH);
+    img = { data: pix || new Uint8ClampedArray(atlasW * atlasH * 4) };
+  } else {
+    // Fallback: canvas bitmap (system font) — left-aligned in proportional cell.
+    const canvas = document.createElement("canvas");
+    canvas.width = atlasW;
+    canvas.height = atlasH;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.clearRect(0, 0, atlasW, atlasH);
+    const fontPx = Math.max(1, Math.floor(size * 0.9));
+    ctx.font = `${fontPx}px "Noto Sans","Segoe UI","DejaVu Sans",sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#ffffff";
+    // Baseline ~80% down the cell
+    ctx.fillText(ch, 1, Math.floor(atlasH * 0.78));
+    img = ctx.getImageData(0, 0, atlasW, atlasH);
+  }
 
   // Stamp straight-alpha white coverage into the CPU mirror.
   const cpu = entry.cpu;
+  const src = img.data;
   for (let y = 0; y < atlasH; y++) {
     for (let x = 0; x < atlasW; x++) {
       const si = (y * atlasW + x) * 4;
       const di = ((atlasY + y) * entry.width + (atlasX + x)) * 4;
-      cpu[di] = img.data[si];
-      cpu[di + 1] = img.data[si + 1];
-      cpu[di + 2] = img.data[si + 2];
-      cpu[di + 3] = img.data[si + 3];
+      cpu[di] = src[si];
+      cpu[di + 1] = src[si + 1];
+      cpu[di + 2] = src[si + 2];
+      cpu[di + 3] = src[si + 3];
     }
   }
-  // Upload only the stamped sub-rect (bytesPerRow must be 256-aligned for
-  // some backends when using the full texture path; full upload is fine at 1024).
   device.queue.writeTexture(
     { texture: entry.texture },
     cpu,
@@ -794,6 +806,7 @@ const api = {
   drawVeil,
   endFrame,
   rasterizeGlyphToAtlas,
+  setOutlineRasterizer,
   /** @private test aid */
   _textures: textures,
 };

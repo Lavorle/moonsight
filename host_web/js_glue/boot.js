@@ -14,6 +14,7 @@
  */
 
 import * as Gpu from "./webgpu_bridge.js";
+import * as Slug from "./slug/index.js";
 
 const PACK_HEADER = 4;
 const SPRITE_STRIDE = 7;
@@ -519,15 +520,21 @@ const LOGICAL_W = 1920;
 const LOGICAL_H = 1080;
 
 /**
- * Keep a fixed 1920×1080 WebGPU backbuffer. CSS scales the canvas element to
- * the viewport — never set canvas.width/height from window×DPR (that would
- * desync NDC mapping from the logical pack coords).
+ * Fixed 1920×1080 WebGPU backbuffer with **letterboxed** CSS presentation.
+ * Stretching via 100vw×100vh made glyphs look unnaturally wide.
  */
 function fitCanvas(canvas) {
   canvas.width = LOGICAL_W;
   canvas.height = LOGICAL_H;
-  canvas.style.width = "100%";
-  canvas.style.height = "100%";
+  const vw = window.innerWidth || LOGICAL_W;
+  const vh = window.innerHeight || LOGICAL_H;
+  const scale = Math.min(vw / LOGICAL_W, vh / LOGICAL_H);
+  const dw = Math.max(1, Math.round(LOGICAL_W * scale));
+  const dh = Math.max(1, Math.round(LOGICAL_H * scale));
+  canvas.style.width = `${dw}px`;
+  canvas.style.height = `${dh}px`;
+  canvas.style.marginLeft = `${Math.floor((vw - dw) / 2)}px`;
+  canvas.style.marginTop = `${Math.floor((vh - dh) / 2)}px`;
   Gpu.resize(LOGICAL_W, LOGICAL_H);
 }
 
@@ -550,6 +557,20 @@ export async function boot(options = {}) {
     fitCanvas(canvas);
     window.addEventListener("resize", () => fitCanvas(canvas));
     bindInput(canvas);
+
+    // Outline font for Slug-inspired atlas stamps (optional; falls back to canvas).
+    const fontUrl =
+      options.fontUrl ||
+      new URLSearchParams(location.search).get("font") ||
+      "./fonts/NotoSans-Regular.ttf";
+    try {
+      setStatus("load outline font…");
+      await Slug.loadFont(fontUrl);
+      Gpu.setOutlineRasterizer(Slug);
+      setStatus("outline font ready");
+    } catch (fe) {
+      console.warn("outline font unavailable, using canvas fillText", fe);
+    }
 
     const params = new URLSearchParams(location.search);
     const wasmUrl =

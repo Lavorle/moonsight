@@ -29,17 +29,20 @@ pub fn build_draw_list(
     view,
     layout,
     atlas,
-    measure=fixed_width_measure(layout.default_char_advance),
+    measure=approximate_measure(layout.font_size),
   )
 }
 
 ///|
 /// Like `build_draw_list` but reuses a shared glyph atlas for UV bookkeeping.
+///
+/// When `measure` is omitted, each run uses `approximate_measure(font_size)`
+/// for that run's pixel size (name / body / choice sizes stay consistent).
 pub fn build_draw_list_with_atlas(
   view : @runtime.StageView,
   layout : UiLayout,
   atlas : GlyphAtlas,
-  measure~ : (Char) -> Float,
+  measure? : (Char) -> Float,
 ) -> DrawList {
   let sprites : Array[SpriteDraw] = []
   let glyphs : Array[GlyphDraw] = []
@@ -86,6 +89,10 @@ pub fn build_draw_list_with_atlas(
             opacity: 1.0,
             z: ui_z + 1,
           })
+          let m_name = match measure {
+            Some(m) => m
+            None => approximate_measure(layout.name_font_size)
+          }
           emit_text_glyphs(
             glyphs,
             atlas,
@@ -95,11 +102,15 @@ pub fn build_draw_list_with_atlas(
             max_width=layout.nameplate_w - 24.0,
             font_size=layout.name_font_size,
             color=layout.name_color,
-            measure~,
+            measure=m_name,
           )
         }
       }
       let body = visible_prefix(block.full_text, block.visible_chars)
+      let m_body = match measure {
+        Some(m) => m
+        None => approximate_measure(layout.font_size)
+      }
       emit_text_glyphs(
         glyphs,
         atlas,
@@ -109,7 +120,7 @@ pub fn build_draw_list_with_atlas(
         max_width=layout.text_w,
         font_size=layout.font_size,
         color=layout.text_color,
-        measure~,
+        measure=m_body,
       )
     }
   }
@@ -132,6 +143,10 @@ pub fn build_draw_list_with_atlas(
           opacity: 0.85,
           z: ui_z,
         })
+        let m_choice = match measure {
+          Some(m) => m
+          None => approximate_measure(layout.choice_font_size)
+        }
         emit_text_glyphs(
           glyphs,
           atlas,
@@ -141,7 +156,7 @@ pub fn build_draw_list_with_atlas(
           max_width=layout.choice_w - 32.0,
           font_size=layout.choice_font_size,
           color=layout.choice_color,
-          measure~,
+          measure=m_choice,
         )
         i = i + 1
       }
@@ -154,9 +169,9 @@ pub fn build_draw_list_with_atlas(
 ///|
 /// Layout `text` and push non-whitespace glyph quads into `glyphs`.
 ///
-/// Atlas cells are shelf-packed at roughly `font_size`×`font_size` for host
-/// rasterization. Screen quads use layout `measure` advance × `font_size` so
-/// text pitch matches the pen (not the oversized atlas cell).
+/// Atlas cells are proportional rectangles: width ≈ advance + pad, height =
+/// font size. Screen quads use the same advance × font size so pitch matches
+/// the pen. Host stamps outlines (Slug-style) or bitmaps into each cell.
 fn emit_text_glyphs(
   glyphs : Array[GlyphDraw],
   atlas : GlyphAtlas,
@@ -183,8 +198,9 @@ fn emit_text_glyphs(
         pen_x = pen_x + adv
         continue
       }
-      let entry = atlas.get_or_queue(ch, size)
-      // Screen size follows layout advance, not the atlas shelf cell.
+      // Shelf cell slightly wider than advance for AA padding / bearings.
+      let cell_w = adv.to_int() + 3
+      let entry = atlas.get_or_queue(ch, size, cell_w=cell_w)
       let sw : Float = if adv < 1.0 { 1.0 } else { adv }
       glyphs.push({
         atlas_x: entry.atlas_x,

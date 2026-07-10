@@ -91,44 +91,52 @@ fn GlyphAtlas::store(
 }
 
 ///|
-/// Look up or allocate a rect for `ch` at `size` (approx cell = size×size).
+/// Look up or allocate a rect for `ch` at font pixel height `size`.
 ///
-/// Missing glyphs are shelf-packed and appended to `pending_queue` for the host
-/// to rasterize. Cells larger than the atlas, or shelf overflow, reuse a 0×0
-/// pending placeholder.
+/// `cell_w` is the shelf cell width (usually measured advance + padding). Cell
+/// height is `size`. Missing glyphs are shelf-packed and queued for the host
+/// to rasterize (bitmap or Slug-style outline). Overflow → 0×0 placeholder.
 pub fn GlyphAtlas::get_or_queue(
   self : GlyphAtlas,
   ch : Char,
   size : Int,
+  cell_w? : Int,
 ) -> AtlasEntry {
   match self.lookup(ch, size) {
     Some(e) => e
     None => {
-      let cell = if size < 1 { 1 } else { size }
+      let cell_h = if size < 1 { 1 } else { size }
+      let mut cw = match cell_w {
+        None => cell_h
+        Some(w) => w
+      }
+      if cw < 1 {
+        cw = 1
+      }
       // Cell must fit in atlas dimensions; otherwise 0×0 overflow placeholder.
-      let entry : AtlasEntry = if cell > self.width || cell > self.height {
+      let entry : AtlasEntry = if cw > self.width || cell_h > self.height {
         { atlas_x: 0, atlas_y: 0, atlas_w: 0, atlas_h: 0, pending: true }
       } else {
         // Advance to next row when this cell does not fit on the current shelf.
-        if self.cursor_x + cell > self.width {
+        if self.cursor_x + cw > self.width {
           self.cursor_x = 0
           self.cursor_y = self.cursor_y + self.row_h
           self.row_h = 0
         }
-        if self.cursor_y + cell > self.height {
+        if self.cursor_y + cell_h > self.height {
           // Overflow: zero rect; still track so callers do not re-queue forever.
           { atlas_x: 0, atlas_y: 0, atlas_w: 0, atlas_h: 0, pending: true }
         } else {
           let e : AtlasEntry = {
             atlas_x: self.cursor_x,
             atlas_y: self.cursor_y,
-            atlas_w: cell,
-            atlas_h: cell,
+            atlas_w: cw,
+            atlas_h: cell_h,
             pending: true,
           }
-          self.cursor_x = self.cursor_x + cell
-          if cell > self.row_h {
-            self.row_h = cell
+          self.cursor_x = self.cursor_x + cw
+          if cell_h > self.row_h {
+            self.row_h = cell_h
           }
           e
         }

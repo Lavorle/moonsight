@@ -15,6 +15,54 @@ pub fn fixed_width_measure(advance : Float) -> (Char) -> Float {
 }
 
 ///|
+/// Approximate proportional advance as a fraction of `font_size` (em).
+///
+/// Used when the host has not supplied real `measureText` metrics. Latin
+/// widths are rough averages for a sans face; CJK / other wide scripts use a
+/// full em so ideographs stay square.
+pub fn approximate_advance_em(ch : Char) -> Float {
+  let cp = ch.to_int()
+  // CJK Unified Ideographs and common fullwidth ranges → 1.0 em
+  if (cp >= 0x2E80 && cp <= 0x9FFF) ||
+      (cp >= 0xF900 && cp <= 0xFAFF) ||
+      (cp >= 0xFF00 && cp <= 0xFFEF) {
+    return 1.0
+  }
+  match ch {
+    ' ' | '\t' => 0.33
+    'i' | 'l' | 'I' | 'j' | '|' | '.' | ',' | '\'' | '`' | '!' | ':' | ';' =>
+      0.30
+    'f' | 't' | 'r' => 0.38
+    'm' | 'w' | 'M' | 'W' => 0.90
+    '@' | '%' | 'Ö' | '—' => 0.95
+    _ => {
+      // Uppercase slightly wider on average
+      if ch >= 'A' && ch <= 'Z' {
+        0.62
+      } else if ch >= '0' && ch <= '9' {
+        0.55
+      } else {
+        0.52
+      }
+    }
+  }
+}
+
+///|
+/// Build a measure function: `advance ≈ em * font_size`.
+pub fn approximate_measure(font_size : Float) -> (Char) -> Float {
+  fn(ch : Char) {
+    let em = approximate_advance_em(ch)
+    let a = em * font_size
+    if a < 1.0 {
+      1.0
+    } else {
+      a
+    }
+  }
+}
+
+///|
 /// Measure a string with a per-glyph advance function.
 pub fn measure_string(text : String, measure~ : (Char) -> Float) -> Float {
   let mut w : Float = 0.0

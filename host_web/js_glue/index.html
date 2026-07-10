@@ -16,12 +16,16 @@
         color: #c8d0e0;
         font-family: system-ui, sans-serif;
       }
-      /* Canvas backing store stays 1920×1080 (logical); CSS scales to viewport. */
+      /* Logical 1920×1080 backbuffer; JS letterboxes CSS size (no stretch). */
       #game {
         display: block;
-        width: 100vw;
-        height: 100vh;
         touch-action: none;
+        background: #0a0b0e;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
       #status {
         position: fixed;

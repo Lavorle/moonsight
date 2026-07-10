@@ -118,9 +118,8 @@ pub fn UiLayout::default_fhd() -> UiLayout {
     font_size,
     name_font_size: 28.0,
     choice_font_size: 30.0,
-    // Monospace pitch = font size so screen quads match square atlas cells.
-    // Host may later supply proportional measureText advances.
-    default_char_advance: font_size,
+    // Hint for hosts; layout prefers approximate_measure(font_size).
+    default_char_advance: font_size * 0.55,
     text_color: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
     name_color: { r: 1.0, g: 0.92, b: 0.7, a: 1.0 },
     choice_color: { r: 0.85, g: 0.95, b: 1.0, a: 1.0 },

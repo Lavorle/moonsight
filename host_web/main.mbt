@@ -158,13 +158,8 @@ pub fn export_frame(intent_code : Int, dt_ms : Float) -> Int {
       let intent = @render.intent_from_code(intent_code)
       eng.tick(intent, dt~)
       let view = eng.view()
-      let measure = @render.fixed_width_measure(s.layout.default_char_advance)
-      let dl = @render.build_draw_list_with_atlas(
-        view,
-        s.layout,
-        s.atlas,
-        measure~,
-      )
+      // Per-run approximate_measure(font_size) inside build (name/body/choice).
+      let dl = @render.build_draw_list_with_atlas(view, s.layout, s.atlas)
       s.frame = @render.pack_draw_list(dl, s.resources)
       s.frame.length()
     }

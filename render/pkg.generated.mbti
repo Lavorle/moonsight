@@ -7,9 +7,13 @@ import {
 }
 
 // Values
+pub fn approximate_advance_em(Char) -> Float
+
+pub fn approximate_measure(Float) -> (Char) -> Float
+
 pub fn build_draw_list(@runtime.StageView, UiLayout) -> DrawList
 
-pub fn build_draw_list_with_atlas(@runtime.StageView, UiLayout, GlyphAtlas, measure~ : (Char) -> Float) -> DrawList
+pub fn build_draw_list_with_atlas(@runtime.StageView, UiLayout, GlyphAtlas, measure? : (Char) -> Float) -> DrawList
 
 pub fn fixed_width_measure(Float) -> (Char) -> Float
 
@@ -96,7 +100,7 @@ pub(all) struct GlyphAtlas {
 } derive(@debug.Debug)
 pub fn GlyphAtlas::contains(Self, Char, Int) -> Bool
 pub fn GlyphAtlas::get_entry(Self, Char, Int) -> AtlasEntry?
-pub fn GlyphAtlas::get_or_queue(Self, Char, Int) -> AtlasEntry
+pub fn GlyphAtlas::get_or_queue(Self, Char, Int, cell_w? : Int) -> AtlasEntry
 pub fn GlyphAtlas::mark_ready(Self, Char, Int, atlas_x~ : Int, atlas_y~ : Int, atlas_w~ : Int, atlas_h~ : Int) -> Unit
 pub fn GlyphAtlas::new(width? : Int, height? : Int) -> Self
 pub fn GlyphAtlas::take_pending(Self) -> Array[(Char, Int)]
