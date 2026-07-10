@@ -311,14 +311,17 @@ fn find_js_glue() -> String? {
 ///|
 fn copy_js_glue(glue_dir : String, out_dir : String) -> Unit raise IoError {
   for name in read_dir(glue_dir) {
-    // Skip nested junk; copy top-level glue files only.
-    // Project-owned outputs are written after this copy.
+    // Skip host-local placeholder; build writes project manifest after assets.
+    // Copy files *and* dirs (slug/, fonts/ are required by boot.js).
     if name == "manifest.json" {
       continue
     }
     let from = join_path(glue_dir, name)
-    if is_file(from) {
-      copy_file(from, join_path(out_dir, name))
+    let to = join_path(out_dir, name)
+    if is_dir(from) {
+      copy_dir(from, to)
+    } else if is_file(from) {
+      copy_file(from, to)
     }
   }
   // Prefer release wasm if present next to engine build tree.
