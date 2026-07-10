@@ -1,6 +1,7 @@
 # MoonSight
 
-MoonBit + WebGPU visual novel engine (Phase 1 runtime kernel).
+MoonBit + WebGPU visual novel engine (Phase 1 runtime kernel + Phase 2 layer
+presentation).
 
 MoonYuki scripts compile to IR/bytecode, run on a VM + Stage/Director, and
 render through a packed draw list consumed by a JS WebGPU host. Desktop uses
@@ -30,7 +31,7 @@ cd dist/demo && python3 -m http.server 8080
 
 ### Browser / WebGPU (important on Linux)
 
-MoonSight Phase 1 **requires WebGPU**. There is no WebGL fallback.
+MoonSight **requires WebGPU**. There is no WebGL fallback.
 
 | Browser | Notes |
 |---------|--------|
@@ -57,12 +58,13 @@ brave-browser --enable-unsafe-webgpu --enable-features=Vulkan --use-angle=vulkan
 
 1. `about:config` → set `dom.webgpu.enabled` = `true`
 2. Also try `gfx.webgpu.force-enabled` and/or `gfx.webgpu.ignore-blocklist` = `true`
-3. Restart; if `navigator.gpu` is still missing, use **Firefox Nightly** or a Chromium browser for Phase 1
+3. Restart; if `navigator.gpu` is still missing, use **Firefox Nightly** or a Chromium browser
 
 Always serve via **`http://localhost`** (or https). Opening `file://` blocks WebGPU.
 
 **Input:** click / Enter / Space / Z advance; 1–9 select choices; Ctrl+S / Ctrl+L
-save & load (localStorage).
+save & load (localStorage). Timed `@flow.wait` ignores Advance until the
+countdown finishes.
 
 **Desktop shell:** build `dist/demo` first, then see
 [`host_desktop/README.md`](./host_desktop/README.md).
@@ -72,13 +74,13 @@ save & load (localStorage).
 | Path | Role |
 |------|------|
 | `script` | MoonYuki → IR / `MSB1` bytecode |
-| `runtime` | VM, Director, Stage, save |
-| `render` | Draw list pack, text layout |
+| `runtime` | VM, Director, Stage, save (v3), tweens |
+| `render` | Draw list pack, text layout, kind+z sort |
 | `audio` | Logical BGM/SE mixer |
-| `std_commands` | Standard `@` host commands |
+| `std_commands` | Standard `@` host commands (`layer.set`, kinds, duration) |
 | `host_web` | Browser wasm + `js_glue` |
 | `host_desktop` | Tauri 2 shell |
-| `cmd/moonsightc` | `check` / `build` CLI |
+| `cmd/moonsightc` | `check` / `build` CLI (literal resource check) |
 | `demo/game` | Sample project |
 
 ## Documentation
@@ -88,10 +90,24 @@ save & load (localStorage).
 - [`docs/project-layout.md`](./docs/project-layout.md) — repo & `moonsight.json`
 - [`docs/draw-list-pack.md`](./docs/draw-list-pack.md) — frame pack format
 
-## Phase 1 scope
+## Scope
+
+### Phase 1 (runtime kernel)
 
 **In:** compile pipeline, VM, layers, dialogue typing, choices, variables,
 jumps, BGM/SE, fade, save/load, browser host, desktop shell, demo, CLI, tests.
 
-**Out:** visual editor, i18n, achievements, Live2D / 3D, second native GPU
-backend, official Yukimi bytecode compatibility.
+### Phase 2 (layer presentation)
+
+**In:** `LayerKind` via `@layer.show kind=…`, linear `x`/`y`/`opacity` duration
+tweens, `@layer.set`, wall-clock `trans.fade` (`fade_remaining`), real
+`@flow.wait` timing (non-skippable), save format **v3** (tweens + wait/fade
+remaining; v2 still loads), build-time literal resource checks, hard-fail
+texture loads, updated demo/docs.
+
+### Out of scope (both phases)
+
+Visual editor, i18n, achievements, Live2D / 3D, particle/postprocess stack,
+full timeline / animation queues, blocking presentation DSL, `trans.dissolve`,
+system menu / backlog / multi-slot UI, second native GPU backend, official
+Yukimi bytecode compatibility.

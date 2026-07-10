@@ -1,15 +1,19 @@
-# MoonSight Phase 1 demo (host loads game.msb or this file as demo.yuki).
+# MoonSight Phase 2 demo (host loads game.msb or this file as demo.yuki).
 # Builtins cover std host commands — no file-level - extern required.
 # scenes/intro.yuki adds multi-file scene "side_room" (merged into game.msb).
+# Phase 2: kind=, duration tweens, layer.set, real @flow.wait with trans.fade.
 
 - scene "entrypoint"
 @flow.jump "intro"
 
 - scene "intro"
-@layer.show "bg" "bg_room"
-@layer.show "y" "char_y" 10
+@layer.show "bg" "bg_room" kind=background
+# Off-screen start via positionals (named x=-N is not lexed yet); then tween in.
+@layer.show "y" "char_y" 10 -200 0 0 kind=character
+@layer.set "y" x=200 opacity=1.0 duration=0.5
 @audio.bgm "bgm_soft"
 @trans.fade 1.0 0.0 0.5
+@flow.wait 0.5
 y:Welcome to MoonSight.
 y:This demo uses MoonYuki.
 @sys.save_hint
@@ -27,19 +31,21 @@ y:MoonSight compiles MoonYuki into a tiny VN runtime.
 @flow.jump "ending"
 
 - scene "leave"
-@layer.hide "y"
+@layer.hide "y" duration=0.3
+@flow.wait 0.3
 y:You step out toward the garden.
 @var.set "left_room" true
 @flow.jump "garden"
 
 - scene "garden"
-@layer.show "bg" "bg_room"
+@layer.show "bg" "bg_room" kind=background
 y:A quiet garden. Placeholder art; BGM still looping.
 @var.set "saw_garden" true
 @flow.jump "ending"
 
 - scene "ending"
 @trans.fade 0.0 1.0 0.5
+@flow.wait 0.5
 y:Thanks for playing the MoonSight demo.
 y:A save hint was set earlier for host snapshot tests.
 @flow.yield
