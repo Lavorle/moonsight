@@ -142,32 +142,56 @@ function ensureAudioUnlocked() {
   }
 }
 
+/** True if path already has a known audio extension (optional query). */
+function hasAudioExt(path) {
+  return /\.(ogg|mp3|wav|m4a)(\?.*)?$/i.test(path);
+}
+
 /**
- * Resolve a logical audio id to a playable URL.
+ * Dual-format alt list for extensionless paths: OGG first, then MP3.
+ * @param {string} base path without extension
+ * @returns {{ogg:string, mp3:string}}
+ */
+function dualFormat(base) {
+  return { ogg: `${base}.ogg`, mp3: `${base}.mp3` };
+}
+
+/**
+ * Resolve a logical audio id to a playable URL or dual-format alt.
  * Prefer explicit manifest.audio entry; else try id.ogg then id.mp3.
  */
 function resolveAudioUrl(id) {
   if (!id) return null;
-  if (audioUrls[id]) return audioUrls[id];
+  if (audioUrls[id] != null) return audioUrls[id];
   // If the id already looks like a path with extension, use as-is.
-  if (/\.(ogg|mp3|wav|m4a)(\?.*)?$/i.test(id)) return id;
-  // Prefer OGG, fallback MP3 (browser picks via <source> or sequential try).
-  return { ogg: `${id}.ogg`, mp3: `${id}.mp3`, primary: `${id}.ogg` };
+  if (hasAudioExt(id)) return id;
+  // Prefer OGG, fallback MP3 (browser picks via dual <source>).
+  return dualFormat(id);
 }
 
 /**
- * @param {string | {ogg:string, mp3:string, primary:string}} urlOrAlt
+ * Clamp volume to [0, 1]; treat non-finite as 1 (keeps volume 0 valid).
+ * @param {unknown} v
+ */
+function clampVolume(v) {
+  const n = Number(v);
+  return Math.max(0, Math.min(1, Number.isFinite(n) ? n : 1));
+}
+
+/**
+ * @param {string | {ogg:string, mp3:string}} urlOrAlt
  * @param {{loop?: boolean, volume?: number}} opts
  */
 function makeAudio(urlOrAlt, opts = {}) {
   const el = new Audio();
   el.preload = "auto";
   el.loop = !!opts.loop;
-  el.volume = Math.max(0, Math.min(1, opts.volume ?? 1));
+  el.volume = clampVolume(opts.volume ?? 1);
   if (typeof urlOrAlt === "string") {
     el.src = urlOrAlt;
   } else {
-    // Prefer OGG via <source>, then MP3.
+    // Prefer OGG via <source>, then MP3. Do not set el.src — that would
+    // force the primary only and break browser fallback selection.
     const sOgg = document.createElement("source");
     sOgg.src = urlOrAlt.ogg;
     sOgg.type = "audio/ogg";
@@ -176,8 +200,6 @@ function makeAudio(urlOrAlt, opts = {}) {
     sMp3.type = "audio/mpeg";
     el.appendChild(sOgg);
     el.appendChild(sMp3);
-    // Some engines need .src even with sources.
-    el.src = urlOrAlt.primary;
   }
   return el;
 }
@@ -202,14 +224,15 @@ function playBgm(id, looped, volume) {
     console.warn("audio: no URL for BGM", id);
     return;
   }
+  const vol = clampVolume(volume);
   if (bgmId === id && bgmEl && !bgmEl.paused) {
-    bgmEl.volume = Math.max(0, Math.min(1, volume));
+    bgmEl.volume = vol;
     bgmEl.loop = !!looped;
     return;
   }
   stopBgm();
   ensureAudioUnlocked();
-  const el = makeAudio(url, { loop: looped, volume });
+  const el = makeAudio(url, { loop: looped, volume: vol });
   bgmEl = el;
   bgmId = id;
   const p = el.play();
@@ -225,7 +248,7 @@ function playSe(id, volume) {
     return;
   }
   ensureAudioUnlocked();
-  const el = makeAudio(url, { loop: false, volume });
+  const el = makeAudio(url, { loop: false, volume: clampVolume(volume) });
   const p = el.play();
   if (p && typeof p.catch === "function") {
     p.catch((e) => console.warn("se play blocked/failed", id, e));
@@ -244,13 +267,13 @@ function flushAudio(exports) {
     if (kind === AUDIO_PLAY_BGM) {
       const id = exports.audio_event_resource(i) || "";
       const looped = (exports.audio_event_looped(i) | 0) !== 0;
-      const volume = +exports.audio_event_volume(i) || 1;
+      const volume = clampVolume(exports.audio_event_volume(i));
       playBgm(id, looped, volume);
     } else if (kind === AUDIO_STOP_BGM) {
       stopBgm();
     } else if (kind === AUDIO_PLAY_SE) {
       const id = exports.audio_event_resource(i) || "";
-      const volume = +exports.audio_event_volume(i) || 1;
+      const volume = clampVolume(exports.audio_event_volume(i));
       playSe(id, volume);
     }
   }
@@ -430,7 +453,8 @@ async function applyManifest(manifest) {
     audioUrls = Object.create(null);
     for (const [id, path] of Object.entries(manifest.audio)) {
       if (typeof path === "string" && path.length) {
-        audioUrls[id] = path;
+        // Extensionless manifest paths → dual OGG/MP3 for browser fallback.
+        audioUrls[id] = hasAudioExt(path) ? path : dualFormat(path);
         console.info("audio", id, "←", path);
       }
     }
@@ -439,12 +463,14 @@ async function applyManifest(manifest) {
 
 async function maybeLoadSource() {
   // Prefer demo.yuki if present; else rely on init_demo inside wasm.
+  // Replacing mixer/source state: stop any JS-side BGM so it cannot desync.
   try {
     const res = await fetch("./demo.yuki");
     if (res.ok) {
       const src = await res.text();
       const rc = exports_.load_source(src);
       console.info("load_source demo.yuki rc=", rc);
+      stopBgm();
       return;
     }
   } catch {
@@ -452,6 +478,7 @@ async function maybeLoadSource() {
   }
   exports_.init_demo();
   console.info("init_demo()");
+  stopBgm();
 }
 
 /** Fixed logical resolution; MoonBit packs all draw coords in FHD pixels. */
