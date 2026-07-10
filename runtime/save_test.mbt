@@ -212,14 +212,21 @@ test "save mid fade-out restores audible fade toward stop" {
   @audio.install_mixer(@audio.Mixer::with_backend(b2))
   let eng2 = load_min_demo_engine()
   eng2.load(blob)
+  // Stage stays clear during restored fade-out; mixer still holds the id.
+  assert_true(eng2.stage.bgm is None)
   guard @audio.global_mixer().bgm is Some(id) else { fail("mixer bgm after load") }
   assert_eq(id, "bgm_soft")
   assert_true(@audio.global_mixer().bgm_fade_stop)
   assert_true(@audio.global_mixer().bgm_fade_remaining > 0.0)
-  // Finish the restored fade → StopBgm.
+  // Finish the restored fade → StopBgm; both stage and mixer clear.
   q2.clear()
   @audio.global_mixer().tick(1.0)
   assert_true(@audio.global_mixer().bgm is None)
+  assert_true(eng2.stage.bgm is None)
   guard q2.get(q2.len() - 1) is Some(@audio.StopBgm) else { fail("StopBgm") }
+  // Second save must not revive BGM after fade completed.
+  let blob2 = eng2.save()
+  let game2 = @runtime.parse_save_game(blob2)
+  assert_true(game2.audio.bgm is None)
   @audio.reset_global_mixer()
 }

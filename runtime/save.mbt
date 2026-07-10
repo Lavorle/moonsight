@@ -296,7 +296,13 @@ fn apply_save_game(eng : Engine, game : SaveGame) -> Unit {
   eng.stage.fade_to = game.fade_to
   eng.stage.fade_remaining = game.fade_remaining
   eng.stage.wait_remaining = game.wait_remaining
-  eng.stage.bgm = game.audio.bgm
+  // During fade-out, stage.bgm is None while mixer still holds the track id.
+  // Keep that split after load so a later save does not re-persist phantom BGM.
+  let fade_out = match game.audio.bgm_fade_stop {
+    Some(true) => true
+    _ => false
+  }
+  eng.stage.bgm = if fade_out { None } else { game.audio.bgm }
   eng.stage.se = game.audio.se
   restore_mixer_from_audio(game.audio)
   match game.choices {
