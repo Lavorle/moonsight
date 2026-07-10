@@ -108,6 +108,8 @@ pub(all) struct GlyphDraw {
   atlas_h : Int
   x : Float
   y : Float
+  w : Float
+  h : Float
   color : Color
 } derive(@debug.Debug)
 
