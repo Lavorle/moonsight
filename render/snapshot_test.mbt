@@ -174,3 +174,52 @@ test "glyph atlas queues missing and reuses entries" {
   assert_eq(ch, 'B')
   assert_eq(sz, 16)
 }
+
+///|
+/// Nested keys must keep CJK codepoints distinct from ASCII and from each
+/// other at different sizes (old packed Int key overflowed for cp ≥ 0x8000).
+test "glyph atlas CJK keys are distinct from ASCII and by size" {
+  let atlas = GlyphAtlas::new(width=256, height=256)
+  let cjk16 = atlas.get_or_queue('这', 16)
+  let cjk32 = atlas.get_or_queue('这', 32)
+  let ascii16 = atlas.get_or_queue('A', 16)
+  // Distinct slots for (这,16), (这,32), (A,16).
+  assert_eq(cjk16.atlas_w, 16)
+  assert_eq(cjk16.atlas_h, 16)
+  assert_eq(cjk32.atlas_w, 32)
+  assert_eq(cjk32.atlas_h, 32)
+  assert_eq(ascii16.atlas_w, 16)
+  assert_true(cjk16.atlas_x != cjk32.atlas_x || cjk16.atlas_y != cjk32.atlas_y)
+  assert_true(
+    cjk16.atlas_x != ascii16.atlas_x || cjk16.atlas_y != ascii16.atlas_y,
+  )
+  // Reuse must hit the same entry (no wrap collision with ASCII).
+  let cjk16b = atlas.get_or_queue('这', 16)
+  assert_eq(cjk16b.atlas_x, cjk16.atlas_x)
+  assert_eq(cjk16b.atlas_y, cjk16.atlas_y)
+  assert_eq(atlas.pending_queue.length(), 3)
+  atlas.mark_ready(
+    '这',
+    16,
+    atlas_x=cjk16.atlas_x,
+    atlas_y=cjk16.atlas_y,
+    atlas_w=16,
+    atlas_h=16,
+  )
+  assert_true(atlas.contains('这', 16))
+  assert_true(!atlas.contains('这', 32))
+  assert_true(!atlas.contains('A', 16))
+}
+
+///|
+test "glyph atlas oversized cell is zero placeholder" {
+  let atlas = GlyphAtlas::new(width=32, height=32)
+  let e = atlas.get_or_queue('X', 64)
+  assert_eq(e.atlas_w, 0)
+  assert_eq(e.atlas_h, 0)
+  assert_true(e.pending)
+  // Still tracked so re-queue does not allocate again.
+  let e2 = atlas.get_or_queue('X', 64)
+  assert_eq(e2.atlas_w, 0)
+  assert_eq(atlas.pending_queue.length(), 1)
+}

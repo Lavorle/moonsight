@@ -16,8 +16,10 @@ pub let ui_choice_row : String = "ui.choice_row"
 /// - Visible layers → `SpriteDraw` (full-canvas size Phase 1).
 /// - Dialogue box bottom 30% (via `UiLayout`) + optional nameplate.
 /// - Visible typewriter text + choices laid out with fixed advances.
-/// - Glyph atlas UVs are zeros here; callers that own a `GlyphAtlas` should
-///   use `build_draw_list_with_atlas` so UVs and pending queue stay coherent.
+/// - Allocates a throwaway `GlyphAtlas` for UV packing (UVs are real shelf
+///   coords, not zeros). Host frame loops must use `build_draw_list_with_atlas`
+///   with a long-lived atlas so pending rasterization / `mark_ready` stay
+///   coherent across frames.
 pub fn build_draw_list(
   view : @runtime.StageView,
   layout : UiLayout,
@@ -151,6 +153,11 @@ pub fn build_draw_list_with_atlas(
 
 ///|
 /// Layout `text` and push non-whitespace glyph quads into `glyphs`.
+///
+/// Atlas cell size is integer `font_size`×`font_size`; pen advance comes from
+/// `measure` and may differ (fixed-width tests use `default_char_advance`).
+/// Task 12 should rasterize into the allocated cell and may refine UV size
+/// via `GlyphAtlas::mark_ready`.
 fn emit_text_glyphs(
   glyphs : Array[GlyphDraw],
   atlas : GlyphAtlas,
