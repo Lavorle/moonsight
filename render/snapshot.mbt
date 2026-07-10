@@ -198,10 +198,10 @@ fn emit_text_glyphs(
         pen_x = pen_x + adv
         continue
       }
-      // Cell width = ceil(advance)+2 so fillText has side bearing room.
-      // Screen size matches the cell so UV samples 1:1 (no horizontal squash).
+      // Cell / screen / pen MUST share the same width. If screen_w > pen advance,
+      // glyphs overlap and middle letters vanish (was: "Talk" → "T l").
       let adv_i = adv.to_int()
-      let cell_w = if adv_i < 1 { 3 } else { adv_i + 2 }
+      let cell_w = if adv_i < 1 { 2 } else { adv_i + 1 }
       let entry = atlas.get_or_queue(ch, size, cell_w=cell_w)
       let sw = Float::from_int(entry.atlas_w)
       let sh = Float::from_int(entry.atlas_h)
@@ -216,7 +216,6 @@ fn emit_text_glyphs(
         h: sh,
         color,
       })
-      // Pen matches on-screen glyph width (1:1 with atlas cell).
       pen_x = pen_x + sw
     }
   }

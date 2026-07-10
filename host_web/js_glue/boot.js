@@ -564,7 +564,8 @@ export async function boot(options = {}) {
     // Modes: ?glyph=slug (default) | canvas | cpu-outline
     const fontUrl =
       options.fontUrl || params.get("font") || "./fonts/NotoSans-Regular.ttf";
-    const glyphMode = options.glyphMode || params.get("glyph") || "slug";
+    // Default to canvas fillText (reliable). GPU Slug: ?glyph=slug
+    const glyphMode = options.glyphMode || params.get("glyph") || "canvas";
     try {
       setStatus("load font…");
       const fontRes = await fetch(fontUrl);

@@ -846,7 +846,7 @@ export function rasterizeGlyphToAtlas(
     return;
   }
 
-  // 3) Canvas fillText (always works; matches Noto when FontFace loaded)
+  // 3) Canvas fillText — reliable; uses same Noto face as layout metrics.
   if (!glyphCanvas) {
     glyphCanvas = document.createElement("canvas");
     glyphCtx = glyphCanvas.getContext("2d", {
@@ -854,18 +854,46 @@ export function rasterizeGlyphToAtlas(
       alpha: true,
     });
   }
-  if (glyphCanvas.width < atlasW) glyphCanvas.width = atlasW;
-  if (glyphCanvas.height < atlasH) glyphCanvas.height = atlasH;
+  // Always resize to exact cell (avoids stale pixels from larger previous cells).
+  glyphCanvas.width = atlasW;
+  glyphCanvas.height = atlasH;
   const ctx = glyphCtx;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = "source-over";
   ctx.clearRect(0, 0, atlasW, atlasH);
-  const fontPx = Math.max(8, Math.floor(atlasH * 0.82));
+  // Use the layout size (not a shrunken atlasH) so advances match ink.
+  const fontPx = Math.max(8, size | 0);
   ctx.font = `${fontPx}px "Noto Sans", "NotoSans", sans-serif`;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(ch, 1, Math.floor(atlasH * 0.72));
+  // alphabetic baseline ≈ 0.8 of em box for Latin sans
+  const baseline = Math.min(atlasH - 1, Math.floor(fontPx * 0.8));
+  // Slight left pad; actual LSB is inside the font's advance box.
+  ctx.fillText(ch, 0, baseline);
   const img = ctx.getImageData(0, 0, atlasW, atlasH);
+  // If nothing was drawn (font not ready), draw a visible diagnostic bar.
+  let any = false;
+  for (let i = 3; i < img.data.length; i += 4) {
+    if (img.data[i] > 8) {
+      any = true;
+      break;
+    }
+  }
+  if (!any && ch.trim()) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(1, 1, Math.max(1, atlasW - 2), Math.max(1, atlasH - 2));
+    const img2 = ctx.getImageData(0, 0, atlasW, atlasH);
+    writeAtlasSubrect(
+      entry.texture,
+      atlasX,
+      atlasY,
+      atlasW,
+      atlasH,
+      img2.data,
+    );
+    return;
+  }
   writeAtlasSubrect(
     entry.texture,
     atlasX,
