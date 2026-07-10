@@ -12,9 +12,29 @@ test "layer.show and trans.fade mutate stage" {
   assert_eq(stage.overlay_opacity, 0.0)
   assert_eq(stage.fade_to, 1.0)
   assert_eq(stage.fade_remaining, 0.3)
+  assert_eq(stage.dissolve_phase, 0)
   // Zero duration still snaps to target.
   ignore(reg.call("trans.fade", stage, [Float(0.0), Float(1.0)]))
   assert_eq(stage.overlay_opacity, 1.0)
+  assert_eq(stage.fade_remaining, 0.0)
+  assert_eq(stage.dissolve_phase, 0)
+}
+
+///|
+/// `@trans.dissolve duration` starts Out phase at opacity 0; duration ≤ 0 clears veil.
+test "trans.dissolve goes out then in" {
+  let reg = @std_commands.standard_registry()
+  let stage = @runtime.Stage::new()
+  ignore(reg.call("trans.dissolve", stage, [Float(1.0)]))
+  // phase Out, opacity starts 0, fade_remaining is total wall for Out+In.
+  assert_eq(stage.dissolve_phase, 1)
+  assert_eq(stage.overlay_opacity, 0.0)
+  assert_eq(stage.fade_to, 1.0)
+  assert_eq(stage.fade_remaining, 1.0)
+  // Zero duration clears the veil immediately.
+  ignore(reg.call("trans.dissolve", stage, [Float(0.0)]))
+  assert_eq(stage.dissolve_phase, 0)
+  assert_eq(stage.overlay_opacity, 0.0)
   assert_eq(stage.fade_remaining, 0.0)
 }
 

@@ -35,6 +35,7 @@ pub fn builtin_externs() -> Array[ExternDecl] {
     stub_extern("layer.move", span~, params=[param("id")]),
     stub_extern("layer.set", span~, params=[param("id")]),
     stub_extern("trans.fade", span~, params=[]),
+    stub_extern("trans.dissolve", span~, params=[param("duration")]),
     stub_extern("var.set", span~, params=[param("name"), param("value")]),
     stub_extern("audio.bgm", span~, params=[param("resource")]),
     stub_extern("audio.se", span~, params=[param("resource")]),

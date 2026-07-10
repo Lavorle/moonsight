@@ -91,7 +91,14 @@ pub(all) struct Stage {
   /// Seconds left for timed @flow.wait; 0 means not in timed wait.
   mut wait_remaining : Double
   /// Wall-clock seconds left for overlay fade to `fade_to` (0 = done / snap).
+  ///
+  /// During dissolve, this is **total** remaining wall time for Out+In.
   mut fade_remaining : Double
+  /// Dissolve dual-phase veil: 0=none, 1=Out (→1), 2=In (→0). Not saved.
+  mut dissolve_phase : Int
+  /// Full dissolve duration (Out+In); used with `fade_remaining` to locate half.
+  /// Zero when no dissolve active. Not saved.
+  mut dissolve_total : Double
   /// Current BGM resource id (logical; Task 13 wires audio backend).
   mut bgm : String?
   /// Last SE resource id (logical).
@@ -115,6 +122,8 @@ pub fn Stage::new() -> Stage {
     fade_to: 0.0,
     wait_remaining: 0.0,
     fade_remaining: 0.0,
+    dissolve_phase: 0,
+    dissolve_total: 0.0,
     bgm: None,
     se: None,
     save_hint: false,

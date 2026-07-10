@@ -824,7 +824,14 @@ fn Engine::confirm_choice(self : Engine, index : Int) -> Unit {
 
 ///|
 /// Ease `overlay_opacity` toward `fade_to` over wall-clock `fade_remaining` seconds.
+///
+/// When `dissolve_phase != 0`, runs dual-half dissolve (0→1 Out, then 1→0 In)
+/// with `fade_remaining` as total wall remaining for Out+In.
 fn Engine::tick_transitions(self : Engine, dt : Double) -> Unit {
+  if self.stage.dissolve_phase != 0 {
+    self.tick_dissolve(dt)
+    return
+  }
   let target = self.stage.fade_to
   let cur = self.stage.overlay_opacity
   if cur == target {
@@ -844,6 +851,52 @@ fn Engine::tick_transitions(self : Engine, dt : Double) -> Unit {
   if self.stage.fade_remaining <= 0.0 {
     self.stage.overlay_opacity = target
     self.stage.fade_remaining = 0.0
+  }
+}
+
+///|
+/// Advance dual-phase dissolve veil: Out (0→1) then In (1→0) over `dissolve_total`.
+fn Engine::tick_dissolve(self : Engine, dt : Double) -> Unit {
+  if dt <= 0.0 {
+    return
+  }
+  let total = self.stage.dissolve_total
+  if total <= 0.0 {
+    self.stage.dissolve_phase = 0
+    self.stage.overlay_opacity = 0.0
+    self.stage.fade_remaining = 0.0
+    self.stage.fade_to = 0.0
+    return
+  }
+  let rem = self.stage.fade_remaining
+  let step_t = if dt < rem { dt } else { rem }
+  let new_rem = rem - step_t
+  let elapsed = total - new_rem
+  let half = total / 2.0
+  if new_rem <= 0.0 || elapsed >= total {
+    self.stage.dissolve_phase = 0
+    self.stage.dissolve_total = 0.0
+    self.stage.overlay_opacity = 0.0
+    self.stage.fade_to = 0.0
+    self.stage.fade_remaining = 0.0
+    return
+  }
+  self.stage.fade_remaining = new_rem
+  if elapsed < half {
+    // Out half: 0 → 1
+    self.stage.dissolve_phase = 1
+    self.stage.fade_to = 1.0
+    self.stage.overlay_opacity = if half > 0.0 { elapsed / half } else { 1.0 }
+  } else {
+    // In half: 1 → 0
+    self.stage.dissolve_phase = 2
+    self.stage.fade_to = 0.0
+    let t = elapsed - half
+    self.stage.overlay_opacity = if half > 0.0 {
+      1.0 - t / half
+    } else {
+      0.0
+    }
   }
 }
 

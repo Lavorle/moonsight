@@ -131,6 +131,91 @@ test "fade transition eases overlay toward target" {
 }
 
 ///|
+/// Dual-phase dissolve: 0→1 over first half, 1→0 over second half; total wall = duration.
+test "dissolve dual-phase veil out then in" {
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let ir = @script.compile_to_ir(src, file="dissolve.yuki")
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng.tick(None_, dt=0.0)
+  ignore(
+    @std_commands.standard_registry().call(
+      "trans.dissolve",
+      eng.stage,
+      [Float(1.0)],
+    ),
+  )
+  assert_eq(eng.stage.dissolve_phase, 1)
+  assert_eq(eng.stage.overlay_opacity, 0.0)
+  assert_eq(eng.stage.fade_remaining, 1.0)
+  // Mid Out (0.25 of 0.5 half) → ~0.5 opacity, still Out
+  eng.tick(None_, dt=0.25)
+  assert_eq(eng.stage.dissolve_phase, 1)
+  assert_true(eng.stage.overlay_opacity > 0.45)
+  assert_true(eng.stage.overlay_opacity < 0.55)
+  assert_true(eng.stage.fade_remaining > 0.7)
+  assert_true(eng.stage.fade_remaining < 0.8)
+  // End of Out half → near opaque; phase may flip to In on exact boundary
+  eng.tick(None_, dt=0.25)
+  assert_true(eng.stage.overlay_opacity > 0.9)
+  assert_true(eng.stage.dissolve_phase == 1 || eng.stage.dissolve_phase == 2)
+  // Mid In (another 0.25) → ~0.5 opacity, phase In
+  eng.tick(None_, dt=0.25)
+  assert_eq(eng.stage.dissolve_phase, 2)
+  assert_true(eng.stage.overlay_opacity > 0.45)
+  assert_true(eng.stage.overlay_opacity < 0.55)
+  // Finish → clear
+  eng.tick(None_, dt=0.25)
+  assert_eq(eng.stage.dissolve_phase, 0)
+  assert_eq(eng.stage.overlay_opacity, 0.0)
+  assert_eq(eng.stage.fade_remaining, 0.0)
+}
+
+///|
+/// Presentation clock: dissolve advances during timed wait; skip_held does not snap it.
+test "dissolve advances during wait; skip does not snap" {
+  let src =
+    #|- scene "s"
+    #|@flow.wait 1.0
+    #|
+  let ir = @script.compile_to_ir(src, file="dissolve_wait.yuki")
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng.tick(None_, dt=0.0)
+  assert_true(eng.stage.wait_remaining > 0.0)
+  ignore(
+    @std_commands.standard_registry().call(
+      "trans.dissolve",
+      eng.stage,
+      [Float(1.0)],
+    ),
+  )
+  // During wait, dissolve still ticks on presentation clock.
+  eng.tick(None_, dt=0.25)
+  assert_true(eng.stage.wait_remaining > 0.0)
+  assert_true(eng.stage.overlay_opacity > 0.45)
+  assert_true(eng.stage.overlay_opacity < 0.55)
+  assert_eq(eng.stage.dissolve_phase, 1)
+  // skip_held with dt=0 must not snap dissolve (same as fade).
+  let op_before = eng.stage.overlay_opacity
+  let phase_before = eng.stage.dissolve_phase
+  let rem_before = eng.stage.fade_remaining
+  eng.tick(None_, skip_held=true, dt=0.0)
+  assert_eq(eng.stage.overlay_opacity, op_before)
+  assert_eq(eng.stage.dissolve_phase, phase_before)
+  assert_eq(eng.stage.fade_remaining, rem_before)
+}
+
+///|
 test "toggle auto synthesizes advance on yield" {
   let src =
     #|- scene "s"

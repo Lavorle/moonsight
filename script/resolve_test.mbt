@@ -91,9 +91,16 @@ test "builtin_externs covers std host names" {
     need in [
       "text.begin", "text.type", "text.end", "flow.jump", "flow.jump_if", "flow.jump_if_not",
       "flow.yield", "flow.choice", "flow.wait", "layer.show", "layer.hide", "layer.move",
-      "layer.set", "trans.fade", "var.set", "audio.bgm", "audio.se", "sys.save_hint",
-      "ui.show", "ui.hide",
+      "layer.set", "trans.fade", "trans.dissolve", "var.set", "audio.bgm", "audio.se",
+      "sys.save_hint", "ui.show", "ui.hide",
     ] {
     assert_true(names.contains(need), msg="missing builtin \{need}")
   }
+}
+
+///|
+test "builtin_externs includes trans.dissolve" {
+  let builtins = @script.builtin_externs()
+  let names = Map::from_iter(builtins.map(e => (e.name, true)).iter())
+  assert_true(names.contains("trans.dissolve"))
 }
