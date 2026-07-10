@@ -197,13 +197,13 @@ fn build_settings(app : @runtime.UiApp) -> @runtime.UiNode {
         font_size=24.0,
         visible=@runtime.VisiblePred::Always,
       ),
-      app.button(
-        "Text +",
-        fn(c : &@runtime.Capabilities) { c.adjust_pref("text_speed", 0.25) },
-      ),
-      app.button(
-        "Text -",
-        fn(c : &@runtime.Capabilities) { c.adjust_pref("text_speed", -0.25) },
+      @runtime.UiNode::Slider(
+        key="text_speed",
+        x=0.0,
+        y=0.0,
+        w=400.0,
+        h=52.0,
+        visible=@runtime.VisiblePred::Always,
       ),
       @runtime.UiNode::Text(
         src=@runtime.TextBindSrc::Pref("auto_mode"),
@@ -227,17 +227,13 @@ fn build_settings(app : @runtime.UiApp) -> @runtime.UiNode {
         font_size=24.0,
         visible=@runtime.VisiblePred::Always,
       ),
-      app.button(
-        "Master +",
-        fn(c : &@runtime.Capabilities) {
-          c.adjust_pref("master_volume", 0.1)
-        },
-      ),
-      app.button(
-        "Master -",
-        fn(c : &@runtime.Capabilities) {
-          c.adjust_pref("master_volume", -0.1)
-        },
+      @runtime.UiNode::Slider(
+        key="master_volume",
+        x=0.0,
+        y=0.0,
+        w=400.0,
+        h=52.0,
+        visible=@runtime.VisiblePred::Always,
       ),
       @runtime.UiNode::Text(
         src=@runtime.TextBindSrc::Pref("bgm_volume"),
@@ -246,13 +242,13 @@ fn build_settings(app : @runtime.UiApp) -> @runtime.UiNode {
         font_size=24.0,
         visible=@runtime.VisiblePred::Always,
       ),
-      app.button(
-        "BGM +",
-        fn(c : &@runtime.Capabilities) { c.adjust_pref("bgm_volume", 0.1) },
-      ),
-      app.button(
-        "BGM -",
-        fn(c : &@runtime.Capabilities) { c.adjust_pref("bgm_volume", -0.1) },
+      @runtime.UiNode::Slider(
+        key="bgm_volume",
+        x=0.0,
+        y=0.0,
+        w=400.0,
+        h=52.0,
+        visible=@runtime.VisiblePred::Always,
       ),
       @runtime.UiNode::Text(
         src=@runtime.TextBindSrc::Pref("se_volume"),
@@ -261,13 +257,13 @@ fn build_settings(app : @runtime.UiApp) -> @runtime.UiNode {
         font_size=24.0,
         visible=@runtime.VisiblePred::Always,
       ),
-      app.button(
-        "SE +",
-        fn(c : &@runtime.Capabilities) { c.adjust_pref("se_volume", 0.1) },
-      ),
-      app.button(
-        "SE -",
-        fn(c : &@runtime.Capabilities) { c.adjust_pref("se_volume", -0.1) },
+      @runtime.UiNode::Slider(
+        key="se_volume",
+        x=0.0,
+        y=0.0,
+        w=400.0,
+        h=52.0,
+        visible=@runtime.VisiblePred::Always,
       ),
       app.button(
         "Back",

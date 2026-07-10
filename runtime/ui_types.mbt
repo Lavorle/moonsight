@@ -69,6 +69,15 @@ pub(all) enum UiNode {
     visible~ : VisiblePred,
   )
   Button(label~ : String, action_id~ : Int, visible~ : VisiblePred)
+  /// Horizontal pref slider; MenuLeft/Right adjust the named pref.
+  Slider(
+    key~ : String,
+    x~ : Double,
+    y~ : Double,
+    w~ : Double,
+    h~ : Double,
+    visible~ : VisiblePred,
+  )
   ChoiceList(
     x~ : Double,
     y~ : Double,
@@ -107,10 +116,12 @@ pub(all) struct ModalInstance {
 } derive(Debug)
 
 ///|
-/// Focusable target collected during layout (button action or choice row).
+/// Focusable target collected during layout (button, choice row, or slider key).
 pub(all) enum UiFocusTarget {
   Button(Int)
   Choice(Int)
+  /// Prefs key for `UiNode::Slider` (e.g. `master_volume`).
+  Slider(String)
 } derive(Debug, Eq)
 
 ///|

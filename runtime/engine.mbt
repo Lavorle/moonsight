@@ -635,8 +635,8 @@ fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
     Advance | SkipTyping => self.ui.activate(caps)
     MenuUp => self.ui.focus_delta(caps, -1)
     MenuDown => self.ui.focus_delta(caps, 1)
-    // Reserved for Task 7 Slider; no-op until sliders exist.
-    MenuLeft | MenuRight => ()
+    MenuLeft => self.ui.slider_delta(caps, -1)
+    MenuRight => self.ui.slider_delta(caps, 1)
     // OpenBacklog is handled on the Playing path (empty stack).
     OpenBacklog => ()
     ToggleAuto => self.apply_intent(ToggleAuto)

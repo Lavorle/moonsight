@@ -169,6 +169,7 @@ pub fn UiRuntime::focus_delta(
 
 ///|
 /// Activate the focused focusable (button handler or choice confirm).
+/// Slider activate is a no-op (use MenuLeft/Right to adjust).
 pub fn UiRuntime::activate(self : UiRuntime, caps : &Capabilities) -> Unit {
   let items = self.current_focusables(self.bind)
   if items.is_empty() {
@@ -179,6 +180,31 @@ pub fn UiRuntime::activate(self : UiRuntime, caps : &Capabilities) -> Unit {
   match items[idx].target {
     UiFocusTarget::Button(action_id) => self.app.invoke(action_id, caps)
     UiFocusTarget::Choice(i) => caps.confirm_choice(i)
+    UiFocusTarget::Slider(_) => ()
+  }
+}
+
+///|
+/// When focus is a Slider, nudge its pref by `direction` × key-specific step.
+///
+/// `direction` sign selects left (−) or right (+). No-op if focus is not a Slider.
+pub fn UiRuntime::slider_delta(
+  self : UiRuntime,
+  caps : &Capabilities,
+  direction : Int,
+) -> Unit {
+  let items = self.current_focusables(self.bind)
+  if items.is_empty() {
+    return
+  }
+  let idx = self.clamped_focus(items.length())
+  match items[idx].target {
+    UiFocusTarget::Slider(key) => {
+      let step = slider_step_for_key(key)
+      let delta = if direction < 0 { 0.0 - step } else { step }
+      caps.adjust_pref(key, delta)
+    }
+    _ => ()
   }
 }
 
@@ -204,6 +230,7 @@ pub fn UiRuntime::handle_pointer(
       match f.target {
         UiFocusTarget::Button(action_id) => self.app.invoke(action_id, caps)
         UiFocusTarget::Choice(ci) => caps.confirm_choice(ci)
+        UiFocusTarget::Slider(_) => ()
       }
       return
     }
@@ -569,6 +596,68 @@ fn walk_ui_node(
       }
       (ui_btn_w, ui_line_h)
     }
+    UiNode::Slider(key~, x~, y~, w~, h~, visible~) => {
+      if !visible.eval(st.bind) {
+        return (0.0, 0.0)
+      }
+      let px = origin_x + Float::from_double(x)
+      let py = origin_y + Float::from_double(y)
+      let bw = Float::from_double(w)
+      let bh = Float::from_double(h)
+      let idx = st.focus_counter
+      st.focus_counter = idx + 1
+      let focused = idx == st.focus_index
+      st.focusables.push(
+        {
+          target: UiFocusTarget::Slider(key),
+          x: px,
+          y: py,
+          w: bw,
+          h: bh,
+        },
+      )
+      if st.paint {
+        let t = pref_normalized(st.bind.prefs, key)
+        let fill_w = bw * Float::from_double(t)
+        // Track (full width).
+        st.ops.push(
+          {
+            kind: 0,
+            resource: ui_res_button,
+            x: px,
+            y: py,
+            w: bw,
+            h: bh,
+            opacity: if focused { 0.55 } else { 0.4 },
+            z: ui_z_widget,
+            text: None,
+            font_size: 0.0,
+            focused: false,
+          },
+        )
+        // Fill proportional to normalized pref value.
+        if fill_w > 0.0 {
+          st.ops.push(
+            {
+              kind: 0,
+              resource: if focused { ui_res_button_focus } else { ui_res_button },
+              x: px,
+              y: py,
+              w: fill_w,
+              h: bh,
+              opacity: if focused { 1.0 } else { 0.85 },
+              z: ui_z_widget,
+              text: None,
+              font_size: 0.0,
+              focused,
+            },
+          )
+        }
+      }
+      // Flow size: at least one button line so VBox advances past the control.
+      let flow_h = if bh > ui_line_h { bh } else { ui_line_h }
+      (bw, flow_h)
+    }
     UiNode::ChoiceList(x~, y~, w~, line_h~, visible~) => {
       if !visible.eval(st.bind) {
         return (0.0, 0.0)
@@ -625,6 +714,27 @@ fn opt_f(v : Double?, fallback : Float) -> Float {
   match v {
     Some(d) => Float::from_double(d)
     None => fallback
+  }
+}
+
+///|
+/// Normalized 0..1 fill fraction for a prefs key.
+fn pref_normalized(prefs : Prefs, key : String) -> Double {
+  match key {
+    "text_speed" => (prefs.text_speed - 0.25) / (3.0 - 0.25)
+    "master_volume" => prefs.master_volume
+    "bgm_volume" => prefs.bgm_volume
+    "se_volume" => prefs.se_volume
+    _ => 0.0
+  }
+}
+
+///|
+/// MenuLeft/Right step for a slider prefs key.
+fn slider_step_for_key(key : String) -> Double {
+  match key {
+    "text_speed" => 0.25
+    _ => 0.1
   }
 }
 

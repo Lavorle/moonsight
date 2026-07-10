@@ -494,6 +494,86 @@ test "VisiblePred And short-circuits ModeIs and SlotOccupied" {
 }
 
 ///|
+test "slider is focusable and MenuRight adjusts pref" {
+  let app = UiApp::new()
+  app.register_modal(
+    "settings",
+    UiNode::VBox(
+      x=Some(0.0),
+      y=Some(0.0),
+      children=[
+        UiNode::Slider(
+          key="master_volume",
+          x=0.0,
+          y=0.0,
+          w=400.0,
+          h=52.0,
+          visible=VisiblePred::Always,
+        ),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  let caps = FakeCaps::new()
+  // Start mid-range so MenuRight can increase without clamping at 1.0.
+  caps.prefs = { ..Prefs::default(), master_volume: 0.5 }
+  rt.prefs = caps.prefs
+  let c : &Capabilities = caps
+  rt.show_modal("settings")
+  let bind = { ..UiBindCtx::empty(), prefs: caps.prefs }
+  rt.sync_bind(bind)
+  let focus = rt.focusables_top(bind)
+  assert_eq(focus.length(), 1)
+  guard focus[0] is UiFocusTarget::Slider(key) else {
+    fail("expected Slider focusable")
+  }
+  assert_eq(key, "master_volume")
+  // slider_delta(+1) is the MenuRight path used by tick_ui.
+  rt.slider_delta(c, 1)
+  // volume step is 0.1
+  assert_eq(caps.prefs.master_volume, 0.6)
+  // MenuLeft decreases.
+  rt.slider_delta(c, -1)
+  assert_eq(caps.prefs.master_volume, 0.5)
+  // Activate on Slider is a no-op.
+  let before = caps.prefs.master_volume
+  rt.activate(c)
+  assert_eq(caps.prefs.master_volume, before)
+}
+
+///|
+test "slider paint fill width tracks normalized pref" {
+  let app = UiApp::new()
+  app.register_modal(
+    "s",
+    UiNode::Slider(
+      key="master_volume",
+      x=0.0,
+      y=0.0,
+      w=400.0,
+      h=52.0,
+      visible=VisiblePred::Always,
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("s")
+  let bind = {
+    ..UiBindCtx::empty(),
+    prefs: { ..Prefs::default(), master_volume: 0.25 },
+  }
+  let ops = rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind~)
+  // Track (full) + fill (0.25 * 400 = 100). First focusable is focused.
+  let mut fill_w : Float = -1.0
+  for op in ops {
+    if op.focused &&
+      (op.resource == "ui.button" || op.resource == "ui.button_focus") {
+      fill_w = op.w
+    }
+  }
+  assert_true(fill_w > 99.0 && fill_w < 101.0)
+}
+
+///|
 test "text in VBox paints at origin and takes a line of flow" {
   let app = UiApp::new()
   app.register_modal(
