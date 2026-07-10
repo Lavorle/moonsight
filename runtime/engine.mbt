@@ -45,19 +45,51 @@ pub fn Engine::from_ir(
 ///|
 /// Apply player intent, run the VM until it waits or halts, then tick transitions.
 ///
-/// `dt` is frame delta in seconds (default ≈ 1/60) for fade and typewriter pacing.
+/// `dt` is frame delta in seconds (default ≈ 1/60) for fade, tweens, wait, typewriter.
+///
+/// Tick order (spec §4): effective intent → gate while timed-wait → apply_intent →
+/// tick_wait → run_until_wait if Running → tick_transitions → tick_layer_tweens →
+/// tick_typewriter.
 pub fn Engine::tick(
   self : Engine,
   intent : Intent,
   dt? : Double = 1.0 / 60.0,
 ) -> Unit {
   let effective = self.effective_intent(intent)
-  self.apply_intent(effective)
+  // Timed wait: swallow Advance/Select/SkipTyping so the countdown cannot be skipped.
+  let gated =
+    if self.stage.wait_remaining > 0.0 {
+      match effective {
+        Advance | SkipTyping | Select(_) => Intent::None_
+        other => other
+      }
+    } else {
+      effective
+    }
+  self.apply_intent(gated)
+  self.tick_wait(dt)
   if self.vm.wait is Running {
     self.vm.run_until_wait(self.director, self.stage)
   }
   self.tick_transitions(dt)
+  self.stage.tick_layer_tweens(dt)
   self.tick_typewriter(dt)
+}
+
+///|
+/// Count down timed `@flow.wait`; when remaining hits 0 and wait is Yield, resume.
+fn Engine::tick_wait(self : Engine, dt : Double) -> Unit {
+  if self.stage.wait_remaining > 0.0 {
+    let left = self.stage.wait_remaining - dt
+    if left <= 0.0 {
+      self.stage.wait_remaining = 0.0
+      if self.vm.wait is Yield {
+        self.vm.wait = Running
+      }
+    } else {
+      self.stage.wait_remaining = left
+    }
+  }
 }
 
 ///|

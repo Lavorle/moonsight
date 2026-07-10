@@ -12,19 +12,31 @@ pub fn cmd_flow_jump(
 }
 
 ///|
-/// `flow.wait time` — yield control (duration used later by engine frame).
+/// `flow.wait time` — yield control; timed waits set `stage.wait_remaining`.
+///
+/// Bare `@flow.wait` (no duration) leaves `wait_remaining = 0` and resumes
+/// on Advance via the existing Yield path. Timed wait uses remaining > 0.
 pub fn cmd_flow_wait(
   stage : @runtime.Stage,
   args : Array[@runtime.Value],
 ) -> @runtime.HostResult {
-  ignore(stage)
   match args {
     [t, ..] =>
       match @runtime.value_as_double(t) {
-        Some(_) => Yield
+        Some(sec) => {
+          if sec > 0.0 {
+            stage.wait_remaining = sec
+          } else {
+            stage.wait_remaining = 0.0
+          }
+          Yield
+        }
         None => Error("flow.wait: expected numeric time")
       }
-    [] => Yield
+    [] => {
+      stage.wait_remaining = 0.0
+      Yield
+    }
   }
 }
 

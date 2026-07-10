@@ -184,3 +184,51 @@ test "missing scene sets last_error and halts" {
   guard eng.vm.last_error is Some(msg) else { fail("last_error") }
   assert_true(msg.contains("nope"))
 }
+
+///|
+test "flow.wait duration resumes after real time" {
+  let src =
+    #|- scene "s"
+    #|@flow.wait 0.5
+    #|@var.set "done" true
+    #|
+  let ir = @script.compile_to_ir(src, file="wait.yuki")
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng.tick(None_, dt=0.0)
+  // After first run should be Yield with wait_remaining ~ 0.5
+  assert_true(eng.vm.wait == Yield)
+  assert_true(eng.stage.wait_remaining > 0.0)
+  // Advance must not skip
+  eng.tick(Advance, dt=0.1)
+  assert_true(eng.vm.wait == Yield)
+  assert_true(eng.stage.get_var("done") == None_)
+  eng.tick(None_, dt=0.5)
+  assert_true(
+    eng.stage.get_var("done") == Bool(true) ||
+    eng.vm.wait == Halted ||
+    eng.vm.wait == Running,
+  )
+  // After enough time, var set
+  eng.tick(None_, dt=0.1)
+  assert_true(eng.stage.get_var("done") == Bool(true))
+}
+
+///|
+test "layer opacity tween advances on engine tick" {
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let eng = @runtime.Engine::from_ir(
+    @script.compile_to_ir(src, file="t.yuki"),
+    entry="s",
+  )
+  eng.stage.show_layer(id="y", layer=Character, resource="c", z=1, opacity=0.0)
+  eng.stage.start_layer_tween(id="y", prop=Opacity, to=1.0, duration=1.0)
+  eng.tick(None_, dt=0.5)
+  assert_eq(eng.stage.layers[0].opacity, 0.5)
+}
