@@ -30,7 +30,8 @@ fn is_ident_start(c : Char) -> Bool {
 
 ///|
 fn is_ident_continue(c : Char) -> Bool {
-  c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '_'
+  // Allow '.' so host names like `text.begin` / `flow.jump` are one Ident.
+  c.is_ascii_alphabetic() || c.is_ascii_digit() || c == '_' || c == '.'
 }
 
 ///|

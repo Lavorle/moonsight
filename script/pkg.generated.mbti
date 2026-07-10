@@ -6,15 +6,31 @@ import {
 }
 
 // Values
+pub fn builtin_externs() -> Array[ExternDecl]
+
+pub fn expand_macros(ScriptUnit) -> ScriptUnit raise MacroError
+
 pub fn lex(String, file~ : String) -> Array[Token]
 
 pub fn parse_source(String, file~ : String) -> ScriptUnit raise ParseError
 
+pub fn resolve_unit(ScriptUnit, Array[ExternDecl]) -> ResolvedUnit raise ResolveError
+
 pub fn script_package_name() -> String
 
 // Errors
+pub(all) suberror MacroError {
+  RecursionLimit(name~ : String, span~ : SourceSpan)
+} derive(Eq, @debug.Debug)
+
 pub(all) suberror ParseError {
   ParseError(span~ : SourceSpan, message~ : String)
+} derive(Eq, @debug.Debug)
+
+pub(all) suberror ResolveError {
+  UnknownCommand(name~ : String, span~ : SourceSpan)
+  DuplicateScene(name~ : String, span~ : SourceSpan)
+  UnknownParent(name~ : String, parent~ : String, span~ : SourceSpan)
 } derive(Eq, @debug.Debug)
 
 // Types and methods
@@ -55,6 +71,13 @@ pub(all) struct MacroDecl {
 pub(all) struct ParamDecl {
   name : String
   default : Expr?
+} derive(@debug.Debug)
+
+pub(all) struct ResolvedUnit {
+  file : String
+  externs : Map[String, ExternDecl]
+  scenes : Array[SceneDecl]
+  scene_table : Map[String, Int]
 } derive(@debug.Debug)
 
 pub(all) struct SceneDecl {
