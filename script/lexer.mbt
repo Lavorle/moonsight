@@ -172,6 +172,10 @@ fn LineScanner::scan_number(self : LineScanner, out : Array[Token]) -> Unit {
   let start = self.pos
   let start_col = self.col()
   let mut is_float = false
+  // Optional leading '-' (used for named values after `=`, e.g. x=-200)
+  if self.peek() is Some('-') {
+    self.advance()
+  }
   while self.peek() is Some(c) && c.is_ascii_digit() {
     self.advance()
   }
@@ -243,6 +247,8 @@ fn LineScanner::scan_value(self : LineScanner, out : Array[Token]) -> Unit {
   match self.peek() {
     Some('"') => self.scan_string(out)
     Some(c) if c.is_ascii_digit() => self.scan_number(out)
+    Some('-') if self.peek_at(1) is Some(d) && d.is_ascii_digit() =>
+      self.scan_number(out)
     Some(c) if is_ident_start(c) => self.scan_ident_or_bool(out)
     Some(_) => {
       let start_col = self.col()

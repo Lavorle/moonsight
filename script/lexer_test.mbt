@@ -96,6 +96,23 @@ test "lex floats bools and spans" {
 }
 
 ///|
+test "lexer named negative int and float" {
+  let src = #|@layer.set "y" x=-200 y=-1.5 duration=0.5
+  let toks = @script.lex(src, file="t.yuki")
+  let mut saw_neg_int = false
+  let mut saw_neg_float = false
+  for t in toks {
+    match t.kind {
+      IntLit(n) => if n == -200 { saw_neg_int = true }
+      FloatLit(f) => if f == -1.5 { saw_neg_float = true }
+      _ => ()
+    }
+  }
+  assert_true(saw_neg_int)
+  assert_true(saw_neg_float)
+}
+
+///|
 test "diagnostic to_cli format" {
   let span : @script.SourceSpan = {
     file: "demo.yuki",
