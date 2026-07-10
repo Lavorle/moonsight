@@ -1,6 +1,7 @@
 import {
   "moonsight/moonsight/runtime",
   "moonsight/moonsight/std_commands",
+  "moonsight/moonsight/std_ui",
   "moonsight/moonsight/render",
   "moonsight/moonsight/audio",
   "moonsight/moonsight/script",

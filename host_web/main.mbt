@@ -117,10 +117,13 @@ fn load_source_inner(src : String, file~ : String) -> Result[Unit, String] {
 ///|
 fn install_engine_from_ir(ir : @script.IrModule) -> Unit {
   let entry = ir.entry
+  let app = @runtime.UiApp::new()
+  @std_ui.register(app)
   let eng = @runtime.Engine::from_ir(
     ir,
     entry~,
     director=@std_commands.standard_registry(),
+    app~,
   )
   let s = session.val
   s.engine = Some(eng)

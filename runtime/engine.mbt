@@ -387,7 +387,9 @@ pub fn Engine::sync_ui_bind(self : Engine) -> Unit {
         Some(s) => s
         None => ""
       }
-      (true, name, t.full_text)
+      // Typewriter: expose only the visible prefix so HUD body tracks reveal.
+      let body = visible_text_prefix(t.full_text, t.visible_chars)
+      (true, name, body)
     }
   }
   let (has_choices, choice_labels) = match self.stage.choices {
@@ -613,6 +615,18 @@ fn Engine::tick_transitions(self : Engine, dt : Double) -> Unit {
   if self.stage.fade_remaining <= 0.0 {
     self.stage.overlay_opacity = target
     self.stage.fade_remaining = 0.0
+  }
+}
+
+///|
+/// Visible typewriter prefix of `full` up to `visible_chars` code units.
+fn visible_text_prefix(full : String, visible_chars : Int) -> String {
+  if visible_chars <= 0 {
+    ""
+  } else if visible_chars >= full.length() {
+    full
+  } else {
+    full.unsafe_substring(start=0, end=visible_chars)
   }
 }
 
