@@ -6,3 +6,5 @@ _build/
 node_modules/
 *.wasm
 host_desktop/tauri/src-tauri/target/
+
+dist/
