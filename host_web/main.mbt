@@ -70,10 +70,52 @@ pub fn load_source(src : String) -> Int {
 }
 
 ///|
+/// Load compiled MSB bytecode (binary string: each char code unit is one byte).
+///
+/// Preferred browser path: fetch `game.msb`, then pass Latin-1 / binary string.
+/// Returns 0 on success, 1 on decode/install failure.
+pub fn load_msb(raw : String) -> Int {
+  match load_msb_inner(raw) {
+    Ok(_) => 0
+    Err(_) => 1
+  }
+}
+
+///|
+/// Last soft engine/VM error message (empty if none).
+pub fn last_error() -> String {
+  match session.val.engine {
+    None => ""
+    Some(eng) =>
+      match eng.vm.last_error {
+        None => ""
+        Some(msg) => msg
+      }
+  }
+}
+
+///|
+fn load_msb_inner(raw : String) -> Result[Unit, String] {
+  let n = raw.length()
+  let bytes = Bytes::makei(n, i => raw[i].to_byte())
+  let ir = @script.decode_module(bytes) catch {
+    _ => return Err("msb decode failed")
+  }
+  install_engine_from_ir(ir)
+  Ok(())
+}
+
+///|
 fn load_source_inner(src : String, file~ : String) -> Result[Unit, String] {
   let ir = @script.compile_to_ir(src, file~) catch {
     _ => return Err("compile failed")
   }
+  install_engine_from_ir(ir)
+  Ok(())
+}
+
+///|
+fn install_engine_from_ir(ir : @script.IrModule) -> Unit {
   let entry = ir.entry
   let eng = @runtime.Engine::from_ir(
     ir,
@@ -93,7 +135,6 @@ fn load_source_inner(src : String, file~ : String) -> Result[Unit, String] {
   ignore(s.resources.intern(@render.ui_nameplate))
   ignore(s.resources.intern(@render.ui_choice_row))
   ignore(s.resources.intern("bg/demo"))
-  Ok(())
 }
 
 ///|

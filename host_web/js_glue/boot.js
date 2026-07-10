@@ -461,9 +461,41 @@ async function applyManifest(manifest) {
   }
 }
 
+/**
+ * Build a binary Latin-1 string from Uint8Array (one code unit per byte).
+ * Used to pass MSB bytes into MoonBit `load_msb` under js-builtin-string.
+ */
+function bytesToBinaryString(buf) {
+  const chunk = 0x8000;
+  let raw = "";
+  for (let i = 0; i < buf.length; i += chunk) {
+    raw += String.fromCharCode.apply(null, buf.subarray(i, i + chunk));
+  }
+  return raw;
+}
+
 async function maybeLoadSource() {
-  // Prefer demo.yuki if present; else rely on init_demo inside wasm.
+  // Prefer compiled multi-file game.msb when present; fallback demo.yuki / init_demo.
   // Replacing mixer/source state: stop any JS-side BGM so it cannot desync.
+  try {
+    const msbRes = await fetch("./game.msb");
+    if (
+      msbRes.ok &&
+      exports_ &&
+      typeof exports_.load_msb === "function"
+    ) {
+      const buf = new Uint8Array(await msbRes.arrayBuffer());
+      if (buf.length > 0) {
+        const rc = exports_.load_msb(bytesToBinaryString(buf));
+        console.info("load_msb game.msb rc=", rc, "bytes=", buf.length);
+        stopBgm();
+        if (rc === 0) return;
+        console.warn("load_msb failed; falling back to demo.yuki");
+      }
+    }
+  } catch (e) {
+    console.warn("game.msb load error", e);
+  }
   try {
     const res = await fetch("./demo.yuki");
     if (res.ok) {

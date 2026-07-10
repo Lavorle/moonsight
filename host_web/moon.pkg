@@ -13,6 +13,8 @@ options(
       "exports": [
         "init_demo",
         "load_source",
+        "load_msb",
+        "last_error",
         "export_frame",
         "frame_len",
         "frame_at",
