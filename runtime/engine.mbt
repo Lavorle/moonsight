@@ -334,9 +334,15 @@ pub fn Engine::occupied_slots(self : Engine) -> Array[Bool] {
 }
 
 ///|
+/// Max Yield→run cycles per frame while `skip_held` (prevents one-frame script thrash).
+let skip_burst_max : Int = 8
+
+///|
 /// Apply player intent, run the VM until it waits or halts, then tick transitions.
 ///
 /// `dt` is frame delta in seconds (default ≈ 1/60) for fade, tweens, wait, typewriter.
+/// `skip_held` (Ctrl hold): complete typewriter / burst-advance Yields; does not skip
+/// timed waits or auto-select choices. Ignored while UI/Title is active.
 ///
 /// Tick order (Phase 4): UI intents when stack/Title → else Playing narrative path;
 /// layer tweens only while Playing; always tick BGM fade.
@@ -344,6 +350,7 @@ pub fn Engine::tick(
   self : Engine,
   intent : Intent,
   dt? : Double = 1.0 / 60.0,
+  skip_held~ : Bool = false,
 ) -> Unit {
   let ui_active =
     self.ui.stack_depth() > 0 || (self.ui.mode is Title)
@@ -378,8 +385,14 @@ pub fn Engine::tick(
   if self.vm.wait is Running {
     self.vm.run_until_wait(self.director, self.stage)
   }
-  self.drain_ui_ops()
   // If @ui.show opened a modal this frame, freeze narrative presentation.
+  let playing =
+    self.ui.stack.is_empty() && !(self.ui.mode is Title)
+  if skip_held && playing && self.stage.wait_remaining <= 0.0 {
+    self.tick_skip_burst()
+  }
+  self.drain_ui_ops()
+  // Re-check playing: skip burst or host ops may have opened a modal.
   let playing =
     self.ui.stack.is_empty() && !(self.ui.mode is Title)
   if playing {
@@ -388,6 +401,47 @@ pub fn Engine::tick(
     self.tick_typewriter(dt)
   }
   @audio.global_mixer().tick(dt)
+}
+
+///|
+/// Hold-skip burst: complete incomplete typewriter once, or advance Yields up to
+/// `skip_burst_max` times. Stops on Choose, Halted, or timed wait.
+fn Engine::tick_skip_burst(self : Engine) -> Unit {
+  let mut bursts = 0
+  while bursts < skip_burst_max {
+    if self.stage.wait_remaining > 0.0 {
+      break
+    }
+    // Modal opened mid-burst (e.g. @ui.show): stop narrative skip.
+    if self.ui.stack_depth() > 0 || (self.ui.mode is Title) {
+      break
+    }
+    match self.vm.wait {
+      Halted | Choose => break
+      Running => {
+        self.vm.run_until_wait(self.director, self.stage)
+        // Budget stall: avoid spinning if still Running.
+        if self.vm.wait is Running {
+          break
+        }
+      }
+      Yield =>
+        match self.stage.text {
+          Some({ complete: false, .. }) => {
+            // Reuse SkipTyping path (complete_text + backlog); one complete per frame.
+            self.apply_intent(SkipTyping)
+            break
+          }
+          _ => {
+            self.apply_intent(SkipTyping)
+            if self.vm.wait is Running {
+              self.vm.run_until_wait(self.director, self.stage)
+            }
+            bursts = bursts + 1
+          }
+        }
+    }
+  }
 }
 
 ///|

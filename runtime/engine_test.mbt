@@ -648,6 +648,71 @@ test "load clears screen stack to Playing" {
 }
 
 ///|
+test "skip_held completes typewriter then advances yield" {
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|y:There
+    #|
+  let ir = @script.compile_to_ir(src, file="skip_held.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.tick(None_, dt=0.0)
+  guard eng.stage.text is Some(t0) else { fail("first line") }
+  assert_eq(t0.full_text, "Hi")
+  assert_true(!t0.complete)
+  // Hold skip: complete typewriter; stay on the same Yield this frame.
+  eng.tick(None_, skip_held=true, dt=0.0)
+  guard eng.stage.text is Some(t1) else { fail("completed") }
+  assert_eq(t1.full_text, "Hi")
+  assert_true(t1.complete)
+  assert_true(eng.vm.wait == Yield)
+  // Next frame hold skip: advance past yield to the next line.
+  eng.tick(None_, skip_held=true, dt=0.0)
+  guard eng.stage.text is Some(t2) else { fail("second line") }
+  assert_eq(t2.full_text, "There")
+}
+
+///|
+test "skip_held does not skip timed wait" {
+  let src =
+    #|- scene "s"
+    #|@flow.wait 0.5
+    #|@var.set "done" true
+    #|
+  let ir = @script.compile_to_ir(src, file="skip_wait.yuki")
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng.tick(None_, dt=0.0)
+  assert_true(eng.vm.wait == Yield)
+  assert_true(eng.stage.wait_remaining > 0.0)
+  let ip0 = eng.vm.ip
+  eng.tick(None_, skip_held=true, dt=0.0)
+  assert_eq(eng.vm.ip, ip0)
+  assert_true(eng.stage.wait_remaining > 0.0)
+  assert_true(eng.stage.get_var("done") == None_)
+}
+
+///|
+test "skip_held does not auto-select choices" {
+  let src =
+    #|- scene "s"
+    #|@flow.choice "Yes" "No" --result c
+    #|
+  let ir = @script.compile_to_ir(src, file="skip_choice.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.tick(None_)
+  assert_true(eng.vm.wait == Choose)
+  eng.tick(None_, skip_held=true)
+  assert_true(eng.vm.wait == Choose)
+  guard eng.stage.choices is Some(ch) else { fail("choices remain") }
+  assert_eq(ch.options.length(), 2)
+  assert_true(eng.stage.get_var("c") == None_)
+}
+
+///|
 /// Pref volume mutations must multiply into global mixer output gains.
 test "set_pref volume updates global mixer gains" {
   @audio.reset_global_mixer()
