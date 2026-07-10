@@ -389,6 +389,12 @@ pub fn Engine::sync_ui_bind(self : Engine) -> Unit {
     }
     Some(c) => (true, c.options.copy())
   }
+  // Playing + empty modal stack: HUD paints focus from ui.hud_focus, but
+  // MenuUp/Down move Stage choice focus. Keep the paint highlight aligned.
+  match self.stage.choice_focus() {
+    Some(i) => self.ui.hud_focus = i
+    None => ()
+  }
   let modal_mode = if self.ui.stack.is_empty() {
     None
   } else {
@@ -548,8 +554,21 @@ fn Engine::apply_intent(self : Engine, intent : Intent) -> Unit {
             None => ()
           }
         // ↑↓ move focus while waiting on narrative choices (not system screens).
-        MenuUp => self.stage.move_choice_focus(-1)
-        MenuDown => self.stage.move_choice_focus(1)
+        // Also update hud_focus so mid-tick paint matches Stage authority.
+        MenuUp => {
+          self.stage.move_choice_focus(-1)
+          match self.stage.choice_focus() {
+            Some(i) => self.ui.hud_focus = i
+            None => ()
+          }
+        }
+        MenuDown => {
+          self.stage.move_choice_focus(1)
+          match self.stage.choice_focus() {
+            Some(i) => self.ui.hud_focus = i
+            None => ()
+          }
+        }
         _ => ()
       }
     Running | Halted => ()

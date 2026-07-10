@@ -58,9 +58,37 @@ test "choice Advance commits focused row; MenuDown moves focus" {
   guard eng.stage.choice_focus() is Some(0) else { fail("focus 0") }
   eng.tick(MenuDown)
   guard eng.stage.choice_focus() is Some(1) else { fail("focus Leave") }
+  // HUD highlight must track Stage focus (commit path uses Stage).
+  assert_eq(eng.ui.hud_focus, 1)
+  eng.sync_ui_bind()
+  assert_eq(eng.ui.hud_focus, 1)
   eng.tick(Advance)
   assert_true(eng.stage.get_var("act") == Int(1))
   assert_true(eng.stage.choices is None)
+}
+
+///|
+test "sync_ui_bind aligns hud_focus with stage choice focus" {
+  let src =
+    #|- scene "s"
+    #|@flow.choice "A" "B" "C" --result pick
+    #|
+  let ir = @script.compile_to_ir(src, file="choice_hud_sync.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.tick(None_)
+  assert_true(eng.vm.wait == Choose)
+  // Simulate stale HUD focus while Stage still starts at 0.
+  eng.ui.hud_focus = 2
+  eng.sync_ui_bind()
+  assert_eq(eng.ui.hud_focus, 0)
+  guard eng.stage.choice_focus() is Some(0) else { fail("stage 0") }
+  eng.tick(MenuDown)
+  eng.tick(MenuDown)
+  guard eng.stage.choice_focus() is Some(2) else { fail("stage 2") }
+  assert_eq(eng.ui.hud_focus, 2)
+  eng.ui.hud_focus = 0
+  eng.sync_ui_bind()
+  assert_eq(eng.ui.hud_focus, 2)
 }
 
 ///|
