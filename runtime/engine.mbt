@@ -28,6 +28,10 @@ pub(all) struct Engine {
   ir_entry : String
   /// In-memory multi-slot save blobs (host may mirror to localStorage).
   mut slot_blobs : Array[String?]
+  /// Session-only completed dialogue lines (not saved).
+  mut backlog : BacklogStore
+  /// Last recorded speaker+text key; avoids double-recording the same line.
+  mut backlog_last_key : String
 }
 
 ///|
@@ -67,6 +71,8 @@ pub fn Engine::from_ir(
     ui,
     ir_entry: entry,
     slot_blobs,
+    backlog: BacklogStore::new(),
+    backlog_last_key: "",
   }
   eng.sync_mixer_prefs()
   eng
@@ -106,6 +112,8 @@ pub fn Engine::start_game(self : Engine) -> Unit {
   self.stage = stage
   self.vm = Vm::from_module(self.vm.ir, entry=self.ir_entry)
   self.auto = self.ui.prefs.auto_mode
+  self.backlog.clear()
+  self.backlog_last_key = ""
 }
 
 ///|
@@ -118,6 +126,8 @@ pub fn Engine::quit_to_title(self : Engine) -> Unit {
   self.stage = stage
   self.vm = Vm::from_module(self.vm.ir, entry=self.ir_entry)
   self.auto = self.ui.prefs.auto_mode
+  self.backlog.clear()
+  self.backlog_last_key = ""
   if self.ui.app.modals.contains("title") {
     self.ui.show_modal("title")
   }
@@ -550,7 +560,10 @@ fn Engine::apply_intent(self : Engine, intent : Intent) -> Unit {
         Advance | SkipTyping =>
           // Typewriter: first Advance completes incomplete text; stay on Yield.
           match self.stage.text {
-            Some({ complete: false, .. }) => self.stage.complete_text()
+            Some({ complete: false, .. }) => {
+              self.stage.complete_text()
+              self.maybe_record_backlog()
+            }
             _ => self.vm.wait = Running
           }
         None_
@@ -668,6 +681,31 @@ fn Engine::tick_typewriter(self : Engine, dt : Double) -> Unit {
       if dt > 0.0 {
         self.stage.reveal_chars(chars)
       }
+    }
+    _ => ()
+  }
+  self.maybe_record_backlog()
+}
+
+///|
+/// If the stage text block is complete and non-empty, append it to the session
+/// backlog once (deduped by speaker + full_text key).
+fn Engine::maybe_record_backlog(self : Engine) -> Unit {
+  match self.stage.text {
+    Some({ complete: true, full_text, speaker, .. }) => {
+      if full_text.length() == 0 {
+        return
+      }
+      let sp = match speaker {
+        Some(s) => s
+        None => "-"
+      }
+      let key = "\{sp}-\{full_text}"
+      if key == self.backlog_last_key {
+        return
+      }
+      self.backlog_last_key = key
+      self.backlog.push(speaker~, text=full_text)
     }
     _ => ()
   }

@@ -202,6 +202,23 @@ test "typewriter reveals chars over ticks without complete_on_end" {
 }
 
 ///|
+test "completed dialogue line is recorded in backlog" {
+  let src =
+    #|- scene "s"
+    #|y:Hello
+    #|
+  let ir = @script.compile_to_ir(src, file="bl.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.tick(None_, dt=0.0)
+  // Incomplete typewriter: complete via Advance
+  eng.tick(Advance)
+  guard eng.stage.text is Some(t) else { fail("text") }
+  assert_true(t.complete)
+  assert_true(eng.backlog.len() >= 1)
+  assert_eq(eng.backlog.get(0).text, "Hello")
+}
+
+///|
 test "jump_if branches Talk vs Leave to different scenes" {
   let src =
     #|- scene "s"

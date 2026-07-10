@@ -178,6 +178,9 @@ pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
   apply_save_game(self, parse_save_game(blob))
   // Spec: load returns to narrative play with no residual modal stack.
   self.clear_screens_to_playing()
+  // Session backlog is not part of save; drop lines from the prior playthrough.
+  self.backlog.clear()
+  self.backlog_last_key = ""
   // Prefs are not in the save blob; re-apply current gains after mixer restore.
   self.sync_mixer_prefs()
 }
