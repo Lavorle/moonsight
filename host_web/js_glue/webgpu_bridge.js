@@ -879,14 +879,17 @@ export function rasterizeGlyphToAtlas(
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#ffffff";
-  // Shared baseline for ALL glyphs of this size (do NOT use per-char ascent —
-  // that made letters jump vertically: "Moonyuki" looked broken).
-  // Cell height is ~1.4em; put alphabetic baseline at 0.78em from top so
-  // ascenders and descenders (g/y/p) both fit with AA margin.
-  const baseline = Math.min(
-    atlasH - Math.max(6, Math.ceil(fontPx * 0.28)),
-    Math.floor(fontPx * 0.78),
-  );
+  // Shared baseline for ALL glyphs of this font size (no per-char vertical jump).
+  // Typical Latin em: ascent ~0.8em above baseline, descent ~0.25em below.
+  // Leave top pad for tall ascenders (f, b, d, h, k, l, t) + AA.
+  const topPad = 2;
+  const ascent = Math.ceil(fontPx * 0.85);
+  const descentRoom = Math.max(8, Math.ceil(fontPx * 0.3));
+  let baseline = topPad + ascent;
+  // If cell is shorter than ideal (legacy), keep descenders by clamping.
+  if (baseline + descentRoom > atlasH) {
+    baseline = Math.max(topPad + Math.ceil(fontPx * 0.75), atlasH - descentRoom);
+  }
   // Only horizontal bearing is per-glyph.
   const metrics = ctx.measureText(ch);
   const left = Math.ceil(metrics.actualBoundingBoxLeft || 0);
