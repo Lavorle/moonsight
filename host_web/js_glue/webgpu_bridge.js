@@ -879,17 +879,21 @@ export function rasterizeGlyphToAtlas(
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#ffffff";
-  // Leave ~25% of cell below the baseline for descenders (g/y/p/q/j).
-  // Cell height is size + size/4 from MoonBit layout.
-  const descRoom = Math.max(4, Math.ceil(fontPx * 0.22));
-  const baseline = Math.min(
-    atlasH - descRoom,
-    Math.max(fontPx, Math.floor(fontPx * 0.8)),
-  );
-  // Shift right by left bearing so ink isn't clipped at x=0 (esp. wide caps).
+  // Measure real ink extents so g/y/p descenders fit inside the cell.
   const metrics = ctx.measureText(ch);
-  const left = metrics.actualBoundingBoxLeft || 0;
-  const xPen = Math.max(0, Math.ceil(left)) + 1;
+  const left = Math.ceil(metrics.actualBoundingBoxLeft || 0);
+  const ascent = Math.ceil(
+    metrics.actualBoundingBoxAscent || fontPx * 0.8,
+  );
+  const descent = Math.ceil(
+    metrics.actualBoundingBoxDescent || fontPx * 0.25,
+  );
+  // 1px AA pad above ascent and below descent.
+  let baseline = ascent + 1;
+  if (baseline + descent + 1 > atlasH) {
+    baseline = Math.max(ascent + 1, atlasH - descent - 1);
+  }
+  const xPen = Math.max(0, left) + 1;
   ctx.fillText(ch, xPen, baseline);
   const img = ctx.getImageData(0, 0, atlasW, atlasH);
   if (!isSpace && !hasInk(img.data)) {
