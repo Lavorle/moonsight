@@ -70,6 +70,36 @@ test "layer.set errors on missing id" {
 }
 
 ///|
+/// `scale=` snaps on show/set when duration is 0; named args use `#:key` packing.
+test "layer.show and layer.set accept scale" {
+  let reg = @std_commands.standard_registry()
+  let stage = @runtime.Stage::new()
+  ignore(
+    reg.call(
+      "layer.show",
+      stage,
+      [
+        Str("y"),
+        Str("char_y"),
+        Str("#:kind"),
+        Str("character"),
+        Str("#:scale"),
+        Float(0.5),
+      ],
+    ),
+  )
+  assert_eq(stage.layers[0].scale, 0.5)
+  ignore(
+    reg.call(
+      "layer.set",
+      stage,
+      [Str("y"), Str("#:scale"), Float(1.0), Str("#:duration"), Float(0.0)],
+    ),
+  )
+  assert_eq(stage.layers[0].scale, 1.0)
+}
+
+///|
 test "layer.show accepts Int and Float coords" {
   let stage = @runtime.Stage::new()
   let reg = @std_commands.standard_registry()

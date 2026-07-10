@@ -65,10 +65,12 @@ fn apply_or_tween(
 }
 
 ///|
-/// `layer.show id resource [z] [x] [y] [opacity]` plus named `kind` / `duration` / etc.
+/// `layer.show id resource [z] [x] [y] [opacity]` plus named `kind` / `duration` / `scale` / etc.
 ///
 /// Default kind is **Character**. New layers with `duration > 0` start opacity at 0
-/// and tween to the target (default 1.0). Existing layers tween only specified x/y/opacity.
+/// and tween to the target (default 1.0). Scale defaults to 1.0; when `scale` is set,
+/// snap unless `duration > 0` then tween Scale from current (new layer current = 1.0).
+/// Existing layers tween only specified x/y/opacity/scale.
 pub fn cmd_layer_show(
   stage : @runtime.Stage,
   args : Array[@runtime.Value],
@@ -133,6 +135,7 @@ pub fn cmd_layer_show(
         _ => None
       }
   }
+  let scale_opt = named_double(named, "scale")
   let duration = match named_double(named, "duration") {
     Some(d) => d
     None => 0.0
@@ -157,7 +160,7 @@ pub fn cmd_layer_show(
 
   match find_layer_index(stage, id) {
     Some(i) => {
-      // Existing layer: z/kind/resource immediate; specified x/y/opacity tween or snap.
+      // Existing layer: z/kind/resource immediate; specified x/y/opacity/scale tween or snap.
       // Cancel pending hide + its opacity→0 tween so re-show cannot vanish the layer.
       let cur = stage.layers[i]
       let new_z = match z_opt {
@@ -195,10 +198,14 @@ pub fn cmd_layer_show(
         Some(ov) => apply_or_tween(stage, id~, prop=Opacity, to=ov, duration~)
         None => ()
       }
+      match scale_opt {
+        Some(sv) => apply_or_tween(stage, id~, prop=Scale, to=sv, duration~)
+        None => ()
+      }
       Ok
     }
     None => {
-      // New layer.
+      // New layer. show_layer defaults scale=1.0 (current for Scale tween).
       if duration > 0.0 {
         // x/y/z/kind/resource immediate; opacity starts at 0 and tweens to target.
         stage.show_layer(
@@ -226,6 +233,11 @@ pub fn cmd_layer_show(
           y~,
           opacity=opacity_target,
         )
+      }
+      // Snap scale unless duration>0 then tween from current (1.0) to target.
+      match scale_opt {
+        Some(sv) => apply_or_tween(stage, id~, prop=Scale, to=sv, duration~)
+        None => ()
       }
       Ok
     }
@@ -288,9 +300,10 @@ pub fn cmd_layer_move(
 }
 
 ///|
-/// `layer.set id` with named `x` / `y` / `opacity` / `duration`.
+/// `layer.set id` with named `x` / `y` / `opacity` / `scale` / `duration`.
 ///
 /// Errors if the layer id is missing (soft-halt, not silent no-op).
+/// `scale=` with `duration=` starts a Scale tween (duration <= 0 snaps).
 pub fn cmd_layer_set(
   stage : @runtime.Stage,
   args : Array[@runtime.Value],
@@ -317,6 +330,10 @@ pub fn cmd_layer_set(
       }
       match named_double(named, "opacity") {
         Some(ov) => apply_or_tween(stage, id~, prop=Opacity, to=ov, duration~)
+        None => ()
+      }
+      match named_double(named, "scale") {
+        Some(sv) => apply_or_tween(stage, id~, prop=Scale, to=sv, duration~)
         None => ()
       }
       Ok
