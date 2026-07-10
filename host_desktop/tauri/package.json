@@ -1,0 +1,15 @@
+{
+  "name": "moonsight-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal Tauri 2 shell that loads the MoonSight host_web dist",
+  "scripts": {
+    "serve-dist": "node scripts/serve-dist.mjs",
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

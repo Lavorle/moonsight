@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schemas.tauri.app/config/2",
+  "productName": "MoonSight",
+  "version": "0.1.0",
+  "identifier": "app.moonsight.desktop",
+  "build": {
+    "beforeDevCommand": "npm run serve-dist",
+    "devUrl": "http://127.0.0.1:4173",
+    "beforeBuildCommand": "",
+    "frontendDist": "../../../dist/demo"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "MoonSight",
+        "width": 1280,
+        "height": 720,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/henry.w@example.net",
+      "icons/icon.png"
+    ]
+  }
+}
