@@ -1,0 +1,49 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonsight/moonsight/host_web"
+
+// Values
+pub fn clear_pending_glyphs() -> Int
+
+pub fn export_frame(Int, Float) -> Int
+
+pub fn frame_at(Int) -> Float
+
+pub fn frame_len() -> Int
+
+pub fn init_demo() -> Unit
+
+pub fn load_json(String) -> Int
+
+pub fn load_source(String) -> Int
+
+pub fn mark_glyph_ready(Int, Int, Int, Int, Int, Int) -> Unit
+
+pub fn pending_glyph_atlas_h(Int) -> Int
+
+pub fn pending_glyph_atlas_w(Int) -> Int
+
+pub fn pending_glyph_atlas_x(Int) -> Int
+
+pub fn pending_glyph_atlas_y(Int) -> Int
+
+pub fn pending_glyph_count() -> Int
+
+pub fn pending_glyph_cp(Int) -> Int
+
+pub fn pending_glyph_size(Int) -> Int
+
+pub fn resource_count() -> Int
+
+pub fn resource_name(Int) -> String
+
+pub fn save_json(Int) -> String
+
+// Errors
+
+// Types and methods
+type HostSession
+
+// Type aliases
+
+// Traits
+

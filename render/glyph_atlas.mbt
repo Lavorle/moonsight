@@ -179,3 +179,13 @@ pub fn GlyphAtlas::contains(self : GlyphAtlas, ch : Char, size : Int) -> Bool {
     _ => false
   }
 }
+
+///|
+/// Look up the current atlas entry for `(ch, size)` if present (pending or ready).
+pub fn GlyphAtlas::get_entry(
+  self : GlyphAtlas,
+  ch : Char,
+  size : Int,
+) -> AtlasEntry? {
+  self.lookup(ch, size)
+}

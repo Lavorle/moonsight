@@ -13,11 +13,39 @@ pub fn build_draw_list_with_atlas(@runtime.StageView, UiLayout, GlyphAtlas, meas
 
 pub fn fixed_width_measure(Float) -> (Char) -> Float
 
+pub let glyph_stride : Int
+
+pub fn gpu_owned_by_js() -> Bool
+
+pub fn intent_from_code(Int) -> @runtime.Intent
+
+pub fn intent_to_code(@runtime.Intent) -> Int
+
 pub fn layout_text(String, max_width~ : Float, font_size~ : Float, measure~ : (Char) -> Float) -> Array[TextRun]
 
 pub fn measure_string(String, measure~ : (Char) -> Float) -> Float
 
+pub fn pack_byte_length(Int, Int) -> Int
+
+pub fn pack_draw_list(DrawList, ResourceTable) -> FixedArray[Float]
+
+pub fn pack_glyph_count(FixedArray[Float]) -> Int
+
+pub fn pack_glyphs(Array[GlyphDraw]) -> FixedArray[Float]
+
+pub let pack_header_len : Int
+
+pub fn pack_sprite_count(FixedArray[Float]) -> Int
+
+pub fn pack_sprites(Array[SpriteDraw], ResourceTable) -> FixedArray[Float]
+
+pub fn pack_veil(FixedArray[Float]) -> Float
+
+pub let pack_version : Float
+
 pub fn render_package_name() -> String
+
+pub let sprite_stride : Int
 
 pub let ui_choice_row : String
 
@@ -26,6 +54,10 @@ pub let ui_dialogue_box : String
 pub let ui_nameplate : String
 
 pub fn visible_prefix(String, Int) -> String
+
+pub fn write_glyphs(FixedArray[Float], Int, Array[GlyphDraw]) -> Int
+
+pub fn write_sprites(FixedArray[Float], Int, Array[SpriteDraw], ResourceTable) -> Int
 
 // Errors
 
@@ -63,6 +95,7 @@ pub(all) struct GlyphAtlas {
   mut pending_queue : Array[(Char, Int)]
 } derive(@debug.Debug)
 pub fn GlyphAtlas::contains(Self, Char, Int) -> Bool
+pub fn GlyphAtlas::get_entry(Self, Char, Int) -> AtlasEntry?
 pub fn GlyphAtlas::get_or_queue(Self, Char, Int) -> AtlasEntry
 pub fn GlyphAtlas::mark_ready(Self, Char, Int, atlas_x~ : Int, atlas_y~ : Int, atlas_w~ : Int, atlas_h~ : Int) -> Unit
 pub fn GlyphAtlas::new(width? : Int, height? : Int) -> Self
@@ -77,6 +110,16 @@ pub(all) struct GlyphDraw {
   y : Float
   color : Color
 } derive(@debug.Debug)
+
+pub(all) struct ResourceTable {
+  mut next_id : Int
+  mut name_to_id : Map[String, Int]
+  mut id_to_name : Array[String]
+} derive(@debug.Debug)
+pub fn ResourceTable::count(Self) -> Int
+pub fn ResourceTable::intern(Self, String) -> Int
+pub fn ResourceTable::name_of(Self, Int) -> String
+pub fn ResourceTable::new() -> Self
 
 pub(all) struct SpriteDraw {
   resource : String

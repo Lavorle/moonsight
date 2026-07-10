@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MoonSight</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0a0b0e;
+        color: #c8d0e0;
+        font-family: system-ui, sans-serif;
+      }
+      #game {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        touch-action: none;
+      }
+      #status {
+        position: fixed;
+        left: 12px;
+        top: 8px;
+        font-size: 12px;
+        opacity: 0.75;
+        pointer-events: none;
+        z-index: 2;
+        text-shadow: 0 1px 2px #000;
+      }
+      #hint {
+        position: fixed;
+        right: 12px;
+        bottom: 8px;
+        font-size: 11px;
+        opacity: 0.55;
+        pointer-events: none;
+        z-index: 2;
+        text-align: right;
+        text-shadow: 0 1px 2px #000;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status">loading…</div>
+    <div id="hint">
+      Enter/Space/Click: advance · 1–9: choice · Ctrl: skip type · A: auto<br />
+      Ctrl+S save · Ctrl+L load (localStorage moonsight/save/0)
+    </div>
+    <canvas id="game" width="1920" height="1080"></canvas>
+    <script type="module" src="./boot.js"></script>
+  </body>
+</html>

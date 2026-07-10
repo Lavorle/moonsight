@@ -3,8 +3,34 @@ import {
   "moonsight/moonsight/std_commands",
   "moonsight/moonsight/render",
   "moonsight/moonsight/audio",
+  "moonsight/moonsight/script",
 }
 
 options(
   "is-main": true,
+  link: {
+    "wasm-gc": {
+      "exports": [
+        "init_demo",
+        "load_source",
+        "export_frame",
+        "frame_len",
+        "frame_at",
+        "resource_count",
+        "resource_name",
+        "save_json",
+        "load_json",
+        "pending_glyph_count",
+        "pending_glyph_cp",
+        "pending_glyph_size",
+        "pending_glyph_atlas_x",
+        "pending_glyph_atlas_y",
+        "pending_glyph_atlas_w",
+        "pending_glyph_atlas_h",
+        "mark_glyph_ready",
+        "clear_pending_glyphs",
+      ],
+      "use-js-builtin-string": true,
+    },
+  },
 )
