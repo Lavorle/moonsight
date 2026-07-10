@@ -46,7 +46,7 @@ explicitly.
 | | |
 |--|--|
 | **Args** | ignored |
-| **Effect** | `stage.complete_text()` |
+| **Effect** | No-op on stage; leaves typewriter incomplete so the engine can reveal chars |
 | **Result** | `Ok` |
 
 ---

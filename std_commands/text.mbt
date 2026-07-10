@@ -33,12 +33,15 @@ pub fn cmd_text_type(
 }
 
 ///|
-/// `text.end` — mark current dialogue block complete.
+/// `text.end` — finish authoring the dialogue block without forcing typewriter complete.
+///
+/// Leaves the block incomplete so `Engine::tick_typewriter` and Advance
+/// complete-first can reveal text gradually.
 pub fn cmd_text_end(
   stage : @runtime.Stage,
   args : Array[@runtime.Value],
 ) -> @runtime.HostResult {
+  ignore(stage)
   ignore(args)
-  stage.complete_text()
   Ok
 }

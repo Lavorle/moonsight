@@ -8,8 +8,13 @@ test "director text.begin type end mutates stage" {
   guard stage.text is Some(t) else { fail("text") }
   assert_eq(t.full_text, "Hi")
   guard t.speaker is Some("y") else { fail("speaker") }
-  assert_true(t.complete)
-  assert_eq(t.visible_chars, t.full_text.length())
+  // text.end no longer force-completes; typewriter starts incomplete.
+  assert_true(!t.complete)
+  assert_eq(t.visible_chars, 0)
+  stage.complete_text()
+  guard stage.text is Some(t2) else { fail("after complete") }
+  assert_true(t2.complete)
+  assert_eq(t2.visible_chars, t2.full_text.length())
 }
 
 ///|

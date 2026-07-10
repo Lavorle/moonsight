@@ -50,7 +50,7 @@ test "layer.hide and layer.move" {
 }
 
 ///|
-test "text begin type end" {
+test "text begin type end leaves typewriter incomplete" {
   let stage = @runtime.Stage::new()
   let reg = @std_commands.standard_registry()
   assert_true(reg.call("text.begin", stage, [Str("y")]) == Ok)
@@ -58,7 +58,8 @@ test "text begin type end" {
   assert_true(reg.call("text.end", stage, []) == Ok)
   guard stage.text is Some(t) else { fail("text") }
   assert_eq(t.full_text, "Hi")
-  assert_true(t.complete)
+  assert_true(!t.complete)
+  assert_eq(t.visible_chars, 0)
 }
 
 ///|
