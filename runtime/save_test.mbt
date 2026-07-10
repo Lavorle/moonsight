@@ -33,7 +33,7 @@ test "save rejects unsupported format_version" {
     err =>
       inspect(
         err.to_string(),
-        content="unsupported save format_version 99 (expected 2 or 3)",
+        content="unsupported save format_version 99 (expected 2, 3, or 4)",
       )
   } noraise {
     _ => fail("expected UnsupportedVersion")
@@ -49,12 +49,12 @@ test "save consumes save_hint flag" {
 }
 
 ///|
-test "save blob is format_version 3" {
+test "save blob is format_version 4" {
   let eng = load_min_demo_engine()
   eng.tick(None_)
   let blob = eng.save()
   let game = @runtime.parse_save_game(blob)
-  assert_eq(game.format_version, 3)
+  assert_eq(game.format_version, 4)
   assert_eq(game.scene, eng.vm.scene)
   assert_eq(game.ip, eng.vm.ip)
   assert_true(game.wait == Yield)
@@ -117,7 +117,7 @@ test "save roundtrip restores tweens and wait_remaining" {
   eng.stage.overlay_opacity = 0.3
   let blob = eng.save()
   let game = @runtime.parse_save_game(blob)
-  assert_eq(game.format_version, 3)
+  assert_eq(game.format_version, 4)
   assert_eq(game.wait_remaining, 0.8)
   assert_eq(game.fade_to, 1.0)
   assert_eq(game.fade_remaining, 0.5)
@@ -159,6 +159,7 @@ test "load v2 save still works" {
   assert_true(eng.stage.layers[0].kind == Background)
   assert_eq(eng.stage.layers[0].tweens.length(), 0)
   assert_true(!eng.stage.layers[0].pending_hide)
+  assert_eq(eng.stage.layers[0].scale, 1.0)
   assert_eq(eng.stage.wait_remaining, 0.0)
   assert_eq(eng.stage.fade_to, 0.0)
   assert_eq(eng.stage.fade_remaining, 0.0)
@@ -190,7 +191,7 @@ test "save header saved_at roundtrip and missing defaults empty" {
   eng.tick(None_)
   let blob = eng.save()
   let game = @runtime.parse_save_game(blob)
-  assert_eq(game.format_version, 3)
+  assert_eq(game.format_version, 4)
   assert_eq(game.saved_at, "")
   // Explicit saved_at survives round-trip through JSON.
   let with_ts =
@@ -280,4 +281,51 @@ test "save mid fade-out restores audible fade toward stop" {
   let game2 = @runtime.parse_save_game(blob2)
   assert_true(game2.audio.bgm is None)
   @audio.reset_global_mixer()
+}
+
+///|
+test "save roundtrip preserves layer scale" {
+  let eng = load_min_demo_engine()
+  eng.tick(Intent::Advance)
+  eng.stage.start_layer_tween(
+    id="bg",
+    prop=@runtime.TweenProp::Scale,
+    to=0.5,
+    duration=0.0,
+  )
+  let blob = eng.save(slot=0)
+  let eng2 = load_min_demo_engine()
+  eng2.load(blob)
+  assert_eq(eng2.stage.layers[0].scale, 0.5)
+  let game = @runtime.parse_save_game(blob)
+  assert_eq(game.format_version, 4)
+}
+
+///|
+test "save rejects unsupported format_version message lists 2-4" {
+  let eng = load_min_demo_engine()
+  let bad =
+    #|{"format_version":99,"module_id":"","scene":"s","ip":0,"call_stack":[],"vars":{},"layers":[],"overlay_opacity":0,"audio":{},"wait":{"$tag":"Running"},"auto":false}
+  try eng.load(bad) catch {
+    err =>
+      // Message must mention supported versions including 4
+      assert_true(err.to_string().contains("4"))
+  } noraise {
+    _ => fail("expected UnsupportedVersion")
+  }
+}
+
+///|
+test "load v3 save without layer scale defaults to 1.0" {
+  let eng = load_min_demo_engine()
+  // v3 blob: layers lack `scale` (pre-scale field); must still decode.
+  let v3 =
+    #|{"format_version":3,"module_id":"","scene":"s","ip":0,"call_stack":[],"vars":{},"layers":[{"id":"bg","kind":"Background","resource":"bg_room","z":0,"x":0,"y":0,"opacity":1,"visible":true,"tweens":[],"pending_hide":false}],"overlay_opacity":0,"audio":{},"wait":"Running","auto":false,"fade_to":0,"fade_remaining":0,"wait_remaining":0}
+  eng.load(v3)
+  assert_eq(eng.vm.scene, "s")
+  assert_eq(eng.stage.layers.length(), 1)
+  assert_eq(eng.stage.layers[0].id, "bg")
+  assert_eq(eng.stage.layers[0].scale, 1.0)
+  assert_eq(eng.stage.layers[0].tweens.length(), 0)
+  assert_true(!eng.stage.layers[0].pending_hide)
 }

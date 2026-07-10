@@ -3,8 +3,10 @@
 ///
 /// v2 adds explicit `wait`, `choices`, `choose_result_var`, and `auto`.
 /// v3 adds layer tweens / `pending_hide`, plus `fade_to`, `fade_remaining`,
-/// and `wait_remaining`. Writers always emit v3; loaders accept v2 and v3.
-pub let save_format_version : Int = 3
+/// and `wait_remaining`.
+/// v4 adds `scale` on layers (default 1.0). Writers always emit v4; loaders
+/// accept v2, v3, and v4. Old v3 blobs without `scale` inject 1.0 on load.
+pub let save_format_version : Int = 4
 
 ///|
 /// Call-stack frame reserved for nested scene calls.
@@ -38,6 +40,7 @@ pub(all) struct AudioLogicState {
 /// Human-debuggable save payload (JSON via `ToJson`/`FromJson`).
 ///
 /// Format v3: full `LayerState` (tweens + pending_hide) and timed fade/wait fields.
+/// Format v4: adds `scale` on each layer (missing on old v3 → default 1.0).
 /// Additive `saved_at` (ISO timestamp or empty) is tolerated when missing on load.
 pub(all) struct SaveGame {
   format_version : Int
@@ -113,7 +116,7 @@ pub impl Show for SaveError with fn output(self : SaveError, logger : &Logger) -
   match self {
     UnsupportedVersion(version~) =>
       logger.write_string(
-        "unsupported save format_version \{version} (expected 2 or 3)",
+        "unsupported save format_version \{version} (expected 2, 3, or 4)",
       )
     InvalidJson(message~) =>
       logger.write_string("invalid save JSON: \{message}")
@@ -124,7 +127,7 @@ pub impl Show for SaveError with fn output(self : SaveError, logger : &Logger) -
 
 ///|
 fn supported_save_version(version : Int) -> Bool {
-  version == 2 || version == 3
+  version == 2 || version == 3 || version == 4
 }
 
 ///|
@@ -132,7 +135,7 @@ fn supported_save_version(version : Int) -> Bool {
 ///
 /// `slot` is reserved for host storage keys (localStorage / file path); Phase 1
 /// does not embed it in the blob. Consumes `stage.save_hint` (clears it).
-/// Always writes format v3.
+/// Always writes format v4.
 pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
   ignore(slot)
   self.stage.save_hint = false
@@ -171,9 +174,10 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
 ///|
 /// Restore engine state from a JSON save blob.
 ///
-/// Accepts `format_version` 2 or 3; rejects others. Reloads scene ops for the
-/// saved scene name and applies `ip`, vars, layers, text, overlay, audio,
-/// wait, choices, and v3 fade/wait remaining fields.
+/// Accepts `format_version` 2, 3, or 4; rejects others. Reloads scene ops for
+/// the saved scene name and applies `ip`, vars, layers, text, overlay, audio,
+/// wait, choices, and v3 fade/wait remaining fields. v3 layers without `scale`
+/// default to 1.0; v4 is the native scale-aware shape.
 pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
   apply_save_game(self, parse_save_game(blob))
   // Spec: load returns to narrative play with no residual modal stack.
@@ -191,7 +195,8 @@ pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
 /// Checks `format_version` on the raw JSON object before full decode so
 /// unsupported versions fail with `UnsupportedVersion` even if other fields
 /// would not decode under newer schemas. v2 blobs are upgraded to the live
-/// `SaveGame` shape with defaulted tween / fade / wait fields.
+/// `SaveGame` shape with defaulted tween / fade / wait / scale fields.
+/// v3/v4 share the same decode path; missing additive fields are injected.
 pub fn parse_save_game(blob : String) -> SaveGame raise SaveError {
   let json = @json.parse(blob) catch {
     err => raise SaveError::InvalidJson(message=err.to_string())
@@ -203,8 +208,9 @@ pub fn parse_save_game(blob : String) -> SaveGame raise SaveError {
     }
     return save_game_from_v2(v2)
   }
-  // Old v3 blobs omit `saved_at`; inject empty default so FromJson succeeds.
+  // Old v3 blobs omit `saved_at` and/or layer `scale`; inject defaults.
   let json = ensure_saved_at_default(json)
+  let json = ensure_layer_scale_default(json)
   let game : SaveGame = @json.from_json(json) catch {
     err => raise SaveError::DecodeFailed(message=err.to_string())
   }
@@ -221,6 +227,31 @@ fn ensure_saved_at_default(json : Json) -> Json {
     Object(map) => {
       if map.get("saved_at") is None {
         map["saved_at"] = Json::string("")
+      }
+      json
+    }
+    _ => json
+  }
+}
+
+///|
+/// Ensure each layer has `scale` (default `1.0`) so pre-v4 / old v3 blobs decode.
+fn ensure_layer_scale_default(json : Json) -> Json {
+  match json {
+    Object(map) => {
+      match map.get("layers") {
+        Some(Array(layers)) => {
+          for layer in layers {
+            match layer {
+              Object(lm) =>
+                if lm.get("scale") is None {
+                  lm["scale"] = Json::number(1.0)
+                }
+              _ => ()
+            }
+          }
+        }
+        _ => ()
       }
       json
     }
