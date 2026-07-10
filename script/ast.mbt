@@ -5,6 +5,54 @@ pub(all) struct ScriptUnit {
   externs : Array[ExternDecl]
   macros : Array[MacroDecl]
   scenes : Array[SceneDecl]
+  screens : Array[ScreenDecl]
+} derive(Debug)
+
+///|
+/// Top-level `- screen "name"` declaration (Phase 3 UI DSL).
+pub(all) struct ScreenDecl {
+  name : String
+  root_children : Array[ScreenNode]
+  span : SourceSpan
+} derive(Debug)
+
+///|
+/// Screen widget tree node (indent-based body under `- screen`).
+pub(all) enum ScreenNode {
+  VBox(x~ : Double?, y~ : Double?, children~ : Array[ScreenNode], span~ : SourceSpan)
+  HBox(x~ : Double?, y~ : Double?, children~ : Array[ScreenNode], span~ : SourceSpan)
+  Fixed(
+    x~ : Double,
+    y~ : Double,
+    w~ : Double?,
+    h~ : Double?,
+    children~ : Array[ScreenNode],
+    span~ : SourceSpan,
+  )
+  Text(src~ : ScreenTextSrc, span~ : SourceSpan)
+  Button(label~ : String, action~ : ScreenActionAst, span~ : SourceSpan)
+} derive(Debug)
+
+///|
+pub(all) enum ScreenTextSrc {
+  Literal(String)
+  SlotLabel(Int)
+  Pref(String)
+} derive(Debug)
+
+///|
+/// Closed action set for buttons. Lowering validates / maps to runtime IR.
+pub(all) enum ScreenActionAst {
+  Return
+  StartGame
+  QuitToTitle
+  ShowScreen(name~ : String, mode~ : String?) // mode: "save" | "load" | None
+  HideScreen(name~ : String?)
+  SaveSlot(Int)
+  LoadSlot(Int)
+  SetPref(key~ : String, value~ : Expr)
+  AdjustPref(key~ : String, delta~ : Double)
+  Noop
 } derive(Debug)
 
 ///|

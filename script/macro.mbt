@@ -25,8 +25,14 @@ pub fn expand_macros(unit : ScriptUnit) -> ScriptUnit raise MacroError {
     })
   }
   // Keep original macro decls (bodies still contain unexpanded calls);
-  // only scene items are expanded at use sites.
-  { file: unit.file, externs: unit.externs, macros: unit.macros, scenes }
+  // only scene items are expanded at use sites. Screens pass through unchanged.
+  {
+    file: unit.file,
+    externs: unit.externs,
+    macros: unit.macros,
+    scenes,
+    screens: unit.screens,
+  }
 }
 
 ///|

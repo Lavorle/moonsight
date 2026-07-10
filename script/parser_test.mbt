@@ -167,3 +167,73 @@ test "parse error on unexpected top-level command" {
     _ => fail("expected parse error")
   }
 }
+
+///|
+test "parse minimal title screen" {
+  let src =
+    #|- screen "title"
+    #|  vbox:
+    #|    text "MoonSight"
+    #|    button "Start" action=start_game
+    #|
+  let unit = @script.parse_source(src, file="t.yuki")
+  assert_eq(unit.screens.length(), 1)
+  assert_eq(unit.screens[0].name, "title")
+  assert_eq(unit.screens[0].root_children.length(), 1)
+  guard unit.screens[0].root_children[0] is VBox(children~, ..) else {
+    fail("expected root vbox")
+  }
+  assert_eq(children.length(), 2)
+  guard children[0] is Text(src~, ..) else { fail("expected text child") }
+  guard src is Literal(lit) else { fail("expected literal text") }
+  assert_eq(lit, "MoonSight")
+  guard children[1] is Button(label~, action~, ..) else {
+    fail("expected button child")
+  }
+  assert_eq(label, "Start")
+  guard action is StartGame else { fail("expected start_game action") }
+}
+
+///|
+test "parse screen actions attrs and text bindings" {
+  let src =
+    #|- screen "menu"
+    #|  vbox x=760 y=360:
+    #|    text slot_label(0)
+    #|    text pref("master_volume")
+    #|    button "Load" action=show_screen("save_load", mode=load)
+    #|    button "Back" action=return
+    #|    button "Save" action=save_slot(1)
+    #|  fixed x=10 y=20 w=100 h=50:
+    #|    button "X" action=noop
+    #|
+  let unit = @script.parse_source(src, file="menu.yuki")
+  assert_eq(unit.screens.length(), 1)
+  assert_eq(unit.screens[0].root_children.length(), 2)
+  guard unit.screens[0].root_children[0]
+    is VBox(x~, y~, children~, ..) else {
+    fail("vbox")
+  }
+  guard x is Some(760.0) else { fail("vbox x") }
+  guard y is Some(360.0) else { fail("vbox y") }
+  assert_eq(children.length(), 5)
+  guard children[0] is Text(src=SlotLabel(0), ..) else { fail("slot_label") }
+  guard children[1] is Text(src=Pref(pk), ..) else { fail("pref text") }
+  assert_eq(pk, "master_volume")
+  guard children[2] is Button(action=ShowScreen(name~, mode~), ..) else {
+    fail("show_screen")
+  }
+  assert_eq(name, "save_load")
+  guard mode is Some("load") else { fail("mode=load") }
+  guard children[3] is Button(action=Return, ..) else { fail("return") }
+  guard children[4] is Button(action=SaveSlot(1), ..) else { fail("save_slot") }
+  guard unit.screens[0].root_children[1]
+    is Fixed(x=fx, y=fy, w~, h~, children=fc, ..) else {
+    fail("fixed")
+  }
+  assert_eq(fx, 10.0)
+  assert_eq(fy, 20.0)
+  guard w is Some(100.0) else { fail("w") }
+  guard h is Some(50.0) else { fail("h") }
+  assert_eq(fc.length(), 1)
+}
