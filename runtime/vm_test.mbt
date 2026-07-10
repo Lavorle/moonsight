@@ -62,3 +62,37 @@ test "advance completes incomplete text before resuming" {
   guard eng.stage.text is Some(t2) else { fail("next line") }
   assert_eq(t2.full_text, "Next")
 }
+
+///|
+test "vm handles JumpScene from host flow.jump" {
+  let src =
+    #|- scene "a"
+    #|@flow.jump "b"
+    #|- scene "b"
+    #|@var.set "landed" 1
+    #|
+  let ir = @script.compile_to_ir(src, file="jump.yuki")
+  let dir = @runtime.Director::new()
+  dir.register_fn("flow.jump", (stage, args) => {
+    ignore(stage)
+    match args {
+      [Str(s), ..] => JumpScene(s)
+      _ => Error("flow.jump")
+    }
+  })
+  dir.register_fn("var.set", (stage, args) => {
+    match args {
+      [Str(name), value, ..] => {
+        stage.set_var(name, value)
+        Ok
+      }
+      _ => Error("var.set")
+    }
+  })
+  let eng = @runtime.Engine::from_ir(ir, entry="a", director=dir)
+  eng.tick(None_)
+  assert_eq(eng.vm.scene, "b")
+  assert_eq(eng.stage.scene, "b")
+  assert_true(eng.stage.get_var("landed") == Int(1))
+  assert_true(eng.vm.wait == Halted)
+}

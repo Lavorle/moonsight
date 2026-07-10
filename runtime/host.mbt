@@ -11,6 +11,8 @@ pub(all) enum HostResult {
   Ok
   /// Host requests VM yield (e.g. after a wait command).
   Yield
+  /// Host requests a scene switch; VM calls `jump_scene`.
+  JumpScene(String)
   Error(String)
 } derive(Debug, Eq)
 
@@ -28,9 +30,13 @@ pub(all) enum BuiltinHost {
 
 ///|
 /// Handler registration entry for Director dispatch.
+///
+/// `Handler` lets packages such as `std_commands` register function
+/// implementations without expanding `BuiltinHost`.
 pub(all) enum HostHandler {
   Builtin(BuiltinHost)
-} derive(Debug, Eq)
+  Handler((Stage, Array[Value]) -> HostResult)
+} derive(Debug)
 
 ///|
 /// Dispatch a built-in host op by dotted name.
@@ -103,25 +109,62 @@ fn builtin_text_end(stage : Stage, args : Array[Value]) -> HostResult {
 }
 
 ///|
+/// Coerce Int/Float host args to Double.
+pub fn value_as_double(v : Value) -> Double? {
+  match v {
+    Float(f) => Some(f)
+    Int(i) => Some(i.to_double())
+    _ => None
+  }
+}
+
+///|
+/// Coerce Int/Float host args to Int (Float truncates toward zero).
+pub fn value_as_int(v : Value) -> Int? {
+  match v {
+    Int(i) => Some(i)
+    Float(f) => Some(f.to_int())
+    _ => None
+  }
+}
+
+///|
 /// `layer.show id resource [z] [x] [y] [opacity]`
 /// Kind defaults to Background; z defaults to 0.
+/// z/x/y/opacity accept Int or Float.
 fn builtin_layer_show(stage : Stage, args : Array[Value]) -> HostResult {
   match args {
     [Str(id), Str(resource), .. rest] => {
       let z = match rest {
-        [Int(z0), ..] => z0
+        [z0, ..] =>
+          match value_as_int(z0) {
+            Some(n) => n
+            None => 0
+          }
         _ => 0
       }
       let x = match rest {
-        [_, Float(x0), ..] => x0
+        [_, x0, ..] =>
+          match value_as_double(x0) {
+            Some(n) => n
+            None => 0.0
+          }
         _ => 0.0
       }
       let y = match rest {
-        [_, _, Float(y0), ..] => y0
+        [_, _, y0, ..] =>
+          match value_as_double(y0) {
+            Some(n) => n
+            None => 0.0
+          }
         _ => 0.0
       }
       let opacity = match rest {
-        [_, _, _, Float(o), ..] => o
+        [_, _, _, o, ..] =>
+          match value_as_double(o) {
+            Some(n) => n
+            None => 1.0
+          }
         _ => 1.0
       }
       stage.show_layer(id~, layer=Background, resource~, z~, x~, y~, opacity~)

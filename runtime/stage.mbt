@@ -59,6 +59,16 @@ pub(all) struct Stage {
   mut vars : Map[String, Value]
   mut scene : String
   mut overlay_opacity : Double
+  /// Last fade target (Phase 1 applies immediately to `overlay_opacity`).
+  mut fade_to : Double
+  /// Last requested fade duration in seconds (animation later).
+  mut fade_duration : Double
+  /// Current BGM resource id (logical; Task 13 wires audio backend).
+  mut bgm : String?
+  /// Last SE resource id (logical).
+  mut se : String?
+  /// Set by `sys.save_hint` until consumed by save flow (Task 9).
+  mut save_hint : Bool
 } derive(Debug)
 
 ///|
@@ -71,6 +81,11 @@ pub fn Stage::new() -> Stage {
     vars: {},
     scene: "",
     overlay_opacity: 0.0,
+    fade_to: 0.0,
+    fade_duration: 0.0,
+    bgm: None,
+    se: None,
+    save_hint: false,
   }
 }
 

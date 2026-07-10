@@ -1,0 +1,52 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonsight/moonsight/std_commands"
+
+import {
+  "moonsight/moonsight/runtime",
+}
+
+// Values
+pub fn cmd_audio_bgm(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_audio_se(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_flow_choice(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_flow_jump(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_flow_wait(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_flow_yield(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_layer_hide(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_layer_move(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_layer_show(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_sys_save_hint(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_text_begin(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_text_end(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_text_type(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_trans_fade(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_var_set(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn standard_host_names() -> Array[String]
+
+pub fn standard_registry() -> @runtime.Director
+
+pub fn std_commands_package_name() -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

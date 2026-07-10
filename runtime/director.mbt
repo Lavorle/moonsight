@@ -1,7 +1,8 @@
 ///|
 /// Dispatches host ops to Stage (and later audio/plugins).
 ///
-/// Task 7 registers a built-in mock minimum; Task 8 loads the full std_commands table.
+/// `with_builtins` is the Task 7 minimum set. Full Phase 1 table is
+/// `@std_commands.standard_registry()` (no runtime→std_commands import).
 pub(all) struct Director {
   handlers : Map[String, HostHandler]
 } derive(Debug)
@@ -39,6 +40,16 @@ pub fn Director::register(
 }
 
 ///|
+/// Register a function handler by name (used by `std_commands`).
+pub fn Director::register_fn(
+  self : Director,
+  name : String,
+  handler : (Stage, Array[Value]) -> HostResult,
+) -> Unit {
+  self.handlers[name] = Handler(handler)
+}
+
+///|
 /// Invoke a host op by name.
 pub fn Director::call(
   self : Director,
@@ -48,8 +59,20 @@ pub fn Director::call(
 ) -> HostResult {
   match self.handlers.get(name) {
     Some(Builtin(kind)) => dispatch_builtin_kind(kind, stage, args)
+    Some(Handler(f)) => f(stage, args)
     None =>
       // Fall back to string dispatch so unregistered-but-known builtins still work.
       dispatch_builtin(name, stage, args)
   }
+}
+
+///|
+/// Sorted list of currently registered host names (for alignment tests).
+pub fn Director::registered_names(self : Director) -> Array[String] {
+  let names : Array[String] = []
+  for k, _ in self.handlers {
+    names.push(k)
+  }
+  names.sort()
+  names
 }

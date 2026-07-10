@@ -1,3 +1,7 @@
 import {
   "moonsight/moonsight/runtime",
 }
+
+import {
+  "moonsight/moonsight/script",
+} for "test"

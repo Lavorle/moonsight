@@ -17,6 +17,10 @@ pub let logical_width : Int
 
 pub fn runtime_package_name() -> String
 
+pub fn value_as_double(Value) -> Double?
+
+pub fn value_as_int(Value) -> Int?
+
 // Errors
 
 // Types and methods
@@ -41,6 +45,8 @@ pub(all) struct Director {
 pub fn Director::call(Self, String, Stage, Array[Value]) -> HostResult
 pub fn Director::new() -> Self
 pub fn Director::register(Self, String, HostHandler) -> Unit
+pub fn Director::register_fn(Self, String, (Stage, Array[Value]) -> HostResult) -> Unit
+pub fn Director::registered_names(Self) -> Array[String]
 pub fn Director::with_builtins() -> Self
 
 pub(all) struct Engine {
@@ -48,7 +54,7 @@ pub(all) struct Engine {
   director : Director
   mut stage : Stage
 } derive(@debug.Debug)
-pub fn Engine::from_ir(@script.IrModule, entry~ : String) -> Self
+pub fn Engine::from_ir(@script.IrModule, entry~ : String, director? : Director) -> Self
 pub fn Engine::tick(Self, Intent) -> Unit
 
 pub(all) struct HostCall {
@@ -58,11 +64,13 @@ pub(all) struct HostCall {
 
 pub(all) enum HostHandler {
   Builtin(BuiltinHost)
-} derive(Eq, @debug.Debug)
+  Handler((Stage, Array[Value]) -> HostResult)
+} derive(@debug.Debug)
 
 pub(all) enum HostResult {
   Ok
   Yield
+  JumpScene(String)
   Error(String)
 } derive(Eq, @debug.Debug)
 
@@ -101,6 +109,11 @@ pub(all) struct Stage {
   mut vars : Map[String, Value]
   mut scene : String
   mut overlay_opacity : Double
+  mut fade_to : Double
+  mut fade_duration : Double
+  mut bgm : String?
+  mut se : String?
+  mut save_hint : Bool
 } derive(@debug.Debug)
 pub fn Stage::begin_text(Self, speaker? : String) -> Unit
 pub fn Stage::clear_choices(Self) -> Unit

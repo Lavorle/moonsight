@@ -48,14 +48,20 @@ pub fn Vm::from_module(ir : @script.IrModule, entry~ : String) -> Vm {
 
 ///|
 /// Load IR into an engine with built-in host handlers.
-pub fn Engine::from_ir(ir : @script.IrModule, entry~ : String) -> Engine {
+///
+/// Pass `director` to inject a full registry (e.g. `@std_commands.standard_registry()`).
+pub fn Engine::from_ir(
+  ir : @script.IrModule,
+  entry~ : String,
+  director? : Director,
+) -> Engine {
   let stage = Stage::new()
   stage.scene = entry
-  {
-    vm: Vm::from_module(ir, entry~),
-    director: Director::with_builtins(),
-    stage,
+  let dir = match director {
+    Some(d) => d
+    None => Director::with_builtins()
   }
+  { vm: Vm::from_module(ir, entry~), director: dir, stage }
 }
 
 ///|
@@ -132,6 +138,9 @@ pub fn Vm::run_until_wait(
         match result {
           Ok => ()
           Yield => self.wait = Yield
+          JumpScene(scene) =>
+            // jump_scene resets ip/ops; ignore the pre-increment above.
+            self.jump_scene(scene, stage)
           Error(msg) => {
             // Soft-fail: halt so tests can observe; no panic in Phase 1 kernel.
             ignore(msg)
