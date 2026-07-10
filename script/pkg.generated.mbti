@@ -8,17 +8,68 @@ import {
 // Values
 pub fn lex(String, file~ : String) -> Array[Token]
 
+pub fn parse_source(String, file~ : String) -> ScriptUnit raise ParseError
+
 pub fn script_package_name() -> String
 
 // Errors
+pub(all) suberror ParseError {
+  ParseError(span~ : SourceSpan, message~ : String)
+} derive(Eq, @debug.Debug)
 
 // Types and methods
+pub(all) enum Arg {
+  Positional(Expr)
+  Named(name~ : String, Expr)
+  Flag(String)
+} derive(@debug.Debug)
+
 pub(all) struct Diagnostic {
   severity : Severity
   span : SourceSpan
   message : String
 } derive(Eq, @debug.Debug)
 pub fn Diagnostic::to_cli(Self) -> String
+
+pub(all) enum Expr {
+  Int(Int)
+  Float(Double)
+  Bool(Bool)
+  Str(String)
+  Ident(String)
+} derive(@debug.Debug)
+
+pub(all) struct ExternDecl {
+  name : String
+  params : Array[ParamDecl]
+  span : SourceSpan
+} derive(@debug.Debug)
+
+pub(all) struct MacroDecl {
+  name : String
+  params : Array[ParamDecl]
+  body : Array[Stmt]
+  span : SourceSpan
+} derive(@debug.Debug)
+
+pub(all) struct ParamDecl {
+  name : String
+  default : Expr?
+} derive(@debug.Debug)
+
+pub(all) struct SceneDecl {
+  name : String
+  parent : String?
+  items : Array[Stmt]
+  span : SourceSpan
+} derive(@debug.Debug)
+
+pub(all) struct ScriptUnit {
+  file : String
+  externs : Array[ExternDecl]
+  macros : Array[MacroDecl]
+  scenes : Array[SceneDecl]
+} derive(@debug.Debug)
 
 pub(all) enum Severity {
   Error
@@ -32,6 +83,16 @@ pub(all) struct SourceSpan {
   end_line : Int
   end_col : Int
 } derive(Eq, @debug.Debug)
+
+pub(all) enum Stmt {
+  Command(cmd~ : String, args~ : Array[Arg], span~ : SourceSpan)
+  Dialogue(speaker~ : String?, text~ : Array[TextPart], span~ : SourceSpan)
+} derive(@debug.Debug)
+
+pub(all) enum TextPart {
+  Literal(String)
+  InlineCommand(cmd~ : String, args~ : Array[Arg])
+} derive(@debug.Debug)
 
 pub(all) struct Token {
   kind : TokenKind
