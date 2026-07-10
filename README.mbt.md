@@ -1,7 +1,8 @@
 # MoonSight
 
-MoonBit + WebGPU visual novel engine (Phases 1–4: runtime kernel, layer
-presentation, system UI, MoonBit UI kernel).
+MoonBit + WebGPU visual novel engine (Phases 1–4 + Q1/0.5 playable core:
+runtime kernel, layer presentation, system UI, MoonBit UI kernel, backlog,
+hold-to-skip, confirm, prefs→mixer).
 
 MoonYuki scripts compile to IR/bytecode, run on a VM + Stage/Director, and
 render through a packed draw list consumed by a JS WebGPU host. System menus and
@@ -65,9 +66,10 @@ Always serve via **`http://localhost`** (or https). Opening `file://` blocks Web
 
 **Input:** cold start on **title** (Start → entry scene). Click / Enter / Space /
 Z advance (or activate focused menu button); **Esc** system menu; **↑↓** / W/S
-focus; 1–9 select choices; A auto; Ctrl+S / Ctrl+L quick save & load slot 0
-(`localStorage`). Timed `@flow.wait` ignores Advance until the countdown
-finishes. Menus pause narrative Advance.
+focus; **←→** settings sliders; **H** backlog; **Ctrl hold** skip; 1–9 select
+choices; A auto; Ctrl+S / Ctrl+L quick save & load slot 0 (`localStorage`).
+Timed `@flow.wait` ignores Advance/skip until the countdown finishes. Menus
+pause narrative Advance. Full semantics: [`docs/play-input.md`](./docs/play-input.md).
 
 **Desktop shell:** build `dist/demo` first, then see
 [`host_desktop/README.md`](./host_desktop/README.md).
@@ -92,6 +94,7 @@ finishes. Menus pause narrative Advance.
 - [`docs/moon-yuki-subset.md`](./docs/moon-yuki-subset.md) — grammar subset
 - [`docs/ui-moonbit.md`](./docs/ui-moonbit.md) — MoonBit UI authoring (HUD + modals)
 - [`docs/host-commands.md`](./docs/host-commands.md) — host command table + intents
+- [`docs/play-input.md`](./docs/play-input.md) — intents, skip hold, wait gate, backlog/confirm
 - [`docs/project-layout.md`](./docs/project-layout.md) — repo & `moonsight.json`
 - [`docs/draw-list-pack.md`](./docs/draw-list-pack.md) — frame pack format
 - [`docs/screen-language.md`](./docs/screen-language.md) — obsolete Phase 3 Screen DSL archive
@@ -125,11 +128,20 @@ button handlers, `std_ui` default HUD and four modals, optional project
 only, project `- screen` hard error, no `screens.json` primary dist path, demo
 override sample + author docs.
 
-### Out of scope (through Phase 4)
+### Q1 / 0.5 (playable core)
+
+**In:** session **backlog** (ring 100; H / History; not saved); **Ctrl hold**
+`skip_held` burst advance (max 8/frame; no timed-wait skip; no auto-choice);
+**confirm** for overwrite save + quit to title (default focus No); **prefs →
+mixer** gains (master/bgm/se); settings **Slider** (←/→); slot labels show
+`saved_at` when present; input/wait semantics in
+[`docs/play-input.md`](./docs/play-input.md).
+
+### Out of scope (through Phase 4 + Q1 non-goals)
 
 Visual editor, i18n, achievements, Live2D / 3D, particle/postprocess stack,
 full timeline / animation queues, blocking presentation DSL, `trans.dissolve`,
-**backlog**, confirm dialogs, slot screenshots, DOM menus, second native GPU
-backend, second wasm / dynamic UI load, sliders / themes / transform animation
-stack, open host-string UI actions, official Yukimi bytecode compatibility,
-long-term Screen DSL lower compatibility.
+slot screenshots, backlog free-scroll / ScrollView, saving backlog into slots,
+rollback, DOM menus, second native GPU backend, second wasm / dynamic UI load,
+themes / transform animation stack, open host-string UI actions, official Yukimi
+bytecode compatibility, long-term Screen DSL lower compatibility.

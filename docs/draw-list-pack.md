@@ -1,8 +1,10 @@
-# Draw-list pack format (Phase 1–4)
+# Draw-list pack format (Phase 1–4 + Q1)
 
 MoonBit owns the CPU draw list (`DrawList`) and packs it into a dense
 `FixedArray[Float]` for the browser host. **JS owns WebGPU** via
 `globalThis.MoonSightGpu` (`host_web/js_glue/webgpu_bridge.js`).
+
+Player intent codes, `skip_held`, and wait gating: [`play-input.md`](./play-input.md).
 
 ## Ownership
 
@@ -112,7 +114,9 @@ Passed as `Int` into `export_frame(intent_code, dt_ms, skip_held)`:
 | 10+n | Select(n) |
 
 `dt_ms` is frame delta in **milliseconds** (converted to seconds inside the host).
-`skip_held` is non-zero while **Control** is held (burst skip; does not skip timed waits).
+`skip_held` is non-zero while **Control** is held (burst skip; does not skip
+timed waits or auto-select choices — full rules in
+[`play-input.md`](./play-input.md)).
 
 ## Host wasm exports (`host_web`)
 

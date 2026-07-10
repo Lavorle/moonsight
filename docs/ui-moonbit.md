@@ -5,6 +5,7 @@ narrative HUD are both `UiNode` trees registered on a `UiApp`, painted via
 `UiDrawOp`, and driven by closed **Capabilities** callbacks.
 
 See also: [`host-commands.md`](./host-commands.md) (`@ui.*`, intents, prefs),
+[`play-input.md`](./play-input.md) (keys, skip, backlog, confirm),
 [`project-layout.md`](./project-layout.md) (`ui_package`, build),
 [`moon-yuki-subset.md`](./moon-yuki-subset.md) (narrative-only grammar).
 
@@ -90,9 +91,11 @@ Register or replace a named modal root. Names used by the engine / scripts:
 | Name | Default role (`std_ui`) |
 |------|-------------------------|
 | `title` | Start / Load / Settings |
-| `game_menu` | Continue / Save / Load / Settings / Title (Esc) |
-| `save_load` | Six slots; `mode` save vs load; Back |
-| `settings` | Prefs adjusters; Back |
+| `game_menu` | Continue / History / Save / Load / Settings / Title (Esc) |
+| `save_load` | Six slots; `mode` save vs load; labels include `saved_at` when present; Back |
+| `settings` | Pref sliders (←/→); Back |
+| `backlog` | Session dialogue history (read-only); H or History |
+| `confirm` | Overwrite save / quit to title (default focus No) |
 
 ```mbt
 app.register_modal(
@@ -144,6 +147,8 @@ Closed host surface for UI actions (engine implements; tests can fake):
 | `set_pref_f` / `set_pref_b` / `adjust_pref` | Prefs write + clamp |
 | `confirm_choice(i)` / `advance()` | Narrative choice / advance |
 | `prefs()` | Read current prefs |
+| `confirm_yes()` / `confirm_no()` | Resolve pending overwrite / quit confirm |
+| `request_quit_to_title()` | Show confirm before `quit_to_title` |
 
 No open host-string actions and no general expression language on the tree.
 
@@ -159,11 +164,13 @@ No open host-string actions and no general expression language on the tree.
 | `Image` | Resource sprite + `visible` |
 | `Button` | Focusable; `action_id` → handler |
 | `ChoiceList` | Expands Stage choices into focusable rows |
+| `Slider` | Horizontal pref control; `MenuLeft`/`MenuRight` step value |
 
 Logical canvas default: **1920×1080**, origin top-left, +y down.
 
-**Out of scope (Phase 4):** sliders, scroll views, themes, transform animation
-stack, DOM / HTML menus, backlog, slot screenshots.
+**Out of scope (Phase 4 + Q1 non-goals):** scroll views, themes, transform
+animation stack, DOM / HTML menus, slot screenshots, saving backlog into slots.
+Play-input / backlog / confirm: [`play-input.md`](./play-input.md).
 
 ## TextBind / VisibleIf
 

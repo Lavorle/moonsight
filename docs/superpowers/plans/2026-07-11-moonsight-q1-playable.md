@@ -1,6 +1,6 @@
 # MoonSight Q1 — 可认真玩 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Reach product gate **0.5**：session backlog, hold-to-skip, save/title confirm, prefs→mixer gains (no double multiply in JS), settings Slider, richer slot labels, and documented input/wait semantics.
 
@@ -58,7 +58,7 @@
 - Modify: `audio/mixer.mbt`
 - Modify: `audio/mixer_test.mbt`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `audio/mixer_test.mbt`:
 
@@ -94,7 +94,7 @@ test "apply_prefs re-emits SetBgmVolume when bgm playing" {
 }
 ```
 
-- [ ] **Step 2: Run tests — expect FAIL**
+- [x] **Step 2: Run tests — expect FAIL**
 
 ```bash
 cd /mnt/nvme1n1p2/moonsight && export CC=gcc && moon test -p audio -v 2>&1 | tail -40
@@ -102,7 +102,7 @@ cd /mnt/nvme1n1p2/moonsight && export CC=gcc && moon test -p audio -v 2>&1 | tai
 
 Expected: FAIL — `set_pref_gains` missing or volumes still 1.0.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `audio/mixer.mbt`:
 
@@ -134,7 +134,7 @@ Update all `output_bgm_volume(volume)` call sites to pass `self` if they become 
 
 Keep `Mixer::new` / `with_backend` initializing prefs to 1.0.
 
-- [ ] **Step 4: Run tests — expect PASS**
+- [x] **Step 4: Run tests — expect PASS**
 
 ```bash
 export CC=gcc && moon test -p audio
@@ -155,7 +155,7 @@ git commit -m "feat(audio): multiply mixer output by prefs gains"
 - Modify: `runtime/engine.mbt`
 - Modify: `runtime/engine_test.mbt` (or prefs path tests)
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```mbt
 ///|
@@ -176,9 +176,9 @@ test "set_pref volume updates global mixer gains" {
 
 Use the same IR/engine fixture style as existing `engine_test.mbt` tests (copy a minimal `from_ir` setup).
 
-- [ ] **Step 2: Run — expect FAIL** (mixer still 1.0 output)
+- [x] **Step 2: Run — expect FAIL** (mixer still 1.0 output)
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add helper on Engine:
 
@@ -199,13 +199,13 @@ Call from:
 - `from_ir` end (defaults)
 - after `load` if auto/prefs unchanged (prefs are not in save — still sync current)
 
-- [ ] **Step 4: Tests PASS**
+- [x] **Step 4: Tests PASS**
 
 ```bash
 export CC=gcc && moon test -p runtime
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/engine.mbt runtime/engine_test.mbt
@@ -222,7 +222,7 @@ git commit -m "feat(runtime): sync prefs volumes into global mixer"
 - Modify: `runtime/engine.mbt`
 - Modify: `runtime/moon.pkg` only if files need listing (same package — usually auto)
 
-- [ ] **Step 1: Failing unit tests for store**
+- [x] **Step 1: Failing unit tests for store**
 
 ```mbt
 ///|
@@ -246,7 +246,7 @@ test "backlog clear empties" {
 }
 ```
 
-- [ ] **Step 2: Implement `BacklogStore`**
+- [x] **Step 2: Implement `BacklogStore`**
 
 ```mbt
 pub(all) struct BacklogEntry {
@@ -266,7 +266,7 @@ pub fn BacklogStore::len(self) -> Int
 pub fn BacklogStore::get(self, i : Int) -> BacklogEntry  // 0 = oldest
 ```
 
-- [ ] **Step 3: Engine field + record + clear**
+- [x] **Step 3: Engine field + record + clear**
 
 ```mbt
 // Engine:
@@ -295,11 +295,11 @@ Call at end of `tick_typewriter` and after `complete_text` in `apply_intent`.
 
 Clear backlog + last key in: `start_game`, `quit_to_title`, successful `load_slot` / `load`.
 
-- [ ] **Step 4: Integration test**
+- [x] **Step 4: Integration test**
 
 Play one dialogue line to complete via Advance; assert `eng.backlog.len() >= 1`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/backlog.mbt runtime/backlog_test.mbt runtime/engine.mbt runtime/engine_test.mbt
@@ -315,7 +315,7 @@ git commit -m "feat(runtime): session backlog ring for completed dialogue"
 - Modify: `runtime/engine_test.mbt`
 - Modify: `host_web/main.mbt` (signature later can wait Task 9; tests call MoonBit API directly)
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 ```mbt
 ///|
@@ -347,7 +347,7 @@ test "skip_held does not auto-select choices" {
 }
 ```
 
-- [ ] **Step 2: Change `Engine::tick` signature**
+- [x] **Step 2: Change `Engine::tick` signature**
 
 ```mbt
 pub fn Engine::tick(
@@ -360,7 +360,7 @@ pub fn Engine::tick(
 
 All existing call sites keep default `skip_held=false`.
 
-- [ ] **Step 3: Implement skip path (Playing only)**
+- [x] **Step 3: Implement skip path (Playing only)**
 
 After gated intent application, if `skip_held` and playing and `wait_remaining <= 0`:
 
@@ -378,13 +378,13 @@ Reuse `apply_intent(SkipTyping)` for one complete/advance step inside the loop t
 
 Constant: `let skip_burst_max : Int = 8`.
 
-- [ ] **Step 4: Tests PASS + full runtime package**
+- [x] **Step 4: Tests PASS + full runtime package**
 
 ```bash
 export CC=gcc && moon test -p runtime
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/engine.mbt runtime/engine_test.mbt
@@ -403,7 +403,7 @@ git commit -m "feat(runtime): skip_held burst advance with wait gate"
 - Modify: `std_ui/modals.mbt`
 - Modify: `std_ui/lib.mbt`
 
-- [ ] **Step 1: Types + failing tests**
+- [x] **Step 1: Types + failing tests**
 
 ```mbt
 pub(all) enum ConfirmKind {
@@ -431,7 +431,7 @@ test "confirm_no cancels" { ... }
 test "request_quit_to_title requires confirm_yes" { ... }
 ```
 
-- [ ] **Step 2: Capabilities**
+- [x] **Step 2: Capabilities**
 
 ```mbt
 fn confirm_yes(Self) -> Unit
@@ -446,7 +446,7 @@ Implement on Engine:
 - `request_quit_to_title`: set QuitToTitle pending + show confirm.
 - Keep `quit_to_title` as the actual teardown (called from confirm_yes only for that kind).
 
-- [ ] **Step 3: std_ui confirm modal + game_menu**
+- [x] **Step 3: std_ui confirm modal + game_menu**
 
 `build_confirm`:
 
@@ -467,13 +467,13 @@ VBox(
 
 Save buttons can keep `save_slot` (engine gates).
 
-- [ ] **Step 4: Tests PASS**
+- [x] **Step 4: Tests PASS**
 
 ```bash
 export CC=gcc && moon test -p runtime -p std_ui
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add runtime/ std_ui/
@@ -501,7 +501,7 @@ backlog_lines : Array[String]  // preformatted "Name: text" newest last
 
 `sync_ui_bind` fills from `self.backlog` (last 12).
 
-- [ ] **Step 1: Intent + code**
+- [x] **Step 1: Intent + code**
 
 ```mbt
 // intent.mbt
@@ -518,7 +518,7 @@ Codes (freeze in docs):
 
 Update `intent_from_code` / `intent_to_code` + pack_test.
 
-- [ ] **Step 2: Playing path**
+- [x] **Step 2: Playing path**
 
 ```mbt
 if effective is OpenBacklog {
@@ -530,7 +530,7 @@ if effective is OpenBacklog {
 
 Esc still pops (return_modal) including backlog.
 
-- [ ] **Step 3: std_ui `build_backlog`**
+- [x] **Step 3: std_ui `build_backlog`**
 
 Title + up to 12 `Text` with `BacklogLine(i)` or Literals updated only via bind resolve.
 
@@ -538,12 +538,12 @@ Close button → `return_modal`.
 
 game_menu: **History** → `show_modal("backlog")`.
 
-- [ ] **Step 4: Tests**
+- [x] **Step 4: Tests**
 
 - OpenBacklog pushes modal name backlog  
 - After dialogue, bind lines non-empty when painted/synced  
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "feat: backlog modal and OpenBacklog intent"
@@ -559,7 +559,7 @@ git commit -m "feat: backlog modal and OpenBacklog intent"
 - Modify: `runtime/ui_test.mbt`
 - Modify: `std_ui/modals.mbt` (`build_settings`)
 
-- [ ] **Step 1: Failing test**
+- [x] **Step 1: Failing test**
 
 ```mbt
 test "slider is focusable and MenuRight adjusts pref" {
@@ -575,7 +575,7 @@ test "slider is focusable and MenuRight adjusts pref" {
 
 More concrete: unit-test layout collects `UiFocusTarget::Slider(key)` and a function `apply_slider_delta(caps, key, +0.1)`.
 
-- [ ] **Step 2: Types**
+- [x] **Step 2: Types**
 
 ```mbt
 // UiNode
@@ -592,7 +592,7 @@ Slider(
 Slider(String)  // prefs key
 ```
 
-- [ ] **Step 3: Layout/paint**
+- [x] **Step 3: Layout/paint**
 
 - Track rect + fill width = `w * pref_normalized`  
   - volume keys: value is already 0..1  
@@ -600,7 +600,7 @@ Slider(String)  // prefs key
 - Focus: use button_focus resource or brighter fill  
 - z same as widgets  
 
-- [ ] **Step 4: Input**
+- [x] **Step 4: Input**
 
 In `tick_ui` / `UiRuntime` when focus is Slider:
 - `MenuLeft` → `adjust_pref(key, -step)`
@@ -609,9 +609,9 @@ In `tick_ui` / `UiRuntime` when focus is Slider:
 
 When Playing narrative, MenuLeft/Right no-op (or ignore).
 
-- [ ] **Step 5: rebuild settings modal** with Sliders for master/bgm/se/text_speed; keep auto on/off buttons.
+- [x] **Step 5: rebuild settings modal** with Sliders for master/bgm/se/text_speed; keep auto on/off buttons.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git commit -m "feat(ui): Slider widget and settings volume sliders"
@@ -628,7 +628,7 @@ git commit -m "feat(ui): Slider widget and settings volume sliders"
 - Modify: `std_ui/modals.mbt` if button labels should show SlotLabel text
 - Modify: tests for `slot_label` format
 
-- [ ] **Step 1: Improve `Engine` slot_label formatting** (already exists — enhance):
+- [x] **Step 1: Improve `Engine` slot_label formatting** (already exists — enhance):
 
 ```mbt
 // empty: "Slot {i} (empty)"
@@ -636,13 +636,13 @@ git commit -m "feat(ui): Slider widget and settings volume sliders"
 // occupied without: "Slot {i} · saved"
 ```
 
-- [ ] **Step 2: `UiBindCtx.slot_labels : Array[String]`** filled in `sync_ui_bind` length = save_slots.
+- [x] **Step 2: `UiBindCtx.slot_labels : Array[String]`** filled in `sync_ui_bind` length = save_slots.
 
-- [ ] **Step 3: `TextBindSrc::SlotLabel(i)`** resolves `bind.slot_labels[i]` if in range.
+- [x] **Step 3: `TextBindSrc::SlotLabel(i)`** resolves `bind.slot_labels[i]` if in range.
 
-- [ ] **Step 4: save_load modal** — use Text SlotLabel under each button or set button label via rebuild (simplest: Text nodes with SlotLabel for each slot).
+- [x] **Step 4: save_load modal** — use Text SlotLabel under each button or set button label via rebuild (simplest: Text nodes with SlotLabel for each slot).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "feat(runtime,std_ui): show save slot timestamps in labels"
@@ -658,7 +658,7 @@ git commit -m "feat(runtime,std_ui): show save slot timestamps in labels"
 - Modify: `docs/draw-list-pack.md` intent table
 - Copy glue to dist is build-time
 
-- [ ] **Step 1: export_frame**
+- [x] **Step 1: export_frame**
 
 ```mbt
 pub fn export_frame(intent_code : Int, dt_ms : Float, skip_held~ : Int = 0) -> Int {
@@ -673,7 +673,7 @@ MoonBit export: if default args not exportable, use third `Int` parameter requir
 pub fn export_frame(intent_code : Int, dt_ms : Float, skip_held : Int) -> Int
 ```
 
-- [ ] **Step 2: boot.js**
+- [x] **Step 2: boot.js**
 
 ```js
 let ctrlHeld = false;
@@ -694,14 +694,14 @@ window.addEventListener("keyup", (ev) => {
 exports_.export_frame(intent, dt, ctrlHeld ? 1 : 0);
 ```
 
-- [ ] **Step 3: Volume double-multiply fix**
+- [x] **Step 3: Volume double-multiply fix**
 
 `effectiveBgmVolume` / `effectiveSeVolume`: return `clampVolume(logical)` only (mixer already applied prefs).  
 Keep JS `prefs` object for UI display sync from `prefs_json()`.
 
 When prefs change in-engine, mixer emits SetBgmVolume — flushAudio already handles.
 
-- [ ] **Step 4: Manual smoke** (document in task report)
+- [x] **Step 4: Manual smoke** (document in task report)
 
 ```bash
 export CC=gcc
@@ -710,7 +710,7 @@ moon build --target wasm-gc --release host_web
 # Ctrl hold skip; H backlog; overwrite save confirm; volume slider
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -m "feat(host): skip hold, backlog key, slider arrows; fix volume prefs path"
@@ -726,7 +726,7 @@ git commit -m "feat(host): skip hold, backlog key, slider arrows; fix volume pre
 - Optional: `demo/game/main.yuki` tip line
 - Optional: improve 1–2 compiler diagnostics
 
-- [ ] **Step 1: Write `docs/play-input.md`**
+- [x] **Step 1: Write `docs/play-input.md`**
 
 Contents:
 - Intent table + codes
@@ -735,11 +735,11 @@ Contents:
 - Default keys
 - Confirm / backlog behavior summary
 
-- [ ] **Step 2: README Scope**
+- [x] **Step 2: README Scope**
 
 Add Q1 / 0.5 bullets; move backlog/confirm/skip off "out of scope through Phase 4" list appropriately.
 
-- [ ] **Step 3: Full verify**
+- [x] **Step 3: Full verify**
 
 ```bash
 export CC=gcc
@@ -750,21 +750,21 @@ moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
 
 Expected: all green; dist has no regressions.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -m "docs: Q1 play-input semantics and 0.5 scope"
 ```
 
-- [ ] **Step 5: Final gate checklist**
+- [x] **Step 5: Final gate checklist**
 
-- [ ] Backlog records completed lines; H / History opens; Esc closes  
-- [ ] Ctrl hold skips yields; timed wait blocked  
-- [ ] Overwrite save + quit title confirm (default No)  
-- [ ] Volume prefs audible / event volume changes  
-- [ ] Settings sliders keyboard adjustable  
-- [ ] Slot labels show saved_at when present  
-- [ ] `moon test` full green  
+- [x] Backlog records completed lines; H / History opens; Esc closes  
+- [x] Ctrl hold skips yields; timed wait blocked  
+- [x] Overwrite save + quit title confirm (default No)  
+- [x] Volume prefs audible / event volume changes  
+- [x] Settings sliders keyboard adjustable  
+- [x] Slot labels show saved_at when present  
+- [x] `moon test` full green  
 
 ---
 

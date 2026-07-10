@@ -1,9 +1,12 @@
-# Standard host commands (Phase 1–4)
+# Standard host commands (Phase 1–4 + Q1)
 
 Host commands are invoked from MoonYuki as `@name …` (or as IR `Host` ops after
 dialogue lower). Runtime dispatch lives in `std_commands` via
 `standard_registry()` → `Director.register_fn`. Compile-time names live in
 `script.builtin_externs()` and **must match** registry keys (enforced by test).
+
+Player intents, hold-to-skip, `wait_remaining` gating, backlog, and confirm:
+see [`play-input.md`](./play-input.md).
 
 Handlers receive `(Stage, Array[Value])` and return `HostResult`:
 
@@ -169,7 +172,7 @@ Unknown scene names fail at VM jump time (empty ops / halt depending on loader).
 | **Args** | optional numeric time in seconds (int/float); empty args allowed |
 | **Timed (`time > 0`)** | Sets `stage.wait_remaining = time`, returns `Yield`; engine ticks wall-clock `dt` until remaining ≤ 0, then resumes from Yield |
 | **Bare / zero** | `wait_remaining = 0`; resumes on **Advance** (same as Phase 1 yield) |
-| **Input while timed** | **Advance**, **SkipTyping**, and **Select** are **ignored** (wait cannot be skipped) |
+| **Input while timed** | **Advance**, **SkipTyping**, **Select**, and **`skip_held`** are **ignored** (wait cannot be skipped); see [`play-input.md`](./play-input.md) |
 | **Modal open** | Menu input wins; wait countdown continues in background; Advance still ignored for narrative until menu closes |
 | **Errors** | non-numeric when present → `flow.wait: expected numeric time` |
 | **Result** | `Yield` |
@@ -411,8 +414,9 @@ var.set
 
 ## Intent mapping (host input → engine)
 
-Defined in `render.intent_from_code` / `docs/draw-list-pack.md`, wired by
-`host_web/js_glue/boot.js`:
+Canonical play semantics (skip vs `SkipTyping`, backlog, confirm):
+[`play-input.md`](./play-input.md). Codes also listed in
+[`draw-list-pack.md`](./draw-list-pack.md). Wired by `host_web/js_glue/boot.js`:
 
 | Code | Intent | Default binding |
 |-----:|--------|-----------------|

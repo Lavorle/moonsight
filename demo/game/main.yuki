@@ -17,6 +17,7 @@
 @flow.wait 0.5
 y:Welcome to MoonSight.
 y:This demo uses MoonYuki.
+y:Tips: H opens history; hold Ctrl to skip.
 @sys.save_hint
 y:Shall we talk, or leave for the garden?
 @flow.choice "Talk" "Leave" --result act
