@@ -3,6 +3,7 @@ package "moonsight/moonsight/runtime"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonsight/moonsight/script",
 }
 
@@ -15,15 +16,30 @@ pub let logical_height : Int
 
 pub let logical_width : Int
 
+pub fn parse_save_game(String) -> SaveGame raise SaveError
+
 pub fn runtime_package_name() -> String
+
+pub let save_format_version : Int
 
 pub fn value_as_double(Value) -> Double?
 
 pub fn value_as_int(Value) -> Int?
 
 // Errors
+pub(all) suberror SaveError {
+  UnsupportedVersion(version~ : Int)
+  InvalidJson(message~ : String)
+  DecodeFailed(message~ : String)
+} derive(Eq, @debug.Debug)
+pub impl Show for SaveError
 
 // Types and methods
+pub(all) struct AudioLogicState {
+  bgm : String?
+  se : String?
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
 pub(all) enum BuiltinHost {
   TextBegin
   TextType
@@ -55,6 +71,8 @@ pub(all) struct Engine {
   mut stage : Stage
 } derive(@debug.Debug)
 pub fn Engine::from_ir(@script.IrModule, entry~ : String, director? : Director) -> Self
+pub fn Engine::load(Self, String) -> Unit raise SaveError
+pub fn Engine::save(Self, slot? : Int) -> String
 pub fn Engine::tick(Self, Intent) -> Unit
 
 pub(all) struct HostCall {
@@ -89,7 +107,7 @@ pub(all) enum LayerKind {
   Effect
   UI
   Overlay
-} derive(Eq, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct LayerState {
   id : String
@@ -100,7 +118,25 @@ pub(all) struct LayerState {
   y : Double
   opacity : Double
   visible : Bool
-} derive(@debug.Debug)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct SaveGame {
+  format_version : Int
+  module_id : String
+  scene : String
+  ip : Int
+  call_stack : Array[StackFrame]
+  vars : Map[String, Value]
+  layers : Array[LayerState]
+  text : TextBlock?
+  overlay_opacity : Double
+  audio : AudioLogicState
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct StackFrame {
+  scene : String
+  ip : Int
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct Stage {
   mut layers : Array[LayerState]
@@ -133,7 +169,7 @@ pub(all) struct TextBlock {
   full_text : String
   visible_chars : Int
   complete : Bool
-} derive(@debug.Debug)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) enum Value {
   Int(Int)
@@ -141,7 +177,7 @@ pub(all) enum Value {
   Bool(Bool)
   Str(String)
   None_
-} derive(Eq, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn Value::truthy(Self) -> Bool
 
 pub(all) struct Vm {

@@ -15,7 +15,7 @@ pub(all) enum LayerKind {
   Effect
   UI
   Overlay
-} derive(Debug, Eq)
+} derive(Debug, Eq, ToJson, FromJson)
 
 ///|
 /// One visible (or hidden) layer node keyed by logical `id`.
@@ -30,7 +30,7 @@ pub(all) struct LayerState {
   y : Double
   opacity : Double
   visible : Bool
-} derive(Debug)
+} derive(Debug, Eq, ToJson, FromJson)
 
 ///|
 /// Current dialogue typewriter block on stage.
@@ -39,7 +39,7 @@ pub(all) struct TextBlock {
   full_text : String
   visible_chars : Int
   complete : Bool
-} derive(Debug)
+} derive(Debug, Eq, ToJson, FromJson)
 
 ///|
 /// Active choice UI: option labels and optional user selection index.

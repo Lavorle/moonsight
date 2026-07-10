@@ -6,7 +6,7 @@ pub(all) enum Value {
   Bool(Bool)
   Str(String)
   None_
-} derive(Debug, Eq)
+} derive(Debug, Eq, ToJson, FromJson)
 
 ///|
 /// Truthiness used by jump conditions and control flow.

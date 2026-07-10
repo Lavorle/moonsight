@@ -1,3 +1,4 @@
 import {
   "moonsight/moonsight/script",
+  "moonbitlang/core/json",
 }
