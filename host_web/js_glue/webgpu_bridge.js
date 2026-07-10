@@ -792,6 +792,10 @@ function writeAtlasSubrect(texture, x, y, w, h, rgba) {
   );
 }
 
+/**
+ * Rasterize one glyph into the atlas.
+ * @returns {boolean} true if the cell has usable ink (or is intentionally blank space)
+ */
 export function rasterizeGlyphToAtlas(
   ch,
   size,
@@ -808,14 +812,22 @@ export function rasterizeGlyphToAtlas(
     uploadRgbaTexture("atlas", atlasSize, atlasSize, pixels);
     entry = textures.get("atlas");
   }
-  if (atlasW <= 0 || atlasH <= 0) return;
+  if (atlasW <= 0 || atlasH <= 0) return false;
   const cp = ch.codePointAt(0) || 0;
+  const isSpace = !ch.trim();
 
   // Clear cell (transparent) then stamp.
   const zeros = new Uint8Array(atlasW * atlasH * 4);
   writeAtlasSubrect(entry.texture, atlasX, atlasY, atlasW, atlasH, zeros);
 
-  // 1) Preferred: GPU Slug (diffusionstudio/slug-webgpu WGSL)
+  function hasInk(data) {
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] > 8) return true;
+    }
+    return false;
+  }
+
+  // 1) GPU Slug (opt-in via ?glyph=slug)
   if (glyphMode === "slug" && slugGpu && slugGpu.hasFont()) {
     try {
       const ok = slugGpu.stampGlyphToAtlas({
@@ -827,13 +839,15 @@ export function rasterizeGlyphToAtlas(
         atlasH,
         fontSize: size,
       });
-      if (ok) return;
+      // Slug stamps coverage in-place; treat space as success, else assume ok
+      // (GPU path has no easy CPU readback). Non-space relies on curves existing.
+      if (ok) return true;
     } catch (e) {
       console.warn("slug stamp failed, falling back to canvas", ch, e);
     }
   }
 
-  // 2) CPU outline (experimental)
+  // 2) CPU outline (opt-in)
   if (
     glyphMode === "cpu-outline" &&
     outlineRaster &&
@@ -843,10 +857,10 @@ export function rasterizeGlyphToAtlas(
       outlineRaster.rasterizeCodepoint(cp, atlasW, atlasH) ||
       new Uint8ClampedArray(atlasW * atlasH * 4);
     writeAtlasSubrect(entry.texture, atlasX, atlasY, atlasW, atlasH, pix);
-    return;
+    return isSpace || hasInk(pix);
   }
 
-  // 3) Canvas fillText — reliable; uses same Noto face as layout metrics.
+  // 3) Canvas fillText — default; same Noto face as layout metrics.
   if (!glyphCanvas) {
     glyphCanvas = document.createElement("canvas");
     glyphCtx = glyphCanvas.getContext("2d", {
@@ -854,45 +868,27 @@ export function rasterizeGlyphToAtlas(
       alpha: true,
     });
   }
-  // Always resize to exact cell (avoids stale pixels from larger previous cells).
   glyphCanvas.width = atlasW;
   glyphCanvas.height = atlasH;
   const ctx = glyphCtx;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalCompositeOperation = "source-over";
   ctx.clearRect(0, 0, atlasW, atlasH);
-  // Use the layout size (not a shrunken atlasH) so advances match ink.
   const fontPx = Math.max(8, size | 0);
   ctx.font = `${fontPx}px "Noto Sans", "NotoSans", sans-serif`;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#ffffff";
-  // alphabetic baseline ≈ 0.8 of em box for Latin sans
   const baseline = Math.min(atlasH - 1, Math.floor(fontPx * 0.8));
-  // Slight left pad; actual LSB is inside the font's advance box.
-  ctx.fillText(ch, 0, baseline);
+  // Shift right by left bearing so ink isn't clipped at x=0 (esp. wide caps).
+  const metrics = ctx.measureText(ch);
+  const left = metrics.actualBoundingBoxLeft || 0;
+  const xPen = Math.max(0, Math.ceil(left)) + 1;
+  ctx.fillText(ch, xPen, baseline);
   const img = ctx.getImageData(0, 0, atlasW, atlasH);
-  // If nothing was drawn (font not ready), draw a visible diagnostic bar.
-  let any = false;
-  for (let i = 3; i < img.data.length; i += 4) {
-    if (img.data[i] > 8) {
-      any = true;
-      break;
-    }
-  }
-  if (!any && ch.trim()) {
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(1, 1, Math.max(1, atlasW - 2), Math.max(1, atlasH - 2));
-    const img2 = ctx.getImageData(0, 0, atlasW, atlasH);
-    writeAtlasSubrect(
-      entry.texture,
-      atlasX,
-      atlasY,
-      atlasW,
-      atlasH,
-      img2.data,
-    );
-    return;
+  if (!isSpace && !hasInk(img.data)) {
+    // Font not ready yet — leave transparent and signal retry (do NOT mark ready).
+    return false;
   }
   writeAtlasSubrect(
     entry.texture,
@@ -902,6 +898,7 @@ export function rasterizeGlyphToAtlas(
     atlasH,
     img.data,
   );
+  return true;
 }
 
 /** Install on globalThis for non-module hosts and MoonBit docs. */

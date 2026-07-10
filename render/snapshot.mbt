@@ -201,7 +201,8 @@ fn emit_text_glyphs(
       // Cell / screen / pen MUST share the same width. If screen_w > pen advance,
       // glyphs overlap and middle letters vanish (was: "Talk" → "T l").
       let adv_i = adv.to_int()
-      let cell_w = if adv_i < 1 { 2 } else { adv_i + 1 }
+      // +2px room for left bearing shift in canvas stamp
+      let cell_w = if adv_i < 1 { 3 } else { adv_i + 2 }
       let entry = atlas.get_or_queue(ch, size, cell_w=cell_w)
       let sw = Float::from_int(entry.atlas_w)
       let sh = Float::from_int(entry.atlas_h)

@@ -103,7 +103,23 @@ pub fn GlyphAtlas::get_or_queue(
   cell_w? : Int,
 ) -> AtlasEntry {
   match self.lookup(ch, size) {
-    Some(e) => e
+    Some(e) => {
+      // If still pending (host stamp failed / font not ready), ensure the
+      // pair is on the queue so JS can retry next frame.
+      if e.pending {
+        let mut found = false
+        for item in self.pending_queue {
+          let (c, s) = item
+          if c == ch && s == size {
+            found = true
+          }
+        }
+        if !found {
+          self.pending_queue.push((ch, size))
+        }
+      }
+      e
+    }
     None => {
       let cell_h = if size < 1 { 1 } else { size }
       let mut cw = match cell_w {

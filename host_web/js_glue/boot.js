@@ -70,8 +70,9 @@ function resolveRes(resId) {
 }
 
 /**
- * Rasterize pending glyphs reported by MoonBit atlas bookkeeping.
- * On partial failure, skip clear_pending so failed entries retry next frame.
+ * Rasterize pending glyphs. Only mark ready when stamp has real ink
+ * (or is whitespace). Empty stamps stay pending so the next frame retries —
+ * fixes first typewriter char ("W" in Welcome) when the font was not ready.
  */
 function flushPendingGlyphs(exports) {
   const n = exports.pending_glyph_count() | 0;
@@ -84,11 +85,13 @@ function flushPendingGlyphs(exports) {
     const atlasY = exports.pending_glyph_atlas_y(i) | 0;
     const atlasW = exports.pending_glyph_atlas_w(i) | 0;
     const atlasH = exports.pending_glyph_atlas_h(i) | 0;
-    if (size <= 0 || atlasW <= 0 || atlasH <= 0) continue;
+    if (size <= 0 || atlasW <= 0 || atlasH <= 0) {
+      anyFailed = true;
+      continue;
+    }
     const ch = String.fromCodePoint(cp);
     try {
-      // Stamp pixels into the UV rect MoonBit already packed into the draw list.
-      Gpu.rasterizeGlyphToAtlas(
+      const ok = Gpu.rasterizeGlyphToAtlas(
         ch,
         size,
         atlasX,
@@ -97,14 +100,18 @@ function flushPendingGlyphs(exports) {
         atlasH,
         1024,
       );
-      exports.mark_glyph_ready(cp, size, atlasX, atlasY, atlasW, atlasH);
+      if (ok) {
+        exports.mark_glyph_ready(cp, size, atlasX, atlasY, atlasW, atlasH);
+      } else {
+        anyFailed = true;
+      }
     } catch (e) {
       anyFailed = true;
       console.warn("glyph rasterize failed", ch, e);
     }
   }
-  // Do not permanently drop failed glyphs: only clear when every stamp succeeded.
-  // Successes re-stamped on a later retry are harmless (idempotent atlas write).
+  // mark_ready already dequeued successes. clear_pending only when all done;
+  // if any failed, leave them in the queue for the next frame.
   if (!anyFailed) {
     exports.clear_pending_glyphs();
   }
@@ -577,6 +584,18 @@ export async function boot(options = {}) {
         await face.load();
         document.fonts.add(face);
         await document.fonts.ready;
+        await document.fonts.load('32px "Noto Sans"');
+      }
+
+      // Warm up canvas fillText so the first typewriter glyph is not blank.
+      {
+        const warm = document.createElement("canvas");
+        warm.width = 64;
+        warm.height = 64;
+        const wctx = warm.getContext("2d");
+        wctx.font = '32px "Noto Sans", "NotoSans", sans-serif';
+        wctx.fillStyle = "#ffffff";
+        wctx.fillText("WABCMygj", 2, 40);
       }
 
       const dev = Gpu.getDevice();
@@ -608,9 +627,9 @@ export async function boot(options = {}) {
     const manifest = await loadManifest(manifestUrl);
     await applyManifest(manifest);
 
-    // Map numeric resource ids that already exist after init
+    // Delay first frame one rAF so font/GPU state settles before typewriter.
     setStatus("running (click / Enter to advance)");
-    requestAnimationFrame(frame);
+    requestAnimationFrame(() => requestAnimationFrame(frame));
   } catch (e) {
     setStatus(String(e && e.message ? e.message : e));
     console.error(e);
