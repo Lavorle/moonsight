@@ -386,8 +386,12 @@ pub fn Engine::tick(
     self.vm.run_until_wait(self.director, self.stage)
   }
   // If @ui.show opened a modal this frame, freeze narrative presentation.
+  // Also gate on pending ui_ops: Show is queued until drain_ui_ops, so stack
+  // may still be empty while a modal is about to open.
   let playing =
-    self.ui.stack.is_empty() && !(self.ui.mode is Title)
+    self.ui.stack.is_empty() &&
+    !(self.ui.mode is Title) &&
+    self.stage.ui_ops.is_empty()
   if skip_held && playing && self.stage.wait_remaining <= 0.0 {
     self.tick_skip_burst()
   }
@@ -405,15 +409,18 @@ pub fn Engine::tick(
 
 ///|
 /// Hold-skip burst: complete incomplete typewriter once, or advance Yields up to
-/// `skip_burst_max` times. Stops on Choose, Halted, or timed wait.
+/// `skip_burst_max` times. Stops on Choose, Halted, timed wait, or pending
+/// `@ui.show` (ops drained after the burst so stack is still empty mid-loop).
 fn Engine::tick_skip_burst(self : Engine) -> Unit {
   let mut bursts = 0
   while bursts < skip_burst_max {
     if self.stage.wait_remaining > 0.0 {
       break
     }
-    // Modal opened mid-burst (e.g. @ui.show): stop narrative skip.
-    if self.ui.stack_depth() > 0 || (self.ui.mode is Title) {
+    // Modal open or pending @ui.show / hide: stop narrative skip.
+    if self.ui.stack_depth() > 0 ||
+      (self.ui.mode is Title) ||
+      !self.stage.ui_ops.is_empty() {
       break
     }
     match self.vm.wait {
@@ -422,6 +429,10 @@ fn Engine::tick_skip_burst(self : Engine) -> Unit {
         self.vm.run_until_wait(self.director, self.stage)
         // Budget stall: avoid spinning if still Running.
         if self.vm.wait is Running {
+          break
+        }
+        // @ui.show may have queued ops during this run.
+        if !self.stage.ui_ops.is_empty() {
           break
         }
       }
@@ -438,6 +449,10 @@ fn Engine::tick_skip_burst(self : Engine) -> Unit {
               self.vm.run_until_wait(self.director, self.stage)
             }
             bursts = bursts + 1
+            // SkipTyping+run may have hit @ui.show; do not advance past its Yield.
+            if !self.stage.ui_ops.is_empty() {
+              break
+            }
           }
         }
     }

@@ -713,6 +713,69 @@ test "skip_held does not auto-select choices" {
 }
 
 ///|
+/// Mid-burst `@ui.show` must stop hold-skip before later narrative (var.set).
+/// Mirrors `ui.show host command opens menu and freezes ip` under skip_held.
+test "skip_held stops on pending ui.show before later var" {
+  let src =
+    #|- scene "s"
+    #|y:Line
+    #|@ui.show "game_menu"
+    #|@var.set "after" 1
+    #|
+  let ir = @script.compile_to_ir(src, file="skip_ui_show.yuki")
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+    app=app_game_menu_continue(),
+  )
+  eng.tick(None_, dt=0.0)
+  // Complete typewriter on first hold; stay on dialogue Yield.
+  eng.tick(None_, skip_held=true, dt=0.0)
+  guard eng.stage.text is Some(t) else { fail("text") }
+  assert_true(t.complete)
+  assert_true(eng.vm.wait == Yield)
+  // Advance past dialogue; must stop at @ui.show and not set `after`.
+  eng.tick(None_, skip_held=true, dt=0.0)
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "game_menu")
+  assert_true(eng.stage.get_var("after") == None_)
+  assert_true(eng.stage.ui_ops.is_empty())
+}
+
+///|
+/// One skip_held frame advances at most `skip_burst_max` (8) pure Yields.
+test "skip_held burst max is 8 yields per tick" {
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|@flow.yield
+    #|@flow.yield
+    #|@flow.yield
+    #|@flow.yield
+    #|@flow.yield
+    #|@flow.yield
+    #|@flow.yield
+    #|@flow.yield
+    #|@var.set "past9" 1
+    #|
+  let ir = @script.compile_to_ir(src, file="skip_burst.yuki")
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  // Reach first pure yield.
+  eng.tick(None_, dt=0.0)
+  assert_true(eng.vm.wait == Yield)
+  assert_true(eng.stage.get_var("past9") == None_)
+  // One hold-skip frame: ≤8 yield advances; 9th yield (and var) not yet.
+  eng.tick(None_, skip_held=true, dt=0.0)
+  assert_true(eng.stage.get_var("past9") == None_)
+  assert_true(eng.vm.wait == Yield)
+}
+
+///|
 /// Pref volume mutations must multiply into global mixer output gains.
 test "set_pref volume updates global mixer gains" {
   @audio.reset_global_mixer()
