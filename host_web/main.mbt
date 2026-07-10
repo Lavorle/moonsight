@@ -246,15 +246,23 @@ pub fn export_frame(intent_code : Int, dt_ms : Float) -> Int {
       let intent = @render.intent_from_code(intent_code)
       eng.tick(intent, dt~)
       let view = eng.view()
-      let occ = eng.occupied_slots()
-      // Screen-aware draw list (menu dim + widgets; skips dialogue in Title/Menu).
-      // Phase 4 Task 3: Engine owns UiRuntime (not ScreenState). Screen DSL
-      // paint path is retired for the host; Task 4 migrates to UiDrawOp.
+      // Phase 4 Task 4: paint only UiDrawOp from UiRuntime (no hard-coded dialogue).
+      eng.sync_ui_bind()
+      let canvas_w = s.layout.canvas_w.to_double()
+      let canvas_h = s.layout.canvas_h.to_double()
+      let bind = eng.ui.bind
+      let ops : Array[@runtime.UiDrawOp] = if eng.ui.stack_depth() > 0 {
+        eng.ui.paint_modal(canvas_w~, canvas_h~, bind~)
+      } else if eng.ui.mode is @runtime.UiMode::Playing {
+        eng.ui.paint_hud(canvas_w~, canvas_h~, bind~)
+      } else {
+        []
+      }
       let dl = @render.build_draw_list_with_atlas(
         view,
         s.layout,
         s.atlas,
-        occupied_slots=occ,
+        ui_ops=ops,
       )
       s.frame = @render.pack_draw_list(dl, s.resources)
       s.frame.length()

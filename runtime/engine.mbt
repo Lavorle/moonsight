@@ -375,7 +375,10 @@ pub fn Engine::tick(
 
 ///|
 /// Build UiBindCtx from stage + prefs + slots and store on UiRuntime.
-fn Engine::sync_ui_bind(self : Engine) -> Unit {
+///
+/// Hosts should call this before `ui.paint_modal` / `ui.paint_hud` each frame
+/// so HUD dialogue/choices reflect the current stage.
+pub fn Engine::sync_ui_bind(self : Engine) -> Unit {
   let occupied = self.occupied_slots()
   let (has_text, dialogue_name, dialogue_body) = match self.stage.text {
     None => (false, "", "")

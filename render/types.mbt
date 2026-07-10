@@ -51,98 +51,35 @@ pub(all) struct DrawList {
 } derive(Debug)
 
 ///|
-/// Fixed UI geometry for dialogue/nameplate/choices on the logical canvas.
+/// Canvas metrics and default glyph paint settings.
+///
+/// Dialogue / menu geometry lives in `UiDrawOp` trees (runtime `UiRuntime`),
+/// not here. Hosts still pass this for layer full-canvas sizing and fallback
+/// font advances when expanding draw-op text to glyphs.
 pub(all) struct UiLayout {
   canvas_w : Float
   canvas_h : Float
-  /// Dialogue box panel.
-  dialogue_x : Float
-  dialogue_y : Float
-  dialogue_w : Float
-  dialogue_h : Float
-  /// Speaker nameplate rect (above text area).
-  nameplate_x : Float
-  nameplate_y : Float
-  nameplate_w : Float
-  nameplate_h : Float
-  /// Dialogue body text origin and wrap width.
-  text_x : Float
-  text_y : Float
-  text_w : Float
-  text_h : Float
-  /// Choice list origin (above dialogue box).
-  choice_x : Float
-  choice_y : Float
-  choice_w : Float
-  choice_line_h : Float
+  /// Fallback body font size when a draw op omits `font_size`.
   font_size : Float
-  name_font_size : Float
-  choice_font_size : Float
   /// Advance used when no host measure is provided.
   default_char_advance : Float
+  /// Default color for glyphs expanded from `UiDrawOp.text`.
   text_color : Color
-  name_color : Color
-  choice_color : Color
-  /// Screen DSL root origin when vbox/hbox omit x/y.
-  screen_origin_x : Float
-  screen_origin_y : Float
-  /// Vertical / horizontal step for button and text widgets.
-  screen_line_h : Float
-  screen_button_w : Float
-  screen_button_h : Float
-  screen_font_size : Float
-  screen_text_color : Color
-  /// Full-screen menu dim opacity (Menu mode only).
-  screen_dim_opacity : Float
 } derive(Debug)
 
 ///|
-/// Default layout for 1920×1080: dialogue box occupies the bottom 30%.
+/// Default layout metrics for a 1920×1080 logical canvas.
 pub fn UiLayout::default_fhd() -> UiLayout {
   let canvas_w : Float = 1920.0
   let canvas_h : Float = 1080.0
-  let dialogue_h : Float = canvas_h * 0.3
-  let dialogue_y : Float = canvas_h - dialogue_h
-  let margin : Float = 48.0
-  let pad : Float = 32.0
-  let nameplate_h : Float = 48.0
   let font_size : Float = 32.0
   {
     canvas_w,
     canvas_h,
-    dialogue_x: margin,
-    dialogue_y,
-    dialogue_w: canvas_w - margin * 2.0,
-    dialogue_h,
-    nameplate_x: margin + pad,
-    nameplate_y: dialogue_y + pad,
-    nameplate_w: 360.0,
-    nameplate_h,
-    text_x: margin + pad,
-    text_y: dialogue_y + pad + nameplate_h + 12.0,
-    text_w: canvas_w - margin * 2.0 - pad * 2.0,
-    text_h: dialogue_h - pad * 2.0 - nameplate_h - 12.0,
-    choice_x: margin + pad,
-    choice_y: dialogue_y - 200.0,
-    choice_w: canvas_w - margin * 2.0 - pad * 2.0,
-    choice_line_h: 48.0,
     font_size,
-    name_font_size: 28.0,
-    choice_font_size: 30.0,
     // Hint for hosts; layout prefers approximate_measure(font_size).
     default_char_advance: font_size * 0.55,
     text_color: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
-    name_color: { r: 1.0, g: 0.92, b: 0.7, a: 1.0 },
-    choice_color: { r: 0.85, g: 0.95, b: 1.0, a: 1.0 },
-    // Center-ish column for title / menu stacks on 1920-wide canvas.
-    screen_origin_x: 760.0,
-    screen_origin_y: 200.0,
-    screen_line_h: 64.0,
-    screen_button_w: 400.0,
-    screen_button_h: 52.0,
-    screen_font_size: 30.0,
-    screen_text_color: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
-    screen_dim_opacity: 0.55,
   }
 }
 

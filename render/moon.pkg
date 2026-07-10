@@ -1,4 +1,3 @@
 import {
   "moonsight/moonsight/runtime",
-  "moonsight/moonsight/script",
 }

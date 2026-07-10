@@ -24,10 +24,71 @@ fn test_view_with_layer() -> @runtime.StageView {
 }
 
 ///|
+/// Sample dialogue chrome ops (geometry formerly hard-coded in UiLayout).
+fn dialogue_ops(layout : UiLayout, speaker : String?, body : String) -> Array[
+  @runtime.UiDrawOp,
+] {
+  let margin : Float = 48.0
+  let pad : Float = 32.0
+  let dialogue_h = layout.canvas_h * 0.3
+  let dialogue_y = layout.canvas_h - dialogue_h
+  let dialogue_x = margin
+  let dialogue_w = layout.canvas_w - margin * 2.0
+  let nameplate_h : Float = 48.0
+  let ops : Array[@runtime.UiDrawOp] = []
+  ops.push({
+    kind: 0,
+    resource: ui_dialogue_box,
+    x: dialogue_x,
+    y: dialogue_y,
+    w: dialogue_w,
+    h: dialogue_h,
+    opacity: 1.0,
+    z: 1000,
+    text: None,
+    font_size: 0.0,
+    focused: false,
+  })
+  match speaker {
+    None => ()
+    Some(name) => {
+      ops.push({
+        kind: 0,
+        resource: ui_nameplate,
+        x: margin + pad,
+        y: dialogue_y + pad,
+        w: 360.0,
+        h: nameplate_h,
+        opacity: 1.0,
+        z: 1001,
+        text: Some(name),
+        font_size: 28.0,
+        focused: false,
+      })
+    }
+  }
+  ops.push({
+    kind: 1,
+    resource: "",
+    x: margin + pad,
+    y: dialogue_y + pad + nameplate_h + 12.0,
+    w: layout.canvas_w - margin * 2.0 - pad * 2.0,
+    h: dialogue_h - pad * 2.0 - nameplate_h - 12.0,
+    opacity: 1.0,
+    z: 1002,
+    text: Some(body),
+    font_size: layout.font_size,
+    focused: false,
+  })
+  ops
+}
+
+///|
 test "build_draw_list emits layer sprites and veil" {
   let view = test_view_with_layer()
   let layout = UiLayout::default_fhd()
-  let dl = build_draw_list(view, layout)
+  let ops = dialogue_ops(layout, Some("Y"), "Hello world from MoonSight")
+  let dl = build_draw_list(view, layout, ui_ops=ops)
   assert_eq(dl.veil_opacity, 0.25)
   // bg + hero + dialogue box + nameplate
   assert_true(dl.sprites.length() >= 4)
@@ -35,14 +96,14 @@ test "build_draw_list emits layer sprites and veil" {
   assert_eq(dl.sprites[1].resource, "char_y")
   assert_eq(dl.sprites[1].x, 200.0)
   assert_eq(dl.sprites[1].opacity, 0.9)
-  // dialogue chrome
+  // dialogue chrome from ui ops
   let mut has_box = false
   let mut has_plate = false
   for s in dl.sprites {
     if s.resource == ui_dialogue_box {
       has_box = true
-      assert_eq(s.y, layout.dialogue_y)
-      assert_eq(s.h, layout.dialogue_h)
+      assert_eq(s.y, layout.canvas_h * 0.7)
+      assert_eq(s.h, layout.canvas_h * 0.3)
     }
     if s.resource == ui_nameplate {
       has_plate = true
@@ -55,18 +116,72 @@ test "build_draw_list emits layer sprites and veil" {
 }
 
 ///|
-test "dialogue box occupies bottom 30 percent of 1920x1080" {
-  let layout = UiLayout::default_fhd()
-  assert_eq(layout.canvas_w, 1920.0)
-  assert_eq(layout.canvas_h, 1080.0)
-  assert_eq(layout.dialogue_h, 324.0)
-  assert_eq(layout.dialogue_y, 756.0)
-  assert_true(layout.text_y >= layout.dialogue_y)
-  assert_true(layout.text_w > 0.0)
+test "dialogue box not emitted without ui draw ops" {
+  let st = @runtime.Stage::new()
+  st.begin_text(speaker="Hero")
+  st.type_more("Hello")
+  st.complete_text()
+  let view = @runtime.StageView::from_stage(
+    st,
+    wait=@runtime.WaitKind::Yield,
+    auto=false,
+  )
+  let dl = build_draw_list(view, UiLayout::default_fhd(), ui_ops=[])
+  let mut has_dialogue = false
+  for s in dl.sprites {
+    if s.resource == ui_dialogue_box {
+      has_dialogue = true
+    }
+  }
+  assert_false(has_dialogue)
+  // Stage text alone must not produce glyphs either.
+  assert_eq(dl.glyphs.length(), 0)
 }
 
 ///|
-test "typewriter only lays out visible chars" {
+test "ui draw ops emit button sprite and glyphs" {
+  let st = @runtime.Stage::new()
+  let view = @runtime.StageView::from_stage(
+    st,
+    wait=@runtime.WaitKind::Halted,
+    auto=false,
+  )
+  let layout = UiLayout::default_fhd()
+  let ops : Array[@runtime.UiDrawOp] = [
+    {
+      kind: 0,
+      resource: ui_button,
+      x: 10.0,
+      y: 20.0,
+      w: 400.0,
+      h: 52.0,
+      opacity: 1.0,
+      z: 3000,
+      text: Some("Start"),
+      font_size: 30.0,
+      focused: false,
+    },
+  ]
+  let dl = build_draw_list(view, layout, ui_ops=ops)
+  assert_true(dl.sprites.length() >= 1)
+  assert_eq(dl.sprites[0].resource, ui_button)
+  assert_eq(dl.sprites[0].x, 10.0)
+  assert_eq(dl.sprites[0].y, 20.0)
+  // "Start" → 5 glyphs
+  assert_eq(dl.glyphs.length(), 5)
+}
+
+///|
+test "canvas metrics default_fhd" {
+  let layout = UiLayout::default_fhd()
+  assert_eq(layout.canvas_w, 1920.0)
+  assert_eq(layout.canvas_h, 1080.0)
+  assert_eq(layout.font_size, 32.0)
+  assert_true(layout.default_char_advance > 0.0)
+}
+
+///|
+test "typewriter only lays out visible chars via ui ops" {
   let st = @runtime.Stage::new()
   st.begin_text()
   st.type_more("ABCDEFGH")
@@ -88,18 +203,21 @@ test "typewriter only lays out visible chars" {
   )
   let atlas = GlyphAtlas::new()
   let layout = UiLayout::default_fhd()
+  // Only the visible prefix is placed into the draw op (HUD responsibility).
+  let ops = dialogue_ops(layout, None, "ABC")
   let dl = build_draw_list_with_atlas(
     view,
     layout,
     atlas,
     measure=fixed_width_measure(10.0),
+    ui_ops=ops,
   )
-  // Only "ABC" → 3 glyphs (no speaker)
+  // Only "ABC" → 3 glyphs (no speaker) + dialogue panel sprite
   assert_eq(dl.glyphs.length(), 3)
 }
 
 ///|
-test "choices emit rows and glyphs" {
+test "choices emit rows and glyphs from ui ops" {
   let st = @runtime.Stage::new()
   st.set_choices(["Yes", "No"])
   let view = @runtime.StageView::from_stage(
@@ -107,7 +225,35 @@ test "choices emit rows and glyphs" {
     wait=@runtime.WaitKind::Choose,
     auto=false,
   )
-  let dl = build_draw_list(view, UiLayout::default_fhd())
+  let layout = UiLayout::default_fhd()
+  let ops : Array[@runtime.UiDrawOp] = []
+  ops.push({
+    kind: 0,
+    resource: ui_choice_row,
+    x: 100.0,
+    y: 400.0,
+    w: 500.0,
+    h: 40.0,
+    opacity: 1.0,
+    z: 1100,
+    text: Some("Yes"),
+    font_size: 30.0,
+    focused: true,
+  })
+  ops.push({
+    kind: 0,
+    resource: ui_choice_row,
+    x: 100.0,
+    y: 448.0,
+    w: 500.0,
+    h: 40.0,
+    opacity: 0.65,
+    z: 1100,
+    text: Some("No"),
+    font_size: 30.0,
+    focused: false,
+  })
+  let dl = build_draw_list(view, layout, ui_ops=ops)
   let mut rows = 0
   for s in dl.sprites {
     if s.resource == ui_choice_row {
@@ -227,39 +373,41 @@ test "glyph atlas oversized cell is zero placeholder" {
 }
 
 ///|
-fn two_button_def() -> @script.ScreenDef {
-  {
-    name: "test_menu",
-    root: @script.SNode::VBox(
-      x=None,
-      y=None,
+test "paint_modal ops emit buttons and glyphs" {
+  let app = @runtime.UiApp::new()
+  app.register_modal(
+    "test_menu",
+    @runtime.UiNode::VBox(
+      x=Some(100.0),
+      y=Some(200.0),
       children=[
-        @script.SNode::Button(
+        @runtime.UiNode::Button(
           label="One",
-          action=@script.ScreenAction::Noop,
+          action_id=0,
+          visible=@runtime.VisiblePred::Always,
         ),
-        @script.SNode::Button(
+        @runtime.UiNode::Button(
           label="Two",
-          action=@script.ScreenAction::Noop,
+          action_id=1,
+          visible=@runtime.VisiblePred::Always,
         ),
       ],
     ),
-  }
-}
-
-///|
-test "screen with two buttons emits quads and glyphs" {
+  )
+  let rt = @runtime.UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("test_menu")
+  let ops = rt.paint_modal(
+    canvas_w=1920.0,
+    canvas_h=1080.0,
+    bind=@runtime.UiBindCtx::empty(),
+  )
   let st = @runtime.Stage::new()
   let view = @runtime.StageView::from_stage(
     st,
     wait=@runtime.WaitKind::Halted,
     auto=false,
   )
-  let defs : Map[String, @script.ScreenDef] = { "test_menu": two_button_def() }
-  let ss = @runtime.ScreenState::new(defs)
-  ss.show("test_menu")
-  let layout = UiLayout::default_fhd()
-  let dl = build_draw_list(view, layout, screens=ss)
+  let dl = build_draw_list(view, UiLayout::default_fhd(), ui_ops=ops)
   let mut buttons = 0
   let mut focus_buttons = 0
   for s in dl.sprites {
@@ -277,7 +425,7 @@ test "screen with two buttons emits quads and glyphs" {
 }
 
 ///|
-test "menu mode dims and skips dialogue" {
+test "menu mode paint_modal dims without dialogue from stage" {
   let st = @runtime.Stage::new()
   st.begin_text(speaker="Y")
   st.type_more("Hello hidden")
@@ -287,14 +435,27 @@ test "menu mode dims and skips dialogue" {
     wait=@runtime.WaitKind::Yield,
     auto=false,
   )
-  let defs : Map[String, @script.ScreenDef] = { "test_menu": two_button_def() }
-  let ss = @runtime.ScreenState::new(defs)
-  ss.mode = @runtime.UiMode::Playing
-  ss.stack = []
-  ss.show("test_menu")
-  assert_true(ss.mode is @runtime.UiMode::Menu)
+  let app = @runtime.UiApp::new()
+  app.register_modal(
+    "game_menu",
+    @runtime.UiNode::Button(
+      label="Back",
+      action_id=0,
+      visible=@runtime.VisiblePred::Always,
+    ),
+  )
+  let rt = @runtime.UiRuntime::from_app(app, save_slots=6)
+  rt.mode = @runtime.UiMode::Playing
+  rt.show_modal("game_menu")
+  assert_true(rt.mode is @runtime.UiMode::Menu)
+  let ops = rt.paint_modal(
+    canvas_w=1920.0,
+    canvas_h=1080.0,
+    bind=@runtime.UiBindCtx::empty(),
+  )
+  // Host paints modal ops only (no HUD dialogue while menu open).
   let layout = UiLayout::default_fhd()
-  let dl = build_draw_list(view, layout, screens=ss)
+  let dl = build_draw_list(view, layout, ui_ops=ops)
   let mut has_dim = false
   let mut has_dialogue = false
   for s in dl.sprites {
@@ -312,7 +473,7 @@ test "menu mode dims and skips dialogue" {
 }
 
 ///|
-test "title mode skips dialogue without dim" {
+test "title root modal has no dim" {
   let st = @runtime.Stage::new()
   st.begin_text()
   st.type_more("No title dialogue")
@@ -322,12 +483,35 @@ test "title mode skips dialogue without dim" {
     wait=@runtime.WaitKind::Yield,
     auto=false,
   )
-  let defs : Map[String, @script.ScreenDef] = { "test_menu": two_button_def() }
-  let ss = @runtime.ScreenState::new(defs)
-  // ScreenState::new starts Title; push title-like screen
-  ss.show("test_menu")
-  assert_true(ss.mode is @runtime.UiMode::Title)
-  let dl = build_draw_list(view, UiLayout::default_fhd(), screens=ss)
+  let app = @runtime.UiApp::new()
+  app.register_modal(
+    "title",
+    @runtime.UiNode::VBox(
+      x=Some(0.0),
+      y=Some(0.0),
+      children=[
+        @runtime.UiNode::Button(
+          label="One",
+          action_id=0,
+          visible=@runtime.VisiblePred::Always,
+        ),
+        @runtime.UiNode::Button(
+          label="Two",
+          action_id=1,
+          visible=@runtime.VisiblePred::Always,
+        ),
+      ],
+    ),
+  )
+  let rt = @runtime.UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("title")
+  assert_true(rt.mode is @runtime.UiMode::Title)
+  let ops = rt.paint_modal(
+    canvas_w=1920.0,
+    canvas_h=1080.0,
+    bind=@runtime.UiBindCtx::empty(),
+  )
+  let dl = build_draw_list(view, UiLayout::default_fhd(), ui_ops=ops)
   let mut has_dim = false
   let mut has_dialogue = false
   let mut buttons = 0
@@ -348,23 +532,41 @@ test "title mode skips dialogue without dim" {
 }
 
 ///|
-test "nested title modal dims" {
+test "nested title modal dims via paint_modal" {
   let st = @runtime.Stage::new()
   let view = @runtime.StageView::from_stage(
     st,
     wait=@runtime.WaitKind::Running,
     auto=false,
   )
-  let defs : Map[String, @script.ScreenDef] = {
-    "title_like": two_button_def(),
-    "nested": two_button_def(),
-  }
-  let ss = @runtime.ScreenState::new(defs)
-  ss.show("title_like")
-  ss.show("nested")
-  assert_true(ss.mode is @runtime.UiMode::Title)
-  assert_eq(ss.stack.length(), 2)
-  let dl = build_draw_list(view, UiLayout::default_fhd(), screens=ss)
+  let app = @runtime.UiApp::new()
+  app.register_modal(
+    "title_like",
+    @runtime.UiNode::Button(
+      label="One",
+      action_id=0,
+      visible=@runtime.VisiblePred::Always,
+    ),
+  )
+  app.register_modal(
+    "nested",
+    @runtime.UiNode::Button(
+      label="Two",
+      action_id=1,
+      visible=@runtime.VisiblePred::Always,
+    ),
+  )
+  let rt = @runtime.UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("title_like")
+  rt.show_modal("nested")
+  assert_true(rt.mode is @runtime.UiMode::Title)
+  assert_eq(rt.stack_depth(), 2)
+  let ops = rt.paint_modal(
+    canvas_w=1920.0,
+    canvas_h=1080.0,
+    bind=@runtime.UiBindCtx::empty(),
+  )
+  let dl = build_draw_list(view, UiLayout::default_fhd(), ui_ops=ops)
   let mut has_dim = false
   for s in dl.sprites {
     if s.resource == ui_menu_dim {
