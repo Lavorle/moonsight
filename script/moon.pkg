@@ -1,1 +1,4 @@
 // script package: MoonYuki compiler front/mid-end
+import {
+  "moonbitlang/core/string" @str,
+}
