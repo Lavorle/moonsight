@@ -296,6 +296,46 @@ test "hidden layers are skipped" {
 }
 
 ///|
+test "build_draw_list multiplies layer size by scale" {
+  // StageView layer scale=0.5 → sprite w,h == layout.canvas_* * 0.5
+  let st = @runtime.Stage::new()
+  st.show_layer(
+    id="hero",
+    layer=@runtime.LayerKind::Character,
+    resource="char_y",
+    z=10,
+    x=100.0,
+    y=50.0,
+  )
+  st.layers[0] = {
+    id: "hero",
+    kind: @runtime.LayerKind::Character,
+    resource: "char_y",
+    z: 10,
+    x: 100.0,
+    y: 50.0,
+    opacity: 1.0,
+    scale: 0.5,
+    visible: true,
+    tweens: [],
+    pending_hide: false,
+  }
+  let view = @runtime.StageView::from_stage(
+    st,
+    wait=@runtime.WaitKind::Halted,
+    auto=false,
+  )
+  let layout = UiLayout::default_fhd()
+  let dl = build_draw_list(view, layout)
+  assert_eq(dl.sprites.length(), 1)
+  assert_eq(dl.sprites[0].resource, "char_y")
+  assert_eq(dl.sprites[0].x, 100.0)
+  assert_eq(dl.sprites[0].y, 50.0)
+  assert_eq(dl.sprites[0].w, layout.canvas_w * 0.5)
+  assert_eq(dl.sprites[0].h, layout.canvas_h * 0.5)
+}
+
+///|
 test "glyph atlas queues missing and reuses entries" {
   let atlas = GlyphAtlas::new(width=64, height=64)
   let a1 = atlas.get_or_queue('A', 16)

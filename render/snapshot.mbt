@@ -25,7 +25,7 @@ pub let ui_button_focus : String = "ui.button_focus"
 ///|
 /// Convert a read-only stage snapshot into a GPU-agnostic draw list.
 ///
-/// - Visible layers → `SpriteDraw` (full-canvas size Phase 1).
+/// - Visible layers → `SpriteDraw` (full-canvas size × layer.scale, origin top-left).
 /// - Optional `ui_ops` → sprites + glyph expansion from `UiDrawOp` (modal/HUD).
 /// - Dialogue / menus are **not** derived from `StageView.text` / choices —
 ///   only from `ui_ops` produced by `UiRuntime.paint_*`.
@@ -58,16 +58,20 @@ pub fn build_draw_list_with_atlas(
   let glyphs : Array[GlyphDraw] = []
 
   // Layers (already sorted by z in StageView).
+  // Size is full-canvas * scale; (x,y) is top-left origin (not re-centered).
   for layer in view.layers {
     if !layer.visible {
       continue
     }
+    // Clamp scale >= 0 so inverted/negative scales do not flip quads.
+    let scale_d = if layer.scale < 0.0 { 0.0 } else { layer.scale }
+    let sc = Float::from_double(scale_d)
     sprites.push({
       resource: layer.resource,
       x: Float::from_double(layer.x),
       y: Float::from_double(layer.y),
-      w: layout.canvas_w,
-      h: layout.canvas_h,
+      w: layout.canvas_w * sc,
+      h: layout.canvas_h * sc,
       opacity: Float::from_double(layer.opacity),
       z: layer.z,
     })
