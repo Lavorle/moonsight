@@ -1,9 +1,13 @@
 import {
   "moonsight/moonsight/script",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
 }
 
-supported_targets = "native+wasm-gc"
+supported_targets = "native"
 
 options(
   "is-main": true,
+  link: { "native": { "cc": "gcc" } },
 )

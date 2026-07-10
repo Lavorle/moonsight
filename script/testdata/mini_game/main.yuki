@@ -1,0 +1,7 @@
+- scene "entrypoint"
+@flow.jump "intro"
+
+- scene "intro"
+@layer.show "bg" "bg_room"
+yuki:Hello from moonsightc.
+@flow.yield
