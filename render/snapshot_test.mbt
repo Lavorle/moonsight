@@ -136,6 +136,8 @@ test "hidden layers are skipped" {
     y: 0.0,
     opacity: 1.0,
     visible: false,
+    tweens: [],
+    pending_hide: false,
   }
   let view = @runtime.StageView::from_stage(
     st,

@@ -146,3 +146,60 @@ test "Intent variants are constructible" {
   assert_eq(intents.length(), 6)
   assert_true(intents[2] == @runtime.Intent::Select(0))
 }
+
+///|
+test "tick_layer_tweens eases opacity linearly" {
+  let st = @runtime.Stage::new()
+  st.show_layer(
+    id="y",
+    layer=@runtime.LayerKind::Character,
+    resource="char_y",
+    z=10,
+    opacity=0.0,
+  )
+  st.start_layer_tween(id="y", prop=@runtime.TweenProp::Opacity, to=1.0, duration=1.0)
+  st.tick_layer_tweens(0.25)
+  assert_eq(st.layers[0].opacity, 0.25)
+  st.tick_layer_tweens(0.75)
+  assert_eq(st.layers[0].opacity, 1.0)
+  assert_eq(st.layers[0].tweens.length(), 0)
+}
+
+///|
+test "snapshot_layers sorts by kind then z" {
+  let st = @runtime.Stage::new()
+  st.show_layer(id="c", layer=@runtime.LayerKind::Character, resource="c", z=0)
+  st.show_layer(id="b", layer=@runtime.LayerKind::Background, resource="b", z=5)
+  st.show_layer(id="e", layer=@runtime.LayerKind::Effect, resource="e", z=0)
+  let snap = st.snapshot_layers()
+  assert_eq(snap[0].id, "b")
+  assert_eq(snap[1].id, "c")
+  assert_eq(snap[2].id, "e")
+}
+
+///|
+test "pending_hide removes layer after opacity tween" {
+  let st = @runtime.Stage::new()
+  st.show_layer(id="y", layer=@runtime.LayerKind::Character, resource="c", z=1, opacity=1.0)
+  st.begin_hide_layer(id="y", duration=0.5)
+  st.tick_layer_tweens(0.5)
+  assert_eq(st.layers.length(), 0)
+}
+
+///|
+test "split_host_args separates positional and #:named pairs" {
+  let args : Array[@runtime.Value] = [
+    @runtime.Value::Str("id"),
+    @runtime.Value::Str("#:z"),
+    @runtime.Value::Int(3),
+    @runtime.Value::Str("res"),
+    @runtime.Value::Str("#:opacity"),
+    @runtime.Value::Float(0.5),
+  ]
+  let (pos, named) = @runtime.split_host_args(args)
+  assert_eq(pos.length(), 2)
+  assert_true(pos[0] == @runtime.Value::Str("id"))
+  assert_true(pos[1] == @runtime.Value::Str("res"))
+  assert_true(named.get("z") is Some(@runtime.Value::Int(3)))
+  assert_true(named.get("opacity") is Some(@runtime.Value::Float(0.5)))
+}

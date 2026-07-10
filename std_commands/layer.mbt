@@ -95,6 +95,8 @@ pub fn cmd_layer_move(
             y,
             opacity: cur.opacity,
             visible: cur.visible,
+            tweens: cur.tweens,
+            pending_hide: cur.pending_hide,
           }
           break
         }

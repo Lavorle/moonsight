@@ -1,9 +1,40 @@
 ///|
-/// Resolved host call: name plus runtime values (named arg labels already dropped).
+/// Resolved host call: name plus flattened runtime values.
+///
+/// Named args are encoded as `Str("#:name")` followed by the value; use
+/// `split_host_args` to separate positional and named maps.
 pub(all) struct HostCall {
   name : String
   args : Array[Value]
 } derive(Debug, Eq)
+
+///|
+/// Split flattened host args: positional values + named map from `#:key` markers.
+pub fn split_host_args(
+  args : Array[Value],
+) -> (Array[Value], Map[String, Value]) {
+  let pos : Array[Value] = []
+  let named : Map[String, Value] = {}
+  let mut i = 0
+  while i < args.length() {
+    match args[i] {
+      Str(s) =>
+        if s.has_prefix("#:") && i + 1 < args.length() {
+          let key = s[2:].to_owned()
+          named[key] = args[i + 1]
+          i = i + 2
+        } else {
+          pos.push(args[i])
+          i = i + 1
+        }
+      _ => {
+        pos.push(args[i])
+        i = i + 1
+      }
+    }
+  }
+  (pos, named)
+}
 
 ///|
 /// Result of a host call.
@@ -232,6 +263,8 @@ fn builtin_layer_move(stage : Stage, args : Array[Value]) -> HostResult {
             y,
             opacity: cur.opacity,
             visible: cur.visible,
+            tweens: cur.tweens,
+            pending_hide: cur.pending_hide,
           }
           break
         }
