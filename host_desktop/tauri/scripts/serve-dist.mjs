@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /**
  * Static file server for dist/demo during `tauri dev`.
- * No second frontend build — moonsightc already emits the web host.
+ *
+ * No React/Svelte toolchain inside Tauri — moonsightc packages the host shell
+ * into dist/demo (prefers apps/host-web/dist Svelte build, else host_web/js_glue).
+ * Paths: scripts/ → repo root is ../../../dist/demo (same as tauri.conf frontendDist).
  */
 import http from "node:http";
 import fs from "node:fs";
@@ -9,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/** Repo-root dist/demo (from host_desktop/tauri/scripts/). */
 const ROOT = path.resolve(__dirname, "../../../dist/demo");
 const PORT = Number(process.env.MOONSIGHT_DEV_PORT || 4173);
 const HOST = process.env.MOONSIGHT_DEV_HOST || "127.0.0.1";
@@ -25,18 +29,25 @@ const TYPES = {
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
   ".svg": "image/svg+xml",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
   ".ogg": "audio/ogg",
   ".mp3": "audio/mpeg",
   ".yuki": "text/plain; charset=utf-8",
   ".msb": "application/octet-stream",
+  ".wgsl": "text/plain; charset=utf-8",
   ".map": "application/json; charset=utf-8",
 };
 
 if (!fs.existsSync(ROOT)) {
   console.error(
     `[serve-dist] missing ${ROOT}\n` +
-      `Build first:\n` +
+      `Build first (from repo root):\n` +
       `  export CC=gcc\n` +
+      `  # optional Svelte shell (moonsightc prefers apps/host-web/dist):\n` +
+      `  cd apps/host-web && npm i && npm run build && cd ../..\n` +
+      `  moon build --target wasm-gc --release host_web\n` +
       `  moon run cmd/moonsightc --target native -- build demo/game -o dist/demo`,
   );
   process.exit(1);

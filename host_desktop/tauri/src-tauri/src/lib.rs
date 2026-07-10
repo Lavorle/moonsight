@@ -1,8 +1,9 @@
 //! MoonSight desktop shell.
 //!
-//! Phase 1: thin webview host for the same static build as the browser
-//! (`dist/demo` from moonsightc + host_web). No native render backend.
-//! Saves stay in webview `localStorage` (see host_web/js_glue/boot.js).
+//! Thin webview host for the same static package as the browser: `dist/demo`
+//! from `moonsightc build` (host shell = `apps/host-web/dist` Svelte when
+//! present, else `host_web/js_glue`). No React/Svelte inside Tauri and no
+//! native render backend. Saves stay in webview `localStorage`.
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
