@@ -176,10 +176,16 @@ fn Engine::write_slot(self : Engine, i : Int) -> Unit {
 }
 
 ///|
+/// True when the top modal is `"confirm"`.
+fn Engine::confirm_is_top(self : Engine) -> Bool {
+  self.ui.stack_depth() > 0 &&
+    self.ui.stack[self.ui.stack_depth() - 1].name == "confirm"
+}
+
+///|
 /// Pop confirm modal when it is on top of the stack.
 fn Engine::pop_confirm_if_top(self : Engine) -> Unit {
-  if self.ui.stack_depth() > 0 &&
-    self.ui.stack[self.ui.stack_depth() - 1].name == "confirm" {
+  if self.confirm_is_top() {
     self.ui.return_modal()
   }
 }
@@ -195,6 +201,10 @@ pub impl Capabilities for Engine with fn save_slot(self, i) {
   // Occupied → confirm; empty → write immediately.
   if self.slot_blobs[i] is Some(_) {
     self.pending_confirm = Some(OverwriteSave(i))
+    // Idempotent: already showing confirm → only refresh pending kind.
+    if self.confirm_is_top() {
+      return
+    }
     self.ui.show_modal("confirm")
     return
   }
@@ -223,6 +233,7 @@ pub impl Capabilities for Engine with fn load_slot(self, i) {
 pub fn Engine::clear_screens_to_playing(self : Engine) -> Unit {
   self.ui.stack = []
   self.ui.mode = Playing
+  self.pending_confirm = None
 }
 
 ///|
@@ -312,6 +323,10 @@ pub impl Capabilities for Engine with fn confirm_no(self) {
 ///|
 pub impl Capabilities for Engine with fn request_quit_to_title(self) {
   self.pending_confirm = Some(QuitToTitle)
+  // Idempotent: already showing confirm → only refresh pending kind.
+  if self.confirm_is_top() {
+    return
+  }
   self.ui.show_modal("confirm")
 }
 
@@ -580,8 +595,13 @@ fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
   match intent {
     OpenMenu =>
       // Esc while modal: pop one level. Root Title only ignores Esc.
+      // Confirm: same as confirm_no (clear pending + pop) so Esc cannot leave
+      // a stale pending_confirm after the dialog is gone.
       if self.ui.mode is Title && self.ui.stack_depth() <= 1 {
         ()
+      } else if self.confirm_is_top() {
+        self.pending_confirm = None
+        self.ui.return_modal()
       } else if self.ui.stack_depth() > 0 {
         self.ui.return_modal()
       }

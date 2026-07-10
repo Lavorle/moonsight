@@ -847,6 +847,31 @@ test "confirm_no cancels" {
 }
 
 ///|
+/// Esc on overwrite confirm must clear pending_confirm (same as confirm_no).
+test "OpenMenu on confirm clears pending without overwrite" {
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let ir = @script.compile_to_ir(src, file="confirm_esc.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.stage.set_var("marker", Int(1))
+  let caps : &@runtime.Capabilities = eng
+  caps.save_slot(0)
+  eng.stage.set_var("marker", Int(2))
+  caps.save_slot(0)
+  assert_true(eng.pending_confirm == Some(OverwriteSave(0)))
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "confirm")
+  eng.tick(OpenMenu)
+  assert_true(eng.pending_confirm is None)
+  assert_eq(eng.ui.stack_depth(), 0)
+  guard eng.get_slot_blob(0) is Some(blob) else { fail("kept") }
+  let g = @runtime.parse_save_game(blob)
+  assert_true(g.vars.get("marker") == Some(Int(1)))
+}
+
+///|
 test "request_quit_to_title requires confirm_yes" {
   let app = @runtime.UiApp::new()
   app.register_modal(
