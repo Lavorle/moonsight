@@ -83,7 +83,7 @@ pause narrative Advance. Full semantics: [`docs/play-input.md`](./docs/play-inpu
 | `render` | Draw list pack, text layout, kind+z sort, `UiDrawOp` paint |
 | `audio` | Logical BGM/SE mixer (volume / fade) |
 | `std_commands` | Standard `@` host commands (layers, ui.show/hide, audio) |
-| `std_ui` | Default HUD + title / game_menu / save_load / settings |
+| `std_ui` | Default HUD + title / game_menu / save_load / settings / confirm / backlog |
 | `host_web` | Browser wasm + `js_glue` (WebGPU, prefs, multi-slot) |
 | `host_desktop` | Tauri 2 shell |
 | `cmd/moonsightc` | `check` / `build` CLI (literal resource check, optional ui_package link) |

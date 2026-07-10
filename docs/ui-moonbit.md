@@ -20,13 +20,13 @@ Cold start → Title modal (`title`)
   Playing → base HUD (dialogue + choices)
   Esc  → OpenMenu → push `game_menu` (modal stack)
   stack empty → Playing again (HUD only)
-  Title action → quit_to_title
+  game_menu Title → request_quit_to_title → confirm → quit_to_title
 ```
 
 | Surface | Role |
 |---------|------|
 | **HUD** (`set_hud`) | Base chrome while Playing: dialogue box, nameplate, body text, choice list. Not a modal. |
-| **Modal stack** (`register_modal`) | Title, game menu, save/load, settings, and any custom named modals. Stack top receives input. |
+| **Modal stack** (`register_modal`) | Title, game menu, save/load, settings, confirm, backlog, and any custom named modals. Stack top receives input. |
 
 | `UiMode` | Meaning |
 |----------|---------|
@@ -47,7 +47,7 @@ Hosts build one `UiApp`, install standard UI, then optional project overrides:
 
 ```mbt
 let app = @runtime.UiApp::new()
-@std_ui.register(app)       // default HUD + four modals
+@std_ui.register(app)       // default HUD + six modals
 @project_ui.register(app)   // optional game package (after std)
 // Engine::from_ir(..., app~)
 ```
@@ -55,13 +55,16 @@ let app = @runtime.UiApp::new()
 ### `std_ui.register` / project `register`
 
 ```mbt
-/// Install default HUD and title / game_menu / save_load / settings.
+/// Install default HUD and title / game_menu / save_load / settings /
+/// confirm / backlog.
 pub fn register(app : @runtime.UiApp) -> Unit {
   app.set_hud(build_hud(app))
   app.register_modal("title", build_title(app))
   app.register_modal("game_menu", build_game_menu(app))
   app.register_modal("save_load", build_save_load(app))
   app.register_modal("settings", build_settings(app))
+  app.register_modal("confirm", build_confirm(app))
+  app.register_modal("backlog", build_backlog(app))
 }
 ```
 
@@ -184,6 +187,7 @@ Play-input / backlog / confirm: [`play-input.md`](./play-input.md).
 | `Pref(key)` | Live prefs display (`text_speed`, `auto_mode`, volumes, …) |
 | `SlotLabel(i)` | Slot label (empty vs occupied styling) |
 | `Var(name)` | Stringified narrative var (missing → `""`) |
+| `BacklogLine(i)` | Preformatted backlog line; `i` = 0..11 (oldest of last 12) |
 
 ```mbt
 @runtime.UiNode::Text(

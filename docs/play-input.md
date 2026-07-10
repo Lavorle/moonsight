@@ -85,7 +85,8 @@ Dangerous UI actions go through modal `"confirm"` and `ConfirmKind`:
 | `OverwriteSave(slot)` | Save into an occupied slot | Writes slot | Cancels |
 | `QuitToTitle` | Game menu → Title (`request_quit_to_title`) | `quit_to_title` | Cancels |
 
-- Message text is bound by `std_ui` from kind (not free-form host strings).
+- Message text is a fixed `Literal("Are you sure?")` in `std_ui` (not kind-bound;
+  `ConfirmKind` only selects the Yes action).
 - **Default focus is No** so Enter alone does not confirm destructive actions.
 - `confirm_yes` / `confirm_no` Capabilities close the confirm flow.
 
@@ -98,7 +99,7 @@ Dangerous UI actions go through modal `"confirm"` and `ConfirmKind`:
 | Persist | **Session only** — not in save v3; cleared on `start_game`, `quit_to_title`, load |
 | Open | **H** / `OpenBacklog`, or game menu **History** → `"backlog"` |
 | Close | Esc / Close → `return_modal` |
-| UI | Read-only list (last ~12 lines + older count); no free scroll (Q3) |
+| UI | Read-only list (last **12** lines via `BacklogLine`); no free scroll (Q3) |
 | Non-recorded | Choice labels, system modal copy |
 
 ## Related

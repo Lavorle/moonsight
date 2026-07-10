@@ -140,7 +140,7 @@ Keep `Mixer::new` / `with_backend` initializing prefs to 1.0.
 export CC=gcc && moon test -p audio
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add audio/mixer.mbt audio/mixer_test.mbt
