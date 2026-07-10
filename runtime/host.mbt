@@ -303,10 +303,17 @@ fn builtin_layer_show(stage : Stage, args : Array[Value]) -> HostResult {
   }
   match find_layer_index(stage, id) {
     Some(i) => {
+      // Cancel pending hide + its opacity→0 tween so re-show cannot vanish the layer.
       let cur = stage.layers[i]
       let new_z = match z_opt {
         Some(n) => n
         None => cur.z
+      }
+      let kept_tweens : Array[LayerTween] = []
+      for t in cur.tweens {
+        if t.prop != Opacity {
+          kept_tweens.push(t)
+        }
       }
       stage.layers[i] = {
         id: cur.id,
@@ -317,7 +324,7 @@ fn builtin_layer_show(stage : Stage, args : Array[Value]) -> HostResult {
         y: cur.y,
         opacity: cur.opacity,
         visible: true,
-        tweens: cur.tweens,
+        tweens: kept_tweens,
         pending_hide: false,
       }
       match x_opt {

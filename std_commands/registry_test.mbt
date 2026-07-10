@@ -103,6 +103,45 @@ test "layer.hide and layer.move" {
 }
 
 ///|
+/// Re-show during an in-flight hide must cancel pending_hide and the opacity→0 tween.
+test "layer.show cancels pending hide tween" {
+  let stage = @runtime.Stage::new()
+  let reg = @std_commands.standard_registry()
+  ignore(
+    reg.call("layer.show", stage, [
+      Str("y"),
+      Str("char_y"),
+      Str("#:opacity"),
+      Float(1.0),
+    ]),
+  )
+  assert_eq(stage.layers.length(), 1)
+  assert_eq(stage.layers[0].opacity, 1.0)
+  ignore(
+    reg.call("layer.hide", stage, [
+      Str("y"),
+      Str("#:duration"),
+      Float(0.5),
+    ]),
+  )
+  assert_true(stage.layers[0].pending_hide)
+  // Partial fade, then re-show before hide completes.
+  stage.tick_layer_tweens(0.25)
+  assert_eq(stage.layers.length(), 1)
+  assert_true(stage.layers[0].opacity < 1.0)
+  ignore(reg.call("layer.show", stage, [Str("y"), Str("char_y")]))
+  assert_eq(stage.layers.length(), 1)
+  assert_true(!stage.layers[0].pending_hide)
+  let opacity_after_reshow = stage.layers[0].opacity
+  // Remaining hide time must not remove the layer or force opacity to 0.
+  stage.tick_layer_tweens(0.5)
+  assert_eq(stage.layers.length(), 1)
+  assert_true(!stage.layers[0].pending_hide)
+  assert_eq(stage.layers[0].opacity, opacity_after_reshow)
+  assert_true(stage.layers[0].opacity > 0.0)
+}
+
+///|
 test "text begin type end leaves typewriter incomplete" {
   let stage = @runtime.Stage::new()
   let reg = @std_commands.standard_registry()

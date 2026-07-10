@@ -187,6 +187,57 @@ test "pending_hide removes layer after opacity tween" {
 }
 
 ///|
+/// Host re-show during hide cancels pending_hide and opacity→0 tween.
+test "builtin layer.show cancels pending hide tween" {
+  let st = @runtime.Stage::new()
+  assert_true(
+    @runtime.dispatch_builtin(
+      "layer.show",
+      st,
+      [
+        @runtime.Value::Str("y"),
+        @runtime.Value::Str("c"),
+        @runtime.Value::Str("#:opacity"),
+        @runtime.Value::Float(1.0),
+      ],
+    ) ==
+    @runtime.HostResult::Ok,
+  )
+  assert_eq(st.layers.length(), 1)
+  assert_true(
+    @runtime.dispatch_builtin(
+      "layer.hide",
+      st,
+      [
+        @runtime.Value::Str("y"),
+        @runtime.Value::Str("#:duration"),
+        @runtime.Value::Float(0.5),
+      ],
+    ) ==
+    @runtime.HostResult::Ok,
+  )
+  assert_true(st.layers[0].pending_hide)
+  st.tick_layer_tweens(0.25)
+  assert_eq(st.layers.length(), 1)
+  assert_true(
+    @runtime.dispatch_builtin(
+      "layer.show",
+      st,
+      [@runtime.Value::Str("y"), @runtime.Value::Str("c")],
+    ) ==
+    @runtime.HostResult::Ok,
+  )
+  assert_eq(st.layers.length(), 1)
+  assert_true(!st.layers[0].pending_hide)
+  let opacity_after_reshow = st.layers[0].opacity
+  st.tick_layer_tweens(0.5)
+  assert_eq(st.layers.length(), 1)
+  assert_true(!st.layers[0].pending_hide)
+  assert_eq(st.layers[0].opacity, opacity_after_reshow)
+  assert_true(st.layers[0].opacity > 0.0)
+}
+
+///|
 test "split_host_args separates positional and #:named pairs" {
   let args : Array[@runtime.Value] = [
     @runtime.Value::Str("id"),

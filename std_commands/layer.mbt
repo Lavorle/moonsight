@@ -158,10 +158,17 @@ pub fn cmd_layer_show(
   match find_layer_index(stage, id) {
     Some(i) => {
       // Existing layer: z/kind/resource immediate; specified x/y/opacity tween or snap.
+      // Cancel pending hide + its opacity→0 tween so re-show cannot vanish the layer.
       let cur = stage.layers[i]
       let new_z = match z_opt {
         Some(n) => n
         None => cur.z
+      }
+      let kept_tweens : Array[@runtime.LayerTween] = []
+      for t in cur.tweens {
+        if t.prop != Opacity {
+          kept_tweens.push(t)
+        }
       }
       stage.layers[i] = {
         id: cur.id,
@@ -172,7 +179,7 @@ pub fn cmd_layer_show(
         y: cur.y,
         opacity: cur.opacity,
         visible: true,
-        tweens: cur.tweens,
+        tweens: kept_tweens,
         pending_hide: false,
       }
       match x_opt {
