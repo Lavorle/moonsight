@@ -212,20 +212,27 @@ function audioLoadFailed(id, detail) {
   throw new Error(msg);
 }
 
-/** Autoplay policy (and similar) — not a missing/broken asset load. */
-function isAutoplayBlock(e) {
-  return !!(e && e.name === "NotAllowedError");
+/**
+ * Autoplay policy and interrupted play() — not a missing/broken asset load.
+ * NotAllowedError: browser blocked autoplay. AbortError: pause/replace/stop
+ * aborted a pending play() promise.
+ */
+function isBenignPlayReject(e) {
+  return !!(e && (e.name === "NotAllowedError" || e.name === "AbortError"));
 }
 
 /**
  * Arm HTMLAudioElement error → hard-fail (async path after makeAudio).
  * @param {HTMLAudioElement} el
  * @param {string} id
+ * @param {() => boolean} [isActive] if set, only hard-fail while it returns true
+ *   (so intentional stop/replace that clears src does not false-trigger)
  */
-function armAudioLoadHardFail(el, id) {
+function armAudioLoadHardFail(el, id, isActive) {
   el.addEventListener(
     "error",
     () => {
+      if (typeof isActive === "function" && !isActive()) return;
       try {
         const code = el.error && el.error.code;
         audioLoadFailed(
@@ -268,21 +275,26 @@ function makeAudio(urlOrAlt, opts = {}) {
 
 function stopBgm() {
   if (bgmEl) {
+    const el = bgmEl;
+    // Drop ownership before teardown so armed error handlers ignore
+    // the error event from removeAttribute("src") + load().
+    bgmEl = null;
+    bgmId = null;
     try {
-      bgmEl.pause();
-      bgmEl.removeAttribute("src");
-      bgmEl.load();
+      el.pause();
+      el.removeAttribute("src");
+      el.load();
     } catch (_) {
       /* ignore */
     }
-    bgmEl = null;
+  } else {
+    bgmId = null;
   }
-  bgmId = null;
 }
 
 /**
  * Play BGM by logical id. Missing URL or media load failure hard-fails
- * (see audioLoadFailed); autoplay policy blocks only warn.
+ * (see audioLoadFailed); autoplay / AbortError only warn.
  */
 function playBgm(id, looped, volume) {
   const url = resolveAudioUrl(id);
@@ -298,16 +310,17 @@ function playBgm(id, looped, volume) {
   stopBgm();
   ensureAudioUnlocked();
   const el = makeAudio(url, { loop: looped, volume: vol });
-  armAudioLoadHardFail(el, id);
   bgmEl = el;
   bgmId = id;
+  armAudioLoadHardFail(el, id, () => bgmEl === el);
   const p = el.play();
   if (p && typeof p.catch === "function") {
     p.catch((e) => {
-      if (isAutoplayBlock(e)) {
+      if (isBenignPlayReject(e)) {
         console.warn("bgm play blocked/failed", id, e);
         return;
       }
+      if (bgmEl !== el) return;
       try {
         audioLoadFailed(id, e);
       } catch (_) {
@@ -319,7 +332,7 @@ function playBgm(id, looped, volume) {
 
 /**
  * Play SE by logical id. Missing URL or media load failure hard-fails
- * (see audioLoadFailed); autoplay policy blocks only warn.
+ * (see audioLoadFailed); autoplay / AbortError only warn.
  */
 function playSe(id, volume) {
   const url = resolveAudioUrl(id);
@@ -332,7 +345,7 @@ function playSe(id, volume) {
   const p = el.play();
   if (p && typeof p.catch === "function") {
     p.catch((e) => {
-      if (isAutoplayBlock(e)) {
+      if (isBenignPlayReject(e)) {
         console.warn("se play blocked/failed", id, e);
         return;
       }
