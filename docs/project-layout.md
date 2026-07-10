@@ -1,4 +1,4 @@
-# Project layout (Phase 1–4)
+# Project layout (Phases 1–4 + Q1/Q2)
 
 MoonSight is a MoonBit module (`moonsight/moonsight`) with packages at the
 repository root (not under a nested `packages/` folder). Preferred build target
@@ -17,28 +17,42 @@ moonsight/
   runtime/                 # VM, Director, Stage, intents, save, UiApp/UiRuntime, prefs
   render/                  # DrawList, pack, text layout, UiDrawOp paint, glyph atlas
   audio/                   # Logical mixer + event queue (volume/fade)
-  std_commands/            # Standard host command table (incl. ui.show/hide)
-  std_ui/                  # Default HUD + title / game_menu / save_load / settings
+  std_commands/            # Standard host command table (incl. ui.show/hide, dissolve)
+  std_ui/                  # Default HUD + title / game_menu / save_load / settings / backlog / confirm
   apps/
-    host-web/              # Svelte+TS host shell (Vite); moonsightc prefers dist/
+    host-web/              # Svelte+TS host shell (Vite 6 + Svelte 5); moonsightc prefers dist/
+      src/
+        adapters/          # webgpu_bridge, slug, wasm boot (ported from js_glue)
+        lib/               # gameSession + host glue (TS)
+        App.svelte         # shell UI chrome
+      public/              # wasm, fonts, demo placeholders for vite dev
+      dist/                # static production shell (index.html + assets/)
+    docs-site/             # Fumadocs (Next.js) bilingual author docs (zh default)
+      content/
+        zh/                # Chinese MDX (getting-started, moon-yuki, play-input, …)
+        en/                # English MDX (same page set)
+      app/                 # Next app router ([lang], docs, search, llms)
   host_web/                # Wasm host entry + js_glue fallback (WebGPU/audio/input/prefs)
     project_ui/            # Overlay stub; moonsightc may link project ui_package here
+    js_glue/               # Vanilla JS shell (fallback when apps/host-web/dist missing)
   host_desktop/            # Minimal Tauri 2 shell over dist/demo
   cmd/moonsightc/          # check / build CLI (native)
   demo/game/               # Sample project (authoring source + optional ui/)
   dist/                    # Build output (usually untracked)
-  docs/                    # Specs, plans, author docs
+  docs/                    # Specs, plans, author docs (repo SoT for unmigrated topics)
 ```
 
-| Package | Role |
-|---------|------|
+| Package / app | Role |
+|---------------|------|
 | `script` | Compile MoonYuki → IR/bytecode (narrative only; rejects `- screen`) |
-| `runtime` | IR VM, Director, Stage, UiApp/UiRuntime, prefs, save JSON |
-| `render` | CPU draw list + float pack for JS GPU (layers + `UiDrawOp`) |
+| `runtime` | IR VM, Director, Stage (scale + dissolve clock), UiApp/UiRuntime, prefs, save **v4** |
+| `render` | CPU draw list + float pack for JS GPU (layers + scale × size + `UiDrawOp`) |
 | `audio` | BGM/SE logical mixer (volume, fade) |
-| `std_commands` | `standard_registry()` host handlers |
-| `std_ui` | Default HUD + four system modals (MoonBit) |
+| `std_commands` | `standard_registry()` host handlers (`trans.dissolve`, `scale=`, …) |
+| `std_ui` | Default HUD + system modals including backlog / confirm (MoonBit) |
 | `host_web` | `init_demo` / `export_frame` / prefs exports; links `std_ui` + `project_ui` |
+| `apps/host-web` | Preferred browser shell (Svelte+TS static dist) |
+| `apps/docs-site` | Author-facing docs site (not linked into wasm) |
 | `cmd/moonsightc` | Project check & web dist builder; optional `ui_package` link |
 
 Dependency direction (high level):
@@ -181,7 +195,7 @@ cp _build/wasm-gc/release/build/host_web/host_web.wasm host_web/js_glue/
 
 ## Hosts
 
-### Browser (`host_web` / `apps/host-web`)
+### Browser (`apps/host-web` preferred, `host_web/js_glue` fallback)
 
 Serve `dist/demo` (or a host shell root after copy) over localhost. WebGPU
 requires a secure context. **WebGPU only** — no WebGL fallback.
@@ -190,9 +204,39 @@ Cold start path: load narrative (`game.msb` / entry) → hydrate slots/prefs →
 `boot_title()` → title **Start** → narrative entry. Init order:
 `UiApp::new` → `@std_ui.register` → `@project_ui.register` → `Engine::from_ir`.
 
+**Svelte shell** (`apps/host-web`):
+
+| Path | Role |
+|------|------|
+| `src/lib/gameSession.ts` | Boot loop, input → intents, Ctrl→`skip_held`, frame export |
+| `src/adapters/` | `webgpu_bridge`, Slug shaders/JS, wasm helpers |
+| `src/App.svelte` | Minimal chrome (hints for Esc / Ctrl / …) |
+| `dist/` | Vite production output copied by `moonsightc` when present |
+
+**Fallback shell** (`host_web/js_glue`): same wasm contract; used when
+`apps/host-web/dist/index.html` is missing.
+
 Input, prefs keys, and save keys are documented in
-[`host-commands.md`](./host-commands.md) and
+[`host-commands.md`](./host-commands.md),
+[`play-input.md`](./play-input.md), and
 [`ui-moonbit.md`](./ui-moonbit.md).
+
+### Docs site (`apps/docs-site`)
+
+Standalone Next.js / Fumadocs app (not part of `moonsightc build`):
+
+```bash
+cd apps/docs-site && npm install && npm run dev
+# default http://localhost:3000 → /zh
+```
+
+| Locale routes | Content |
+|---------------|---------|
+| `/zh/docs`, `/zh/docs/getting-started`, `/zh/docs/moon-yuki`, `/zh/docs/play-input` | `content/zh/*.mdx` |
+| `/en/docs`, `/en/docs/getting-started`, … | `content/en/*.mdx` |
+
+i18n: `parser: 'dir'`, default language **zh**. Search API and `llms*.txt`
+routes ship with the scaffold.
 
 ### Desktop (`host_desktop`)
 
@@ -228,38 +272,43 @@ Package tests cover lexer/parser/lower/bytecode, VM / director / stage / save /
 UI kernel, render pack, audio mixer, std_commands registry alignment,
 `std_ui` registration, and host_web blackbox where applicable.
 
-## Phase notes
+## Phase / quarter notes
 
-| Phase | Focus |
-|-------|--------|
+| Phase / Q | Focus |
+|-----------|--------|
 | **1** | Runtime kernel: compile, VM, layers, dialogue, choices, BGM/SE, fade, save, WebGPU host, CLI |
 | **2** | Layer kinds, property tweens, `layer.set`, real `flow.wait`, wall-clock fade, save v3, resource checks |
 | **3** | Screen DSL + runtime stack, std 4 screens, multi-slot + prefs, cold-start title, named negatives, audio hard-fail, BGM volume/fade, build cleanup |
 | **4** | MoonBit UI kernel (HUD + modal stack), `std_ui`, Capabilities, optional `ui_package`, remove Screen DSL / `screens.json` primary |
+| **Q1 / 0.5** | Session backlog (H), Ctrl hold skip, confirm overwrite/quit, prefs→mixer gains, settings Slider, play-input docs |
+| **Q2** | `trans.dissolve`, layer `scale` + save v4, longer demo, Svelte host default path, Fumadocs zh/en core pages |
 
 ## Documentation index
 
 | Doc | Content |
 |-----|---------|
-| [`moon-yuki-subset.md`](./moon-yuki-subset.md) | Grammar subset + examples |
+| [`apps/docs-site`](../apps/docs-site) | Bilingual site (Getting Started, MoonYuki, play-input) |
+| [`moon-yuki-subset.md`](./moon-yuki-subset.md) | Grammar subset + examples (repo SoT) |
 | [`ui-moonbit.md`](./ui-moonbit.md) | MoonBit UI authoring (HUD + modals) |
 | [`screen-language.md`](./screen-language.md) | **Obsolete** Phase 3 Screen DSL archive |
-| [`host-commands.md`](./host-commands.md) | Host table, intents, errors |
+| [`host-commands.md`](./host-commands.md) | Host table, intents, errors (dissolve/scale) |
+| [`play-input.md`](./play-input.md) | Intents, skip hold, wait gate, backlog/confirm |
 | [`draw-list-pack.md`](./draw-list-pack.md) | Packed frame format + MenuUp/Down |
 | [`project-layout.md`](./project-layout.md) | This file |
 | `superpowers/specs/…` | Design specs |
 | `superpowers/plans/…` | Implementation plans |
 
-## Explicit non-goals (through Phase 4)
+## Explicit non-goals (through Q2)
 
 Do not expect or document as shipped:
 
-- Visual editor, full i18n / achievements, Live2D, second native GPU backend
+- Visual editor, full product i18n (beyond docs-site locales), achievements, Live2D, second native GPU backend
 - Official YukimiScript bytecode interop, TOML project config
-- Backlog / history viewer
-- Confirm dialogs, slot screenshot thumbnails
-- DOM / HTML overlay menus; second wasm / dynamic UI load
-- Sliders, scroll views, general theme files, transform animation stack
+- Voice track; deep SE overhaul (SE status quo)
+- Slot screenshot thumbnails; backlog free-scroll / ScrollView; saving backlog into slots
+- DOM / HTML **game** menus (host chrome may be DOM; narrative UI is MoonBit/wasm)
+- Second wasm / dynamic UI load; general theme files; rotate/anchor; transform animation stack
 - Open host-string UI actions / general expression language on the tree
 - SE fade; OS user-directory saves (still webview `localStorage`)
 - Long-term Screen DSL lower compatibility (`- screen` is a hard error)
+- Deleting vanilla `host_web/js_glue` (kept as fallback)

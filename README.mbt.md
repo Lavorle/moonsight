@@ -1,9 +1,9 @@
 # MoonSight
 
 MoonBit + WebGPU visual novel engine (Phases 1–4 + Q1/0.5 playable core + Q2
-Engine presentation: runtime kernel, layer presentation, system UI, MoonBit UI
-kernel, backlog, hold-to-skip, confirm, prefs→mixer, `trans.dissolve`, layer
-`scale=`).
+multi-track: runtime kernel, layer presentation, system UI, MoonBit UI kernel,
+backlog, hold-to-skip, confirm, prefs→mixer, `trans.dissolve`, layer `scale=`,
+Svelte host shell, bilingual Fumadocs site).
 
 MoonYuki scripts compile to IR/bytecode, run on a VM + Stage/Director, and
 render through a packed draw list consumed by a JS WebGPU host. System menus and
@@ -168,28 +168,52 @@ mixer** gains (master/bgm/se); settings **Slider** (←/→); slot labels show
 `saved_at` when present; input/wait semantics in
 [`docs/play-input.md`](./docs/play-input.md).
 
-### Q2 (Engine presentation + multi-track)
+### Q2 (Engine presentation + multi-track) — delivered
 
-**Engine (in):** `@trans.dissolve duration` dual-phase full-screen veil
-(0→1→0 over wall-clock duration; non-blocking, pair with `@flow.wait`); layer
-`scale=` on `@layer.show` / `@layer.set` with linear `duration=` tween (origin
-top-left `(x,y)`; no rotate/anchor); save format **v4** (`scale` on layers;
-v3 loads default `scale=1.0`); longer demo beats using dissolve/scale; docs for
-dissolve/scale and presentation vs wait/skip in
-[`docs/host-commands.md`](./docs/host-commands.md) /
-[`docs/play-input.md`](./docs/play-input.md).
+**Engine:** `@trans.dissolve duration` dual-phase full-screen veil (0→1→0 over
+wall-clock duration; non-blocking, pair with `@flow.wait`); layer `scale=` on
+`@layer.show` / `@layer.set` with linear `duration=` tween (origin top-left
+`(x,y)`; no rotate/anchor); save format **v4** (`scale` on layers; v3 loads
+default `scale=1.0`); longer demo (`demo/game`) with dissolve/scale beats and
+extra garden/bench scenes; docs for dissolve/scale and presentation vs wait/skip
+in [`docs/host-commands.md`](./docs/host-commands.md) /
+[`docs/play-input.md`](./docs/play-input.md). Voice track and deep SE work were
+explicitly **not** in scope (SE status quo).
 
-**Host / Docs (WIP mid-track):** Svelte+TS host shell (`apps/host-web`) and
-Fumadocs site (`apps/docs-site`) are Q2 multi-track deliverables — not required
-for Engine dissolve/scale. `moonsightc build` prefers `apps/host-web/dist` when
-built; vanilla `host_web/js_glue` remains the fallback play path.
+**Host:** Vite + Svelte 5 + TypeScript shell at [`apps/host-web`](./apps/host-web)
+with WebGPU/Slug adapters under `src/adapters/`. `moonsightc build` **prefers**
+`apps/host-web/dist` when `index.html` is present; vanilla
+`host_web/js_glue` remains the fallback through Q4. Default playable path after
+`npm run build` in `apps/host-web` + `moonsightc build` is the Svelte shell.
 
-### Out of scope (through Q2 Engine non-goals)
+**Docs:** Fumadocs (Next.js) bilingual site at
+[`apps/docs-site`](./apps/docs-site) — Getting Started, MoonYuki subset, play
+input for **zh** and **en**. Routes:
+`/{lang}/docs/getting-started` (and sibling pages under `/{lang}/docs/…`).
+Default locale **zh**. Repo `docs/*.md` remain engine source of truth for
+unmigrated topics.
 
-Visual editor, i18n, achievements, Live2D / 3D, particle/postprocess stack,
-full timeline / animation queues, blocking presentation DSL, rotate/anchor,
-voice track, slot screenshots, backlog free-scroll / ScrollView, saving backlog
-into slots, rollback, DOM menus, second native GPU backend, second wasm /
-dynamic UI load, themes / transform animation stack, open host-string UI
-actions, official Yukimi bytecode compatibility, long-term Screen DSL lower
-compatibility.
+### Q2 acceptance checklist (hygiene)
+
+Automated gates (see also `.superpowers/sdd/task-13-report.md`): `moon check`,
+`moon test`, `apps/host-web` build, `apps/docs-site` build,
+`moon build --target wasm-gc --release host_web`,
+`moonsightc build demo/game -o dist/demo`.
+
+Manual / interactive play (Title → dialogue, dissolve/scale visibility, Ctrl
+skip vs `@flow.wait`, H backlog / Esc menu on Svelte host) requires a WebGPU
+browser on localhost. When WebGPU is unavailable in the agent environment,
+those items are recorded as **not verified in-session** with how to verify;
+static evidence (dist artifacts, unit tests, docs routes HTTP 200) is not a
+substitute for visual play.
+
+### Out of scope (through Q2 non-goals)
+
+Visual editor, full product i18n beyond docs-site locales, achievements,
+Live2D / 3D, particle/postprocess stack, full timeline / animation queues,
+blocking presentation DSL, rotate/anchor, voice track, slot screenshots,
+backlog free-scroll / ScrollView, saving backlog into slots, rollback, DOM
+game menus, second native GPU backend, second wasm / dynamic UI load, themes /
+transform animation stack, open host-string UI actions, official Yukimi
+bytecode compatibility, long-term Screen DSL lower compatibility, deleting
+vanilla `js_glue`.
