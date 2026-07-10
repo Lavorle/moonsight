@@ -1,4 +1,4 @@
-# Standard host commands (Phase 1–3)
+# Standard host commands (Phase 1–4)
 
 Host commands are invoked from MoonYuki as `@name …` (or as IR `Host` ops after
 dialogue lower). Runtime dispatch lives in `std_commands` via
@@ -21,9 +21,9 @@ through lower as marker pairs `Str("#:<name>")` + value. Bare keywords
 (`kind=background`) and quoted strings both work for string-valued names.
 **Named negatives** (`x=-200`, `y=-1.5`) are supported by the lexer.
 
-Screen UI is authored with the **Screen DSL** (`- screen`), not only host
-commands — see [`screen-language.md`](./screen-language.md). Narrative scripts
-open/close modals with `@ui.show` / `@ui.hide`.
+System UI and dialogue HUD are **MoonBit** trees on `UiApp` (`std_ui` + optional
+`ui_package`) — see [`ui-moonbit.md`](./ui-moonbit.md). Narrative scripts still
+open/close modals with `@ui.show` / `@ui.hide`. Project `- screen` is rejected.
 
 ---
 
@@ -69,8 +69,9 @@ Ease is **linear**. New tweens replace same-layer same-property tweens
 
 Draw order (bottom → top): `background` → `character` → `effect` → `ui`, then
 within each kind by `z` ascending (stable on ties). Fullscreen overlay veil
-from `trans.fade` is separate from the layer list. Modal screens draw above
-layers (with optional dim); see draw order in the design / render path.
+from `trans.fade` is separate from the layer list. HUD and modal widgets paint
+via `UiDrawOp` above layers (with optional menu dim); see
+[`ui-moonbit.md`](./ui-moonbit.md).
 
 ### `layer.show id resource [z] [x] [y] [opacity]` + named
 
@@ -169,7 +170,7 @@ Unknown scene names fail at VM jump time (empty ops / halt depending on loader).
 | **Timed (`time > 0`)** | Sets `stage.wait_remaining = time`, returns `Yield`; engine ticks wall-clock `dt` until remaining ≤ 0, then resumes from Yield |
 | **Bare / zero** | `wait_remaining = 0`; resumes on **Advance** (same as Phase 1 yield) |
 | **Input while timed** | **Advance**, **SkipTyping**, and **Select** are **ignored** (wait cannot be skipped) |
-| **Modal screen open** | Menu input wins; wait countdown continues in background; Advance still ignored for narrative until menu closes |
+| **Modal open** | Menu input wins; wait countdown continues in background; Advance still ignored for narrative until menu closes |
 | **Errors** | non-numeric when present → `flow.wait: expected numeric time` |
 | **Result** | `Yield` |
 
@@ -203,8 +204,9 @@ forms:
 | **Select** | Intent `Select(n)` stores **Int index** `n` in the result var and resumes |
 | **Host stub** | If invoked as Host (tests), string args become choices and handler `Yield`s |
 
-UI rendering of choices is Stage + draw-list; input mapping is in the host
-(see Intent section below). Choice UI is **not** Screen-DSL (Phase 3 non-goal).
+Choice UI is the HUD `ChoiceList` node (`std_ui`); input mapping is in the host
+(see Intent section below). Layout is overridable via `set_hud` /
+[`ui-moonbit.md`](./ui-moonbit.md).
 
 ---
 
@@ -293,11 +295,13 @@ Overlay is packed as frame **veil_opacity** for the GPU host.
 
 ---
 
-## ui (Phase 3)
+## ui (Phase 3–4)
 
-Modal screens are defined with `- screen` (see
-[`screen-language.md`](./screen-language.md)). These host commands only
-**queue** stack ops on `Stage`; the Engine drains them onto `ScreenState`.
+Modals are registered in MoonBit (`std_ui` / project `ui_package`) — see
+[`ui-moonbit.md`](./ui-moonbit.md). These host commands only **queue** stack ops
+on `Stage`; the Engine drains them onto `UiRuntime` (`show_modal` / `hide_modal`).
+
+`@ui.show` / `@ui.hide` remain the narrative bridge; they do **not** define widget trees.
 
 ### `ui.show name [mode=save|load]`
 
@@ -309,8 +313,8 @@ Modal screens are defined with `- screen` (see
 
 | | |
 |--|--|
-| **Args** | `name: Str`; optional named `mode` (`save` \| `load`) for dual-purpose screens |
-| **Effect** | Queue push modal; Engine shows screen and yields so narrative IP freezes while open |
+| **Args** | `name: Str`; optional named `mode` (`save` \| `load`) for dual-purpose modals |
+| **Effect** | Queue push modal; Engine shows modal and yields so narrative IP freezes while open |
 | **Errors** | missing/non-str name → `ui.show: expected name Str` |
 | **Result** | `Yield` (typical) |
 
@@ -324,12 +328,12 @@ Modal screens are defined with `- screen` (see
 | | |
 |--|--|
 | **Args** | optional `Str` name |
-| **Effect** | Queue pop top screen, or remove matching name when given |
+| **Effect** | Queue pop top modal, or remove matching name when given |
 | **Errors** | bad arg type → `ui.hide: expected optional name Str` |
 | **Result** | `Ok` |
 
 `OpenMenu` Intent (Esc) while Playing with empty stack ≡ show `game_menu`.
-While a modal is open, Esc pops one layer (`return`).
+While a modal is open, Esc pops one layer (`return_modal`).
 
 ---
 
@@ -362,9 +366,9 @@ Writers always emit **format_version 3**. Loaders accept **v2 and v3**.
 - Mid-tween / mid-fade / mid-wait save → load continues with remaining times.
 - v2 loads: layers without tweens; `kind` defaults as stored (missing → character semantics where applicable); no tween restore.
 - Unknown higher versions are rejected with a clear error.
-- **Screen stack is not saved.** **Prefs are not part of slot saves.**
+- **UI modal stack / HUD focus are not saved.** **Prefs are not part of slot saves.**
 
-### Multi-slot + prefs (Phase 3)
+### Multi-slot + prefs (Phase 3+)
 
 | Item | Detail |
 |------|--------|
@@ -372,7 +376,7 @@ Writers always emit **format_version 3**. Loaders accept **v2 and v3**.
 | Prefs key | `moonsight/prefs` (JSON object) |
 | Prefs fields | `text_speed`, `auto_mode`, `master_volume`, `bgm_volume`, `se_volume` |
 | Quick keys | Ctrl/Cmd+S / Ctrl/Cmd+L → **slot 0** |
-| `save_slots` | `moonsight.json` optional field (default 6, clamp 1..20); also in `manifest.json` / `screens.json` |
+| `save_slots` | `moonsight.json` optional field (default 6, clamp 1..20); also in `manifest.json` |
 
 ---
 
@@ -413,11 +417,11 @@ Defined in `render.intent_from_code` / `docs/draw-list-pack.md`, wired by
 | Code | Intent | Default binding |
 |-----:|--------|-----------------|
 | 0 | `None` | (no input) |
-| 1 | `Advance` | **Click** / pointer on canvas; **Enter**; **Space**; **Z** (on screens = activate focused button) |
+| 1 | `Advance` | **Click** / pointer on canvas; **Enter**; **Space**; **Z** (on modals/HUD = activate focused button) |
 | 2 | `SkipTyping` | **Control** (keydown) |
 | 3 | `OpenMenu` | **Esc** — Playing + empty stack → `game_menu`; modal open → pop one layer |
 | 4 | `ToggleAuto` | **A** (also writes prefs.`auto_mode`) |
-| 5 | `MenuUp` | **↑** / **W** — previous focusable on screen |
+| 5 | `MenuUp` | **↑** / **W** — previous focusable on modal/HUD |
 | 6 | `MenuDown` | **↓** / **S** — next focusable (plain S; Ctrl+S is quick-save) |
 | 10+n | `Select(n)` | **1**–**9** → Select(0)…Select(8) |
 
@@ -431,7 +435,7 @@ Engine policy:
 | Timed `@flow.wait` (`wait_remaining > 0`) | **Ignored** | **Ignored** | **Ignored** | OpenMenu allowed |
 | Bare `@flow.wait` / `flow.yield` | Resume | — | — | OpenMenu allowed |
 | `Choose` | — | Commits option index | — | OpenMenu allowed |
-| Modal screen open | Activate focused button | optional direct activate | — | MenuUp/Down move focus; Esc = return |
+| Modal open | Activate focused button | optional direct activate | — | MenuUp/Down move focus; Esc = return |
 | `Title` | Activate button | — | — | focus navigation |
 | Layer tween / overlay fade only (VM Running) | Not gated | Not gated | Not gated | OpenMenu allowed |
 

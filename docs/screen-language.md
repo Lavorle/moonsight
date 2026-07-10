@@ -1,4 +1,18 @@
-# Screen language (Phase 3)
+# Screen language — **obsolete (Phase 4)**
+
+> **This document is historical.** Project `- screen` / `screens.json` were
+> **removed** in Phase 4. Author UI in MoonBit (`std_ui` + optional
+> `ui_package`). See **[`ui-moonbit.md`](./ui-moonbit.md)**.
+>
+> Parser error on `- screen` points at `docs/ui-moonbit.md`. Do not add new
+> Screen DSL content here.
+
+---
+
+The remainder preserves Phase 3 wording for archaeology only. It does **not**
+describe the current engine path.
+
+# Screen language (Phase 3) — archive
 
 Author-facing guide for the **Screen DSL**: modal system UI (title, menu,
 save/load, settings) authored in `.yuki` and rendered via the same WebGPU

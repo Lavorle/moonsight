@@ -1,4 +1,4 @@
-# Project layout (Phase 1–3)
+# Project layout (Phase 1–4)
 
 MoonSight is a MoonBit module (`moonsight/moonsight`) with packages at the
 repository root (not under a nested `packages/` folder). Preferred build target
@@ -14,30 +14,30 @@ moonsight/
   .github/workflows/ci.yml # moon check + moon test (+ moonsightc smoke)
 
   script/                  # MoonYuki lexer → parser → macro → resolve → IR → MSB
-                           # + Screen DSL parse/lower + screens.json encode
-  runtime/                 # VM, Director, Stage, intents, save, ScreenState, prefs
-  render/                  # DrawList, pack, text layout, screen widgets, glyph atlas
+  runtime/                 # VM, Director, Stage, intents, save, UiApp/UiRuntime, prefs
+  render/                  # DrawList, pack, text layout, UiDrawOp paint, glyph atlas
   audio/                   # Logical mixer + event queue (volume/fade)
   std_commands/            # Standard host command table (incl. ui.show/hide)
-  std_screens/             # Default title / game_menu / save_load / settings
+  std_ui/                  # Default HUD + title / game_menu / save_load / settings
   host_web/                # Wasm host entry + js_glue (WebGPU/audio/input/prefs)
+    project_ui/            # Overlay stub; moonsightc may link project ui_package here
   host_desktop/            # Minimal Tauri 2 shell over dist/demo
   cmd/moonsightc/          # check / build CLI (native)
-  demo/game/               # Sample project (authoring source)
+  demo/game/               # Sample project (authoring source + optional ui/)
   dist/                    # Build output (usually untracked)
   docs/                    # Specs, plans, author docs
 ```
 
 | Package | Role |
 |---------|------|
-| `script` | Compile MoonYuki → IR/bytecode; ScreenDef lower/encode |
-| `runtime` | IR VM, Director, Stage, Screen stack/UiMode, prefs, save JSON |
-| `render` | CPU draw list + float pack for JS GPU (layers + screens) |
+| `script` | Compile MoonYuki → IR/bytecode (narrative only; rejects `- screen`) |
+| `runtime` | IR VM, Director, Stage, UiApp/UiRuntime, prefs, save JSON |
+| `render` | CPU draw list + float pack for JS GPU (layers + `UiDrawOp`) |
 | `audio` | BGM/SE logical mixer (volume, fade) |
 | `std_commands` | `standard_registry()` host handlers |
-| `std_screens` | Default system screens (merged at build) |
-| `host_web` | `init_demo` / `export_frame` / screens + prefs exports |
-| `cmd/moonsightc` | Project check & web dist builder |
+| `std_ui` | Default HUD + four system modals (MoonBit) |
+| `host_web` | `init_demo` / `export_frame` / prefs exports; links `std_ui` + `project_ui` |
+| `cmd/moonsightc` | Project check & web dist builder; optional `ui_package` link |
 
 Dependency direction (high level):
 
@@ -45,9 +45,10 @@ Dependency direction (high level):
 script ──► (no render)
 runtime ──► script types/IR usage as needed
 std_commands ──► runtime (+ audio for bgm/se)
-render ──► runtime (intent, stage snapshot inputs)
-host_web ──► runtime, render, std_commands, script, audio
-moonsightc ──► script (+ native FS); merges std_screens
+std_ui ──► runtime (UiApp)
+render ──► runtime (intent, stage, UiDrawOp)
+host_web ──► runtime, render, std_commands, std_ui, project_ui, script, audio
+moonsightc ──► script (+ native FS); links project_ui when ui_package set
 ```
 
 ## Game project layout
@@ -64,12 +65,15 @@ my_game/
     bg_room.png
     char_y.png
     bgm_soft.ogg
+  ui/                      # optional MoonBit UI package (see ui_package)
+    lib.mbt
 ```
 
-Optional project `- screen` definitions live in any `*.yuki` under the project;
-same name as a std screen **overrides** it.
+UI is **not** authored with `- screen` in `.yuki` (Phase 4 compile error).
+Default chrome ships from engine `std_ui`. Optional project package overrides
+via `ui_package` — see [`ui-moonbit.md`](./ui-moonbit.md).
 
-Demo: `demo/game/` (same shape). Mini golden fixture:
+Demo: `demo/game/` (same shape, with sample `ui/`). Mini golden fixture:
 `script/testdata/mini_game/`.
 
 ### `moonsight.json`
@@ -83,6 +87,7 @@ Phase 1 pins **JSON** (no TOML dependency).
 | `logical_width` | number | `1920` | Logical canvas width |
 | `logical_height` | number | `1080` | Logical canvas height |
 | `save_slots` | number | `6` | Multi-slot count (clamped **1..20**) |
+| `ui_package` | string \| omit | omit | Relative dir of MoonBit UI sources linked into host wasm |
 
 Example (`demo/game/moonsight.json`):
 
@@ -91,12 +96,15 @@ Example (`demo/game/moonsight.json`):
   "name": "moonsight-demo",
   "entry": "main.yuki",
   "logical_width": 1920,
-  "logical_height": 1080
+  "logical_height": 1080,
+  "ui_package": "ui"
 }
 ```
 
 `build` fails if `moonsight.json` is missing. Missing entry file warns but still
-compiles other `.yuki` files.
+compiles other `.yuki` files. When `ui_package` is set, build copies `*.mbt`
+into `host_web/project_ui`, rebuilds `host_web` wasm, then **restores** the
+committed no-op stub.
 
 ### Asset ids
 
@@ -121,22 +129,13 @@ Typical `dist/demo/`:
 | Artifact | Purpose |
 |----------|---------|
 | `game.msb` | Merged narrative bytecode (`MSB1`) |
-| `screens.json` | Merged ScreenDef array + `save_slots` (host loads with MSB) |
 | `demo.yuki` | Copy of entry source (host load path today) |
 | `manifest.json` | name, logical size, resources, audio, save_slots |
 | `assets/**` | Copied media |
-| `index.html`, `boot.js`, `webgpu_bridge.js`, `host_web.wasm` | From `host_web/js_glue` |
+| `index.html`, `boot.js`, `webgpu_bridge.js`, `host_web.wasm` | From `host_web/js_glue` (wasm includes `std_ui` + linked project UI) |
 
-`screens.json` shape (logical):
-
-```json
-{
-  "save_slots": 6,
-  "defs": [
-    { "name": "title", "root": { /* SNode tree */ } }
-  ]
-}
-```
+**No `screens.json` primary path.** UI trees live in the host wasm via
+`std_ui` / `project_ui` registration at engine init.
 
 `manifest.json` shape:
 
@@ -152,9 +151,11 @@ Typical `dist/demo/`:
 ```
 
 Build uses staging then promotes on success; failure must not leave a broken
-`out_dir`.
+`out_dir`. With `ui_package`, a failed prepare/rebuild restores `project_ui`
+stub.
 
-Ensure `host_web` wasm is built/copied into js_glue when needed:
+Ensure `host_web` wasm is built/copied into js_glue when needed (without
+`ui_package`, moonsightc does not rebuild wasm automatically):
 
 ```bash
 moon build --target wasm-gc --release host_web
@@ -168,12 +169,13 @@ cp _build/wasm-gc/release/build/host_web/host_web.wasm host_web/js_glue/
 Serve `dist/demo` (or `host_web/js_glue` after copy) over localhost. WebGPU
 requires a secure context. **WebGPU only** — no WebGL fallback.
 
-Cold start path: load `screens.json` → hydrate slots/prefs → `boot_title()` →
-title **Start** → narrative entry.
+Cold start path: load narrative (`game.msb` / entry) → hydrate slots/prefs →
+`boot_title()` → title **Start** → narrative entry. Init order:
+`UiApp::new` → `@std_ui.register` → `@project_ui.register` → `Engine::from_ir`.
 
 Input, prefs keys, and save keys are documented in
 [`host-commands.md`](./host-commands.md) and
-[`screen-language.md`](./screen-language.md).
+[`ui-moonbit.md`](./ui-moonbit.md).
 
 ### Desktop (`host_desktop`)
 
@@ -205,9 +207,9 @@ moon check
 moon test
 ```
 
-Package tests cover lexer/parser/lower/bytecode, screen encode/decode, VM /
-director / stage / save / screen stack / prefs, render pack, audio mixer,
-std_commands registry alignment, and host_web blackbox where applicable.
+Package tests cover lexer/parser/lower/bytecode, VM / director / stage / save /
+UI kernel, render pack, audio mixer, std_commands registry alignment,
+`std_ui` registration, and host_web blackbox where applicable.
 
 ## Phase notes
 
@@ -216,27 +218,31 @@ std_commands registry alignment, and host_web blackbox where applicable.
 | **1** | Runtime kernel: compile, VM, layers, dialogue, choices, BGM/SE, fade, save, WebGPU host, CLI |
 | **2** | Layer kinds, property tweens, `layer.set`, real `flow.wait`, wall-clock fade, save v3, resource checks |
 | **3** | Screen DSL + runtime stack, std 4 screens, multi-slot + prefs, cold-start title, named negatives, audio hard-fail, BGM volume/fade, build cleanup |
+| **4** | MoonBit UI kernel (HUD + modal stack), `std_ui`, Capabilities, optional `ui_package`, remove Screen DSL / `screens.json` primary |
 
 ## Documentation index
 
 | Doc | Content |
 |-----|---------|
 | [`moon-yuki-subset.md`](./moon-yuki-subset.md) | Grammar subset + examples |
-| [`screen-language.md`](./screen-language.md) | Screen DSL, actions, prefs, slots |
+| [`ui-moonbit.md`](./ui-moonbit.md) | MoonBit UI authoring (HUD + modals) |
+| [`screen-language.md`](./screen-language.md) | **Obsolete** Phase 3 Screen DSL archive |
 | [`host-commands.md`](./host-commands.md) | Host table, intents, errors |
 | [`draw-list-pack.md`](./draw-list-pack.md) | Packed frame format + MenuUp/Down |
 | [`project-layout.md`](./project-layout.md) | This file |
 | `superpowers/specs/…` | Design specs |
 | `superpowers/plans/…` | Implementation plans |
 
-## Explicit non-goals (through Phase 3)
+## Explicit non-goals (through Phase 4)
 
 Do not expect or document as shipped:
 
 - Visual editor, full i18n / achievements, Live2D, second native GPU backend
 - Official YukimiScript bytecode interop, TOML project config
 - Backlog / history viewer
-- Dialogue or choice UI as Screen DSL (still hard-coded `UiLayout`)
-- Save confirm dialogs, slot screenshot thumbnails
-- DOM / HTML overlay menus
+- Confirm dialogs, slot screenshot thumbnails
+- DOM / HTML overlay menus; second wasm / dynamic UI load
+- Sliders, scroll views, general theme files, transform animation stack
+- Open host-string UI actions / general expression language on the tree
 - SE fade; OS user-directory saves (still webview `localStorage`)
+- Long-term Screen DSL lower compatibility (`- screen` is a hard error)

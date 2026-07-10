@@ -2,5 +2,6 @@
   "name": "moonsight-demo",
   "entry": "main.yuki",
   "logical_width": 1920,
-  "logical_height": 1080
+  "logical_height": 1080,
+  "ui_package": "ui"
 }

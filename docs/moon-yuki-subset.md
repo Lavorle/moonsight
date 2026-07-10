@@ -1,13 +1,14 @@
-# MoonYuki subset (Phase 1–3)
+# MoonYuki subset (Phase 1–4)
 
 MoonYuki is a line-oriented visual-novel DSL compiled by the `script` package
-into IR / bytecode (`MSB1`) plus **Screen** definitions. This document describes
-**the subset that is implemented and exercised by tests and the demo**.
+into IR / bytecode (`MSB1`). **UI is not authored in MoonYuki** (Phase 4: MoonBit
+`std_ui` / `ui_package` — see [`ui-moonbit.md`](./ui-moonbit.md)). This document
+describes **the subset that is implemented and exercised by tests and the demo**.
 
 Out of scope (do not invent): visual editor, i18n, achievements, Live2D / 3D,
 full timeline / animation queues, blocking presentation DSL, official
-YukimiScript bytecode compatibility, `trans.dissolve`, backlog, dialogue/choice
-screen-ization, confirm dialogs, slot screenshots, DOM menus.
+YukimiScript bytecode compatibility, `trans.dissolve`, backlog, confirm dialogs,
+slot screenshots, DOM menus, project `- screen` / Screen DSL.
 
 ## Phase notes
 
@@ -26,16 +27,23 @@ screen-ization, confirm dialogs, slot screenshots, DOM menus.
 Bare keywords work for string-valued named args after resolve/lower
 (`kind=background` or `kind="background"`). Prefer bare for kinds/enums in demos.
 
-### Phase 3 — Screen UI + D+B
+### Phase 3 — system UI + D+B (historical in yuki)
 
 | Feature | Notes |
 |---------|--------|
-| Screen DSL | Top-level `- screen "name"` with indent-2 widgets (`vbox`/`hbox`/`fixed`/`text`/`button`) |
-| Actions | Closed enum: `return`, `start_game`, `quit_to_title`, `show_screen`, `hide_screen`, `save_slot`, `load_slot`, `set_pref`, `adjust_pref`, `noop` |
-| `@ui.show` / `@ui.hide` | Narrative bridge to modal stack |
+| Multi-slot + prefs | Save slots + prefs keys; UI chrome was Screen DSL (removed in Phase 4) |
+| `@ui.show` / `@ui.hide` | Narrative bridge to modal stack (**kept** in Phase 4) |
 | Named negatives | `x=-200`, `y=-1.5` lexed correctly |
 | Audio | `@audio.bgm` `volume=` / `fade=`; hard-fail missing audio at build/load |
-| Prefs / slots | Multi-slot saves + prefs keys; see [`screen-language.md`](./screen-language.md) |
+
+### Phase 4 — MoonBit UI (not MoonYuki)
+
+| Feature | Notes |
+|---------|--------|
+| UI authoring | `std_ui` + optional project `ui_package` (MoonBit); see [`ui-moonbit.md`](./ui-moonbit.md) |
+| `- screen` | **Rejected** at parse with migration message → `docs/ui-moonbit.md` |
+| `@ui.show` / `@ui.hide` | Still map to modal show/hide on `UiRuntime` |
+| `screens.json` | No longer a dist primary artifact |
 
 ## File shape
 
@@ -47,7 +55,7 @@ A compilation unit (one `.yuki` file) may contain, in any order at top level:
 | Extern | `- extern name [params…]` |
 | Macro | `- macro name [params…]` then body lines ending at next top-level decl |
 | Scene | `- scene "name"` or `- scene "name" inherit "parent"` |
-| Screen | `- screen "name"` then indent-2 widget body (not a narrative scene) |
+| ~~Screen~~ | **Removed** — `- screen` is a compile error |
 
 Scene bodies contain:
 
@@ -55,34 +63,28 @@ Scene bodies contain:
 - Host / macro commands: `@cmd args…`
 - Blank lines (ignored)
 
-Screen bodies contain widgets only (`vbox` / `hbox` / `fixed` / `text` /
-`button`) — see [`screen-language.md`](./screen-language.md). Screens do not
-enter the narrative scene table.
-
 Top-level `@` commands outside a scene/macro body are a **parse error**.
 
 ### Multi-file projects
 
 `moonsightc build` collects every `*.yuki` under the project directory, compiles
 each independently, and **merges scenes** into one IR module / `game.msb`.
-Screens merge separately into **`screens.json`** (project overrides
-`std_screens/` by name).
 
 - Scene names must be unique across the merged set (duplicate = error).
-- Screen names must be unique within the project set; std names are overridden.
 - Macros and file-local `extern`s do **not** cross files.
 - Entry scene preference: a scene named `"entrypoint"` if present, else the
   first scene of the **entry file** graph; the demo uses `entrypoint` → jumps
-  after title **Start** (`start_game`).
+  after title **Start** (`start_game` from UI Capabilities).
 
-The browser host still loads **entry source** as `demo.yuki`;
-`game.msb` + `screens.json` are emitted for the publish path and tests.
+Optional project UI is linked via `moonsight.json` `ui_package` into host wasm
+(not via `.yuki`). The browser host still loads **entry source** as `demo.yuki`;
+`game.msb` is the narrative publish artifact.
 
 ## Grammar sketch
 
 ```
 unit        ::= item*
-item        ::= extern | macro | scene | screen | comment | blank
+item        ::= extern | macro | scene | comment | blank
 
 extern      ::= "- extern" name param*
 param       ::= name | name "=" literal
@@ -93,8 +95,7 @@ body_line   ::= command | dialogue | blank   (until next top-level "- …")
 scene       ::= "- scene" string ("inherit" string)? scene_line*
 scene_line  ::= command | dialogue | blank | comment
 
-screen      ::= "- screen" string screen_line*
-screen_line ::= widget | blank | comment   (indent-2 hierarchy)
+# "- screen" is a hard error (Phase 4); UI lives in MoonBit packages
 
 command     ::= "@" dotted_name arg*
 dialogue    ::= speaker ":" text_parts
@@ -270,17 +271,18 @@ Named negatives work: `x=-200`, `y=-1.5`, `opacity=0`.
 See [`host-commands.md`](./host-commands.md) for full arg tables, defaults, and
 tween rules.
 
-## Screens (author summary)
+## UI bridge (author summary)
+
+Do **not** write `- screen` in `.yuki` (compile error). Title / menu / HUD are
+MoonBit (`std_ui` + optional `ui_package`) — see [`ui-moonbit.md`](./ui-moonbit.md).
+
+Narrative open/close of modals:
 
 ```yuki
-- screen "title"
-  vbox x=760 y=360:
-    text "MoonSight"
-    button "Start" action=start_game
+@ui.show "game_menu"
+@ui.show "save_load" mode=load
+@ui.hide
 ```
-
-Full widget/action table: [`screen-language.md`](./screen-language.md).
-Narrative open/close: `@ui.show` / `@ui.hide`.
 
 ## Comments and whitespace
 
@@ -300,8 +302,10 @@ Blank lines are ignored. Keep one statement per line (line-oriented lexer).
       → Resolve (externs, scenes, commands)
       → Lower → IR (Host / Yield / Choose / …; named args as #: markers)
       → Bytecode encode (MSB1, magic "MSB1")
-      ↳ screens → ScreenDef → screens.json (merged with std_screens)
 ```
+
+UI trees are **not** produced by this pipeline; they are registered at host
+init from `std_ui` / linked `ui_package`.
 
 CLI:
 
@@ -312,10 +316,11 @@ moon run cmd/moonsightc --target native -- build project_dir -o dist/out
 
 `build` fails if literal image/audio resource ids used in scripts are missing
 from project assets/manifest. Failed builds do not promote a half-written
-`out_dir`.
+`out_dir`. Optional `ui_package` rebuilds host wasm and restores the project_ui
+stub afterward.
 
 Diagnostics surface as compile/check errors (unknown command, duplicate scene,
-parse failures, invalid screen actions). Runtime host errors soft-halt the VM
+parse failures, rejected `- screen`). Runtime host errors soft-halt the VM
 (`HostResult::Error`).
 
 ## Minimal complete example
@@ -344,12 +349,12 @@ y:Thanks for playing.
 @flow.yield
 ```
 
-Cold start uses the std `title` screen (Start → `start_game` → entry). Press
+Cold start uses the std `title` modal (Start → `start_game` → entry). Press
 **Esc** in play for `game_menu`.
 
 See also:
 
-- [`screen-language.md`](./screen-language.md) — Screen DSL, actions, prefs, slots
+- [`ui-moonbit.md`](./ui-moonbit.md) — MoonBit UI (HUD + modals, Capabilities)
 - [`host-commands.md`](./host-commands.md) — standard host table, intents, save v3
 - [`project-layout.md`](./project-layout.md) — repo + `moonsight.json`
 - [`draw-list-pack.md`](./draw-list-pack.md) — frame pack + intent codes

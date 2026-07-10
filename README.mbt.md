@@ -1,12 +1,12 @@
 # MoonSight
 
-MoonBit + WebGPU visual novel engine (Phases 1–3: runtime kernel, layer
-presentation, Screen UI / system menu).
+MoonBit + WebGPU visual novel engine (Phases 1–4: runtime kernel, layer
+presentation, system UI, MoonBit UI kernel).
 
 MoonYuki scripts compile to IR/bytecode, run on a VM + Stage/Director, and
-render through a packed draw list consumed by a JS WebGPU host. System menus
-use a small Screen DSL. Desktop uses the same web build inside a minimal Tauri
-shell.
+render through a packed draw list consumed by a JS WebGPU host. System menus and
+dialogue HUD use a retained MoonBit UI tree (`std_ui` + optional project
+`ui_package`). Desktop uses the same web build inside a minimal Tauri shell.
 
 ## Quickstart
 
@@ -18,10 +18,10 @@ export CC=gcc
 moon check
 moon test
 
-# compile sample game + web dist
+# compile sample game + web dist (demo sets ui_package → rebuilds host wasm)
 moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
 
-# optional: refresh host wasm into js_glue before build if missing
+# optional: refresh host wasm into js_glue before build if missing / no ui_package
 moon build --target wasm-gc --release host_web
 cp _build/wasm-gc/release/build/host_web/host_web.wasm host_web/js_glue/
 
@@ -76,24 +76,25 @@ finishes. Menus pause narrative Advance.
 
 | Path | Role |
 |------|------|
-| `script` | MoonYuki → IR / `MSB1` + ScreenDef / `screens.json` |
-| `runtime` | VM, Director, Stage, Screen stack, prefs, save (v3), tweens |
-| `render` | Draw list pack, text layout, kind+z sort, screen widgets |
+| `script` | MoonYuki → IR / `MSB1` (rejects project `- screen`) |
+| `runtime` | VM, Director, Stage, UiApp/UiRuntime, prefs, save (v3), tweens |
+| `render` | Draw list pack, text layout, kind+z sort, `UiDrawOp` paint |
 | `audio` | Logical BGM/SE mixer (volume / fade) |
 | `std_commands` | Standard `@` host commands (layers, ui.show/hide, audio) |
-| `std_screens` | Default title / game_menu / save_load / settings |
+| `std_ui` | Default HUD + title / game_menu / save_load / settings |
 | `host_web` | Browser wasm + `js_glue` (WebGPU, prefs, multi-slot) |
 | `host_desktop` | Tauri 2 shell |
-| `cmd/moonsightc` | `check` / `build` CLI (literal resource check, screen merge) |
-| `demo/game` | Sample project |
+| `cmd/moonsightc` | `check` / `build` CLI (literal resource check, optional ui_package link) |
+| `demo/game` | Sample project (+ optional `ui/` override) |
 
 ## Documentation
 
 - [`docs/moon-yuki-subset.md`](./docs/moon-yuki-subset.md) — grammar subset
-- [`docs/screen-language.md`](./docs/screen-language.md) — Screen DSL + system UI
+- [`docs/ui-moonbit.md`](./docs/ui-moonbit.md) — MoonBit UI authoring (HUD + modals)
 - [`docs/host-commands.md`](./docs/host-commands.md) — host command table + intents
 - [`docs/project-layout.md`](./docs/project-layout.md) — repo & `moonsight.json`
 - [`docs/draw-list-pack.md`](./docs/draw-list-pack.md) — frame pack format
+- [`docs/screen-language.md`](./docs/screen-language.md) — obsolete Phase 3 Screen DSL archive
 
 ## Scope
 
@@ -112,14 +113,23 @@ texture loads, updated demo/docs.
 
 ### Phase 3 (Screen UI + system menu)
 
-**In:** Screen DSL subset + runtime stack/focus, standard four screens (title,
-game_menu, save_load, settings), multi-slot saves + prefs, cold-start title,
-WebGPU-drawn widgets (no DOM menu), `@ui.show`/`@ui.hide`, named negatives
-(`x=-200`), audio load hard-fail, BGM volume/fade, build cleanup, demo + docs.
+**In (historical path):** Screen DSL + runtime stack/focus, standard four
+screens, multi-slot saves + prefs, cold-start title, WebGPU-drawn widgets,
+`@ui.show`/`@ui.hide`, named negatives, audio load hard-fail, BGM volume/fade.
 
-### Out of scope (through Phase 3)
+### Phase 4 (MoonBit UI kernel)
+
+**In:** retained `UiApp` / `UiRuntime` (HUD + modal stack), Capabilities +
+button handlers, `std_ui` default HUD and four modals, optional project
+`ui_package` linked into the same host wasm, dialogue/choice paint via HUD tree
+only, project `- screen` hard error, no `screens.json` primary dist path, demo
+override sample + author docs.
+
+### Out of scope (through Phase 4)
 
 Visual editor, i18n, achievements, Live2D / 3D, particle/postprocess stack,
 full timeline / animation queues, blocking presentation DSL, `trans.dissolve`,
-**backlog**, dialogue/choice screen-ization, confirm dialogs, slot screenshots,
-DOM menus, second native GPU backend, official Yukimi bytecode compatibility.
+**backlog**, confirm dialogs, slot screenshots, DOM menus, second native GPU
+backend, second wasm / dynamic UI load, sliders / themes / transform animation
+stack, open host-string UI actions, official Yukimi bytecode compatibility,
+long-term Screen DSL lower compatibility.
