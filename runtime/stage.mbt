@@ -23,6 +23,7 @@ pub(all) enum TweenProp {
   X
   Y
   Opacity
+  Scale
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
@@ -45,6 +46,7 @@ pub(all) struct LayerState {
   x : Double
   y : Double
   opacity : Double
+  scale : Double
   visible : Bool
   tweens : Array[LayerTween]
   pending_hide : Bool
@@ -121,7 +123,7 @@ pub fn Stage::new() -> Stage {
 }
 
 ///|
-/// Show or replace a layer by `id`. Defaults: `x=0`, `y=0`, `opacity=1`, visible.
+/// Show or replace a layer by `id`. Defaults: `x=0`, `y=0`, `opacity=1`, `scale=1`, visible.
 pub fn Stage::show_layer(
   self : Stage,
   id~ : String,
@@ -140,6 +142,7 @@ pub fn Stage::show_layer(
     x,
     y,
     opacity,
+    scale: 1.0,
     visible: true,
     tweens: [],
     pending_hide: false,
@@ -189,6 +192,7 @@ fn layer_with_prop(layer : LayerState, prop : TweenProp, value : Double) -> Laye
       x: value,
       y: layer.y,
       opacity: layer.opacity,
+      scale: layer.scale,
       visible: layer.visible,
       tweens: layer.tweens,
       pending_hide: layer.pending_hide,
@@ -201,6 +205,7 @@ fn layer_with_prop(layer : LayerState, prop : TweenProp, value : Double) -> Laye
       x: layer.x,
       y: value,
       opacity: layer.opacity,
+      scale: layer.scale,
       visible: layer.visible,
       tweens: layer.tweens,
       pending_hide: layer.pending_hide,
@@ -213,6 +218,20 @@ fn layer_with_prop(layer : LayerState, prop : TweenProp, value : Double) -> Laye
       x: layer.x,
       y: layer.y,
       opacity: value,
+      scale: layer.scale,
+      visible: layer.visible,
+      tweens: layer.tweens,
+      pending_hide: layer.pending_hide,
+    }
+    Scale => {
+      id: layer.id,
+      kind: layer.kind,
+      resource: layer.resource,
+      z: layer.z,
+      x: layer.x,
+      y: layer.y,
+      opacity: layer.opacity,
+      scale: value,
       visible: layer.visible,
       tweens: layer.tweens,
       pending_hide: layer.pending_hide,
@@ -250,6 +269,7 @@ pub fn Stage::start_layer_tween(
           x: snapped.x,
           y: snapped.y,
           opacity: snapped.opacity,
+          scale: snapped.scale,
           visible: snapped.visible,
           tweens: kept,
           pending_hide: snapped.pending_hide,
@@ -271,6 +291,7 @@ pub fn Stage::start_layer_tween(
         x: cur.x,
         y: cur.y,
         opacity: cur.opacity,
+        scale: cur.scale,
         visible: cur.visible,
         tweens: kept,
         pending_hide: cur.pending_hide,
@@ -293,18 +314,21 @@ pub fn Stage::tick_layer_tweens(self : Stage, dt : Double) -> Unit {
     let mut x = cur.x
     let mut y = cur.y
     let mut opacity = cur.opacity
+    let mut scale = cur.scale
     let next_tweens : Array[LayerTween] = []
     for t in cur.tweens {
       let current = match t.prop {
         X => x
         Y => y
         Opacity => opacity
+        Scale => scale
       }
       if t.remaining <= 0.0 || dt >= t.remaining {
         match t.prop {
           X => x = t.to
           Y => y = t.to
           Opacity => opacity = t.to
+          Scale => scale = t.to
         }
       } else {
         let frac = dt / t.remaining
@@ -313,6 +337,7 @@ pub fn Stage::tick_layer_tweens(self : Stage, dt : Double) -> Unit {
           X => x = stepped
           Y => y = stepped
           Opacity => opacity = stepped
+          Scale => scale = stepped
         }
         next_tweens.push({
           prop: t.prop,
@@ -329,6 +354,7 @@ pub fn Stage::tick_layer_tweens(self : Stage, dt : Double) -> Unit {
       x,
       y,
       opacity,
+      scale,
       visible: cur.visible,
       tweens: next_tweens,
       pending_hide: cur.pending_hide,
@@ -370,6 +396,7 @@ pub fn Stage::begin_hide_layer(
         x: cur.x,
         y: cur.y,
         opacity: cur.opacity,
+        scale: cur.scale,
         visible: cur.visible,
         tweens: cur.tweens,
         pending_hide: true,

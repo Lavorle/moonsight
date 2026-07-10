@@ -277,6 +277,7 @@ fn layer_state_from_v2(layer : LayerStateV2) -> LayerState {
     x: layer.x,
     y: layer.y,
     opacity: layer.opacity,
+    scale: 1.0,
     visible: layer.visible,
     tweens: [],
     pending_hide: false,

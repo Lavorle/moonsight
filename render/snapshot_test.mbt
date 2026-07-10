@@ -281,6 +281,7 @@ test "hidden layers are skipped" {
     x: 0.0,
     y: 0.0,
     opacity: 1.0,
+    scale: 1.0,
     visible: false,
     tweens: [],
     pending_hide: false,

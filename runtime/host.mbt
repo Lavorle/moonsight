@@ -323,6 +323,7 @@ fn builtin_layer_show(stage : Stage, args : Array[Value]) -> HostResult {
         x: cur.x,
         y: cur.y,
         opacity: cur.opacity,
+        scale: cur.scale,
         visible: true,
         tweens: kept_tweens,
         pending_hide: false,

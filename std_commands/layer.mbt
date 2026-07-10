@@ -178,6 +178,7 @@ pub fn cmd_layer_show(
         x: cur.x,
         y: cur.y,
         opacity: cur.opacity,
+        scale: cur.scale,
         visible: true,
         tweens: kept_tweens,
         pending_hide: false,

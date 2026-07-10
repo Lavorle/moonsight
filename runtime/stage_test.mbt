@@ -176,6 +176,24 @@ test "tick_layer_tweens eases opacity linearly" {
 }
 
 ///|
+test "layer scale snaps and tweens" {
+  let st = @runtime.Stage::new()
+  st.show_layer(
+    id="y",
+    layer=@runtime.LayerKind::Character,
+    resource="char_y",
+    z=0,
+  )
+  assert_eq(st.layers[0].scale, 1.0)
+  st.start_layer_tween(id="y", prop=@runtime.TweenProp::Scale, to=0.5, duration=0.0)
+  assert_eq(st.layers[0].scale, 0.5)
+  st.start_layer_tween(id="y", prop=@runtime.TweenProp::Scale, to=1.0, duration=1.0)
+  st.tick_layer_tweens(0.5)
+  let s = st.layers[0].scale
+  assert_true(s > 0.74 && s < 0.76)
+}
+
+///|
 test "snapshot_layers sorts by kind then z" {
   let st = @runtime.Stage::new()
   st.show_layer(id="c", layer=@runtime.LayerKind::Character, resource="c", z=0)
