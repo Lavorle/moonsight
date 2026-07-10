@@ -23,13 +23,35 @@ moon test
 # compile sample game + web dist (demo sets ui_package → rebuilds host wasm)
 moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
 
-# optional: refresh host wasm into js_glue before build if missing / no ui_package
-moon build --target wasm-gc --release host_web
-cp _build/wasm-gc/release/build/host_web/host_web.wasm host_web/js_glue/
-
 # play in browser (WebGPU; use localhost — not file://)
 cd dist/demo && python3 -m http.server 8080
 # open http://localhost:8080/
+```
+
+## Web host (Q2+)
+
+`moonsightc build` copies a web shell into the output directory:
+
+1. **`apps/host-web/dist`** when present (Svelte/Vite; requires `index.html`)
+2. **`host_web/js_glue`** fallback (vanilla JS — default playable path if dist is missing)
+
+Recommended order when using the Svelte host:
+
+```bash
+export CC=gcc
+cd apps/host-web && npm i && npm run build && cd ../..
+moon build --target wasm-gc --release host_web
+moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
+```
+
+Without a Svelte dist build, the vanilla `js_glue` shell is still used. With no
+`ui_package`, you may still refresh wasm into the shell sources manually:
+
+```bash
+moon build --target wasm-gc --release host_web
+cp _build/wasm-gc/release/build/host_web/host_web.wasm host_web/js_glue/
+# optional: also into Svelte public/ for dev
+# cp _build/wasm-gc/release/build/host_web/host_web.wasm apps/host-web/public/
 ```
 
 ### Browser / WebGPU (important on Linux)
@@ -85,7 +107,8 @@ pause narrative Advance. Full semantics: [`docs/play-input.md`](./docs/play-inpu
 | `audio` | Logical BGM/SE mixer (volume / fade) |
 | `std_commands` | Standard `@` host commands (layers, dissolve, ui.show/hide, audio) |
 | `std_ui` | Default HUD + title / game_menu / save_load / settings / confirm / backlog |
-| `host_web` | Browser wasm + `js_glue` (WebGPU, prefs, multi-slot) |
+| `host_web` | Browser wasm + `js_glue` fallback shell (WebGPU, prefs, multi-slot) |
+| `apps/host-web` | Svelte+TS host shell (preferred by `moonsightc` when `dist/` exists) |
 | `host_desktop` | Tauri 2 shell |
 | `cmd/moonsightc` | `check` / `build` CLI (literal resource check, optional ui_package link) |
 | `demo/game` | Sample project (+ optional `ui/` override) |
@@ -151,8 +174,8 @@ dissolve/scale and presentation vs wait/skip in
 
 **Host / Docs (WIP mid-track):** Svelte+TS host shell (`apps/host-web`) and
 Fumadocs site (`apps/docs-site`) are Q2 multi-track deliverables — not required
-for Engine dissolve/scale. Vanilla `host_web/js_glue` remains the default play
-path until Host track lands.
+for Engine dissolve/scale. `moonsightc build` prefers `apps/host-web/dist` when
+built; vanilla `host_web/js_glue` remains the fallback play path.
 
 ### Out of scope (through Q2 Engine non-goals)
 

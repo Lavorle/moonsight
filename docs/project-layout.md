@@ -19,7 +19,9 @@ moonsight/
   audio/                   # Logical mixer + event queue (volume/fade)
   std_commands/            # Standard host command table (incl. ui.show/hide)
   std_ui/                  # Default HUD + title / game_menu / save_load / settings
-  host_web/                # Wasm host entry + js_glue (WebGPU/audio/input/prefs)
+  apps/
+    host-web/              # Svelte+TS host shell (Vite); moonsightc prefers dist/
+  host_web/                # Wasm host entry + js_glue fallback (WebGPU/audio/input/prefs)
     project_ui/            # Overlay stub; moonsightc may link project ui_package here
   host_desktop/            # Minimal Tauri 2 shell over dist/demo
   cmd/moonsightc/          # check / build CLI (native)
@@ -132,7 +134,12 @@ Typical `dist/demo/`:
 | `demo.yuki` | Copy of entry source (host load path today) |
 | `manifest.json` | name, logical size, resources, audio, save_slots |
 | `assets/**` | Copied media |
-| `index.html`, `boot.js`, `webgpu_bridge.js`, `host_web.wasm` | From `host_web/js_glue` (wasm includes `std_ui` + linked project UI) |
+| `index.html`, `host_web.wasm`, shell assets | Host shell from `apps/host-web/dist` (preferred) or `host_web/js_glue` (fallback). Wasm includes `std_ui` + linked project UI. Svelte dist ships Vite-bundled JS/CSS under `assets/`; vanilla glue ships `boot.js` + `webgpu_bridge.js` + `slug/`. |
+
+**Host shell discovery** (`moonsightc build`): `apps/host-web/dist` when it
+contains `index.html`, else `host_web/js_glue`. Project `manifest.json` always
+overwrites any shell placeholder; release `host_web.wasm` is injected when
+present under `_build/wasm-gc/release/build/host_web/`.
 
 **No `screens.json` primary path.** UI trees live in the host wasm via
 `std_ui` / `project_ui` registration at engine init.
@@ -154,8 +161,18 @@ Build uses staging then promotes on success; failure must not leave a broken
 `out_dir`. With `ui_package`, a failed prepare/rebuild restores `project_ui`
 stub.
 
-Ensure `host_web` wasm is built/copied into js_glue when needed (without
-`ui_package`, moonsightc does not rebuild wasm automatically):
+Recommended web shell build order (Svelte preferred):
+
+```bash
+export CC=gcc
+cd apps/host-web && npm i && npm run build && cd ../..
+moon build --target wasm-gc --release host_web
+moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
+```
+
+Without `apps/host-web/dist`, moonsightc falls back to `host_web/js_glue`.
+Without `ui_package`, moonsightc does not rebuild wasm automatically — refresh
+into the shell sources when needed:
 
 ```bash
 moon build --target wasm-gc --release host_web
@@ -164,9 +181,9 @@ cp _build/wasm-gc/release/build/host_web/host_web.wasm host_web/js_glue/
 
 ## Hosts
 
-### Browser (`host_web`)
+### Browser (`host_web` / `apps/host-web`)
 
-Serve `dist/demo` (or `host_web/js_glue` after copy) over localhost. WebGPU
+Serve `dist/demo` (or a host shell root after copy) over localhost. WebGPU
 requires a secure context. **WebGPU only** — no WebGL fallback.
 
 Cold start path: load narrative (`game.msb` / entry) → hydrate slots/prefs →

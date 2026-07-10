@@ -26,13 +26,16 @@ Asset path (from `src-tauri/`):
 
 ## Prerequisites
 
-1. **Web dist** — build the demo (or any project) into `dist/demo` first:
+1. **Web dist** — build the demo (or any project) into `dist/demo` first.
+   `moonsightc` prefers `apps/host-web/dist` when present, else `host_web/js_glue`:
 
    ```bash
    # from repo root
    export CC=gcc
+   # optional but recommended (Svelte host shell):
+   cd apps/host-web && npm i && npm run build && cd ../..
+   moon build --target wasm-gc --release host_web   # wasm used by ui_package / inject
    moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
-   # ensures host_web.wasm is present (release wasm-gc build of host_web if needed)
    ```
 
 2. **Rust** stable + system deps for Tauri 2 on Linux (WebKitGTK, etc.):
@@ -56,7 +59,7 @@ cd host_desktop/tauri && npm run tauri build
 
 ## Saves (Phase 1)
 
-Phase 1 **keeps `localStorage`** inside the webview (`moonsight/save/{slot}` via `host_web/js_glue/boot.js`). No Tauri filesystem plugin is wired yet.
+Phase 1 **keeps `localStorage`** inside the webview (`moonsight/save/{slot}` via the web shell: Svelte host or `host_web/js_glue/boot.js`). No Tauri filesystem plugin is wired yet.
 
 If later localStorage is insufficient (quota / multi-profile / export), map the save path to the OS app data dir with `@tauri-apps/plugin-fs` (or a thin Rust command) under e.g. `{appDataDir}/moonsight/save/`. That is intentionally deferred past Phase 1.
 

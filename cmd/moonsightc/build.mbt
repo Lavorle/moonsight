@@ -10,7 +10,7 @@ fn build_staging_dir(out_dir : String) -> String {
 /// 1. Read moonsight.json
 /// 2. Compile all `.yuki` → `game.msb`
 /// 3. Copy assets + write manifest.json
-/// 4. Copy host wasm + js_glue
+/// 4. Copy host shell (apps/host-web/dist preferred, host_web/js_glue fallback)
 ///
 /// Writes go to a staging directory first; `out_dir` is replaced only on full
 /// success. On failure, staging is deleted and any prior `out_dir` is left intact.
@@ -58,15 +58,16 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     write_bytes_to_file(msb_path, bytecode)
     println("wrote \{msb_path} (\{bytecode.length()} bytes, entry=\{ir.entry})")
 
-    // Host runtime first (may include a placeholder manifest.json).
-    match find_js_glue() {
-      Some(glue) => {
-        copy_js_glue(glue, staging)
-        println("copied js_glue from \{glue}")
+    // Host shell first (may include a placeholder manifest.json).
+    // Prefer Svelte dist when present; fall back to vanilla js_glue.
+    match find_host_shell() {
+      Some(shell) => {
+        copy_host_shell(shell, staging)
+        println("copied host shell from \{shell}")
       }
       None =>
         println(
-          "warning: host_web/js_glue not found; skip wasm/js copy (build host_web first)",
+          "warning: host shell not found (apps/host-web/dist or host_web/js_glue); skip wasm/js copy",
         )
     }
 
@@ -194,25 +195,36 @@ fn is_audio_name(name : String) -> Bool {
 }
 
 ///|
-/// Locate engine `host_web/js_glue` relative to cwd or project parents.
-fn find_js_glue() -> String? {
+/// Locate the web host shell relative to cwd or project parents.
+///
+/// Discovery order (`find_host_shell`):
+/// 1. `apps/host-web/dist` — Svelte/Vite build (requires `index.html`)
+/// 2. `host_web/js_glue` — vanilla fallback (requires `index.html` or `boot.js`)
+///
+/// Default playable path still works when dist is missing (js_glue fallback).
+fn find_host_shell() -> String? {
+  // Relative candidates: Svelte dist first, then vanilla js_glue.
   let candidates = [
+    "apps/host-web/dist", "./apps/host-web/dist", "../apps/host-web/dist",
     "host_web/js_glue", "./host_web/js_glue", "../host_web/js_glue",
   ]
   for c in candidates {
-    if path_exists(join_path(c, "index.html")) ||
-      path_exists(join_path(c, "boot.js")) {
+    if is_host_shell_dir(c) {
       return Some(c)
     }
   }
-  // Walk parents of cwd looking for host_web/js_glue
+  // Walk parents of cwd looking for either shell root.
   match @env.current_dir() {
     Some(cwd) => {
       let mut dir = cwd
       for _ in 0..<8 {
-        let cand = join_path(dir, "host_web/js_glue")
-        if path_exists(join_path(cand, "boot.js")) {
-          return Some(cand)
+        let dist = join_path(dir, "apps/host-web/dist")
+        if is_host_shell_dir(dist) {
+          return Some(dist)
+        }
+        let glue = join_path(dir, "host_web/js_glue")
+        if is_host_shell_dir(glue) {
+          return Some(glue)
         }
         let parent = dirname(dir)
         if parent == dir {
@@ -227,14 +239,25 @@ fn find_js_glue() -> String? {
 }
 
 ///|
-fn copy_js_glue(glue_dir : String, out_dir : String) -> Unit raise IoError {
-  for name in read_dir(glue_dir) {
+/// True if `dir` looks like a usable host shell root.
+/// Svelte dist and js_glue both ship `index.html`; js_glue also has `boot.js`.
+fn is_host_shell_dir(dir : String) -> Bool {
+  path_exists(join_path(dir, "index.html")) ||
+  path_exists(join_path(dir, "boot.js"))
+}
+
+///|
+/// Copy host shell static files into `out_dir`.
+/// Skips host-local placeholder `manifest.json` (project manifest is written later).
+/// Injects release `host_web.wasm` when the engine build tree has one.
+fn copy_host_shell(shell_dir : String, out_dir : String) -> Unit raise IoError {
+  for name in read_dir(shell_dir) {
     // Skip host-local placeholder; build writes project manifest after assets.
-    // Copy files *and* dirs (slug/, fonts/ are required by boot.js).
+    // Copy files *and* dirs (slug/, fonts/, Vite assets/ as required by the shell).
     if name == "manifest.json" {
       continue
     }
-    let from = join_path(glue_dir, name)
+    let from = join_path(shell_dir, name)
     let to = join_path(out_dir, name)
     if is_dir(from) {
       copy_dir(from, to)
