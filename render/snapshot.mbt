@@ -198,10 +198,13 @@ fn emit_text_glyphs(
         pen_x = pen_x + adv
         continue
       }
-      // Shelf cell slightly wider than advance for AA padding / bearings.
-      let cell_w = adv.to_int() + 3
+      // Cell width = ceil(advance)+2 so fillText has side bearing room.
+      // Screen size matches the cell so UV samples 1:1 (no horizontal squash).
+      let adv_i = adv.to_int()
+      let cell_w = if adv_i < 1 { 3 } else { adv_i + 2 }
       let entry = atlas.get_or_queue(ch, size, cell_w=cell_w)
-      let sw : Float = if adv < 1.0 { 1.0 } else { adv }
+      let sw = Float::from_int(entry.atlas_w)
+      let sh = Float::from_int(entry.atlas_h)
       glyphs.push({
         atlas_x: entry.atlas_x,
         atlas_y: entry.atlas_y,
@@ -210,10 +213,11 @@ fn emit_text_glyphs(
         x: pen_x,
         y: pen_y,
         w: sw,
-        h: font_size,
+        h: sh,
         color,
       })
-      pen_x = pen_x + adv
+      // Pen matches on-screen glyph width (1:1 with atlas cell).
+      pen_x = pen_x + sw
     }
   }
 }

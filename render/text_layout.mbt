@@ -15,11 +15,9 @@ pub fn fixed_width_measure(advance : Float) -> (Char) -> Float {
 }
 
 ///|
-/// Approximate proportional advance as a fraction of `font_size` (em).
+/// Advance as a fraction of em for layout.
 ///
-/// Used when the host has not supplied real `measureText` metrics. Latin
-/// widths are rough averages for a sans face; CJK / other wide scripts use a
-/// full em so ideographs stay square.
+/// ASCII uses Noto Sans metrics (`noto_advance_em`); CJK / fullwidth use 1 em.
 pub fn approximate_advance_em(ch : Char) -> Float {
   let cp = ch.to_int()
   // CJK Unified Ideographs and common fullwidth ranges → 1.0 em
@@ -28,28 +26,11 @@ pub fn approximate_advance_em(ch : Char) -> Float {
       (cp >= 0xFF00 && cp <= 0xFFEF) {
     return 1.0
   }
-  match ch {
-    ' ' | '\t' => 0.33
-    'i' | 'l' | 'I' | 'j' | '|' | '.' | ',' | '\'' | '`' | '!' | ':' | ';' =>
-      0.30
-    'f' | 't' | 'r' => 0.38
-    'm' | 'w' | 'M' | 'W' => 0.90
-    '@' | '%' | 'Ö' | '—' => 0.95
-    _ => {
-      // Uppercase slightly wider on average
-      if ch >= 'A' && ch <= 'Z' {
-        0.62
-      } else if ch >= '0' && ch <= '9' {
-        0.55
-      } else {
-        0.52
-      }
-    }
-  }
+  noto_advance_em(ch)
 }
 
 ///|
-/// Build a measure function: `advance ≈ em * font_size`.
+/// Build a measure function: `advance = em * font_size` (min 1px).
 pub fn approximate_measure(font_size : Float) -> (Char) -> Float {
   fn(ch : Char) {
     let em = approximate_advance_em(ch)

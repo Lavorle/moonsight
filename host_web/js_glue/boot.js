@@ -558,21 +558,29 @@ export async function boot(options = {}) {
     window.addEventListener("resize", () => fitCanvas(canvas));
     bindInput(canvas);
 
-    // Outline font for Slug-inspired atlas stamps (optional; falls back to canvas).
+    const params = new URLSearchParams(location.search);
+    // Load Noto so canvas fillText matches layout metrics (Noto advances table).
+    // Slug-style outline stamp is opt-in: ?outline=1
     const fontUrl =
-      options.fontUrl ||
-      new URLSearchParams(location.search).get("font") ||
-      "./fonts/NotoSans-Regular.ttf";
+      options.fontUrl || params.get("font") || "./fonts/NotoSans-Regular.ttf";
     try {
-      setStatus("load outline font…");
+      setStatus("load font…");
+      if (typeof FontFace !== "undefined") {
+        const face = new FontFace("Noto Sans", `url(${fontUrl})`);
+        await face.load();
+        document.fonts.add(face);
+        await document.fonts.ready;
+      }
       await Slug.loadFont(fontUrl);
       Gpu.setOutlineRasterizer(Slug);
-      setStatus("outline font ready");
+      const wantOutline =
+        options.outline === true || params.get("outline") === "1";
+      Gpu.setPreferOutlineRaster(wantOutline);
+      setStatus(wantOutline ? "font ready (outline)" : "font ready");
     } catch (fe) {
-      console.warn("outline font unavailable, using canvas fillText", fe);
+      console.warn("font load failed; using system sans", fe);
     }
 
-    const params = new URLSearchParams(location.search);
     const wasmUrl =
       options.wasmUrl || params.get("wasm") || "./host_web.wasm";
 

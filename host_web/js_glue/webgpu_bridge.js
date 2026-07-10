@@ -730,6 +730,22 @@ export function setOutlineRasterizer(mod) {
   outlineRaster = mod;
 }
 
+/**
+ * Shared offscreen canvas for glyph stamps (fillText is the reliable path).
+ * Outline/Slug raster is opt-in via `?outline=1` after setOutlineRasterizer.
+ */
+let glyphCanvas = null;
+let glyphCtx = null;
+/** @type {boolean} */
+let preferOutline = false;
+
+/**
+ * @param {boolean} on
+ */
+export function setPreferOutlineRaster(on) {
+  preferOutline = !!on;
+}
+
 export function rasterizeGlyphToAtlas(
   ch,
   size,
@@ -742,7 +758,6 @@ export function rasterizeGlyphToAtlas(
   ensureGpu();
   let entry = textures.get("atlas");
   if (!entry || entry.width < atlasSize || !entry.cpu) {
-    // allocate blank atlas (transparent black)
     const pixels = new Uint8Array(atlasSize * atlasSize * 4);
     uploadRgbaTexture("atlas", atlasSize, atlasSize, pixels);
     entry = textures.get("atlas");
@@ -750,32 +765,41 @@ export function rasterizeGlyphToAtlas(
   }
   if (atlasW <= 0 || atlasH <= 0) return;
 
-  /** @type {Uint8ClampedArray | ImageData | {data: Uint8ClampedArray}} */
-  let img;
+  /** @type {Uint8ClampedArray} */
+  let src;
   const cp = ch.codePointAt(0) || 0;
-  if (outlineRaster && outlineRaster.hasFont()) {
+  const useOutline =
+    preferOutline && outlineRaster && outlineRaster.hasFont();
+  if (useOutline) {
     const pix = outlineRaster.rasterizeCodepoint(cp, atlasW, atlasH);
-    img = { data: pix || new Uint8ClampedArray(atlasW * atlasH * 4) };
+    src = pix || new Uint8ClampedArray(atlasW * atlasH * 4);
   } else {
-    // Fallback: canvas bitmap (system font) — left-aligned in proportional cell.
-    const canvas = document.createElement("canvas");
-    canvas.width = atlasW;
-    canvas.height = atlasH;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    // Reliable path: Canvas fillText with the same Noto face we metric against.
+    if (!glyphCanvas) {
+      glyphCanvas = document.createElement("canvas");
+      glyphCtx = glyphCanvas.getContext("2d", {
+        willReadFrequently: true,
+        alpha: true,
+      });
+    }
+    if (glyphCanvas.width < atlasW) glyphCanvas.width = atlasW;
+    if (glyphCanvas.height < atlasH) glyphCanvas.height = atlasH;
+    const ctx = glyphCtx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, atlasW, atlasH);
-    const fontPx = Math.max(1, Math.floor(size * 0.9));
-    ctx.font = `${fontPx}px "Noto Sans","Segoe UI","DejaVu Sans",sans-serif`;
+    // Pixel size ≈ cell height; slight shrink avoids clipping descenders.
+    const fontPx = Math.max(8, Math.floor(atlasH * 0.82));
+    ctx.font = `${fontPx}px "Noto Sans", "NotoSans", sans-serif`;
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
     ctx.fillStyle = "#ffffff";
-    // Baseline ~80% down the cell
-    ctx.fillText(ch, 1, Math.floor(atlasH * 0.78));
-    img = ctx.getImageData(0, 0, atlasW, atlasH);
+    // Baseline: place capital height roughly in the upper 70% of the cell.
+    const baseline = Math.floor(atlasH * 0.72);
+    ctx.fillText(ch, 1, baseline);
+    src = ctx.getImageData(0, 0, atlasW, atlasH).data;
   }
 
-  // Stamp straight-alpha white coverage into the CPU mirror.
   const cpu = entry.cpu;
-  const src = img.data;
   for (let y = 0; y < atlasH; y++) {
     for (let x = 0; x < atlasW; x++) {
       const si = (y * atlasW + x) * 4;
@@ -807,6 +831,7 @@ const api = {
   endFrame,
   rasterizeGlyphToAtlas,
   setOutlineRasterizer,
+  setPreferOutlineRaster,
   /** @private test aid */
   _textures: textures,
 };
