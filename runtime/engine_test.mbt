@@ -102,10 +102,29 @@ test "toggle auto synthesizes advance on yield" {
   assert_true(t_done.complete)
   eng.tick(ToggleAuto)
   assert_true(eng.auto)
+  assert_true(eng.screens.prefs.auto_mode)
   // auto + None_ while Yield → Advance to next line
   eng.tick(None_)
   guard eng.stage.text is Some(t1) else { fail("second") }
   assert_eq(t1.full_text, "There")
+}
+
+///|
+test "playing ToggleAuto syncs prefs.auto_mode" {
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|
+  let ir = @script.compile_to_ir(src, file="auto_prefs.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  assert_true(!eng.auto)
+  assert_true(!eng.screens.prefs.auto_mode)
+  eng.tick(ToggleAuto)
+  assert_true(eng.auto)
+  assert_true(eng.screens.prefs.auto_mode)
+  eng.tick(ToggleAuto)
+  assert_true(!eng.auto)
+  assert_true(!eng.screens.prefs.auto_mode)
 }
 
 ///|

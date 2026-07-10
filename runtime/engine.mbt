@@ -234,10 +234,7 @@ fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
     Advance | SkipTyping => self.screens.activate(host)
     MenuUp => self.screens.focus_delta(host, -1)
     MenuDown => self.screens.focus_delta(host, 1)
-    ToggleAuto => {
-      self.auto = !self.auto
-      self.screens.prefs = self.screens.prefs.set("auto_mode", Bool(self.auto))
-    }
+    ToggleAuto => self.apply_intent(ToggleAuto)
     Select(n) => {
       // Optional: jump focus to index n when in range.
       if !self.screens.stack.is_empty() {
@@ -327,7 +324,10 @@ fn Engine::effective_intent(self : Engine, intent : Intent) -> Intent {
 ///|
 fn Engine::apply_intent(self : Engine, intent : Intent) -> Unit {
   match intent {
-    ToggleAuto => self.auto = !self.auto
+    ToggleAuto => {
+      self.auto = !self.auto
+      self.screens.prefs = self.screens.prefs.set("auto_mode", Bool(self.auto))
+    }
     _ => ()
   }
   match self.vm.wait {
