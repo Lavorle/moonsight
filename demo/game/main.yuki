@@ -1,0 +1,46 @@
+# MoonSight Phase 1 demo (host loads this file as demo.yuki).
+# Builtins cover std host commands — no file-level - extern required.
+# scenes/intro.yuki adds multi-file scene "side_room" (merged into game.msb).
+
+- scene "entrypoint"
+@flow.jump "intro"
+
+- scene "intro"
+@layer.show "bg" "bg_room"
+@layer.show "y" "char_y" 10
+@audio.bgm "bgm_soft"
+@trans.fade 1.0 0.0 0.5
+y:Welcome to MoonSight.
+y:This demo uses MoonYuki.
+@sys.save_hint
+y:Shall we talk, or leave for the garden?
+@flow.choice "Talk" "Leave" --result act
+# Choose stores Int index in act (0=Talk, 1=Leave). Source has no JumpIf yet;
+# both paths continue and we record the variable for save / later routing.
+@var.set "demo_choice" act
+y:Got it — following the Talk path (JumpIf TBD).
+@flow.jump "talk"
+
+- scene "talk"
+y:Nice to meet you. I'm Y.
+@var.set "met_y" true
+y:MoonSight compiles MoonYuki into a tiny VN runtime.
+@flow.jump "leave"
+
+- scene "leave"
+@layer.hide "y"
+y:You step out toward the garden.
+@var.set "left_room" true
+@flow.jump "garden"
+
+- scene "garden"
+@layer.show "bg" "bg_room"
+y:A quiet garden. Placeholder art; BGM still looping.
+@var.set "saw_garden" true
+@flow.jump "ending"
+
+- scene "ending"
+@trans.fade 0.0 1.0 0.5
+y:Thanks for playing the MoonSight demo.
+y:A save hint was set earlier for host snapshot tests.
+@flow.yield

@@ -1,0 +1,8 @@
+# Multi-file compile sample (merged by moonsightc into game.msb).
+# Host demo.yuki only ships the entry file; garden also lives in main.yuki
+# so browser play works. This file keeps a distinct side scene for merge tests.
+
+- scene "side_room"
+y:Side room — present only in the multi-file project graph.
+@var.set "saw_side" true
+@flow.yield
