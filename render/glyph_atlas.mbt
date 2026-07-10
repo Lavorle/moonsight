@@ -91,16 +91,17 @@ fn GlyphAtlas::store(
 }
 
 ///|
-/// Look up or allocate a rect for `ch` at font pixel height `size`.
+/// Look up or allocate a rect for `ch` at font pixel size `size` (lookup key).
 ///
-/// `cell_w` is the shelf cell width (usually measured advance + padding). Cell
-/// height is `size`. Missing glyphs are shelf-packed and queued for the host
-/// to rasterize (bitmap or Slug-style outline). Overflow → 0×0 placeholder.
+/// `cell_w` / `cell_h` are shelf dimensions. Height should exceed the em size
+/// slightly so canvas descenders (`g`, `y`, `p`, …) are not clipped.
+/// Overflow → 0×0 placeholder.
 pub fn GlyphAtlas::get_or_queue(
   self : GlyphAtlas,
   ch : Char,
   size : Int,
   cell_w? : Int,
+  cell_h? : Int,
 ) -> AtlasEntry {
   match self.lookup(ch, size) {
     Some(e) => {
@@ -121,7 +122,15 @@ pub fn GlyphAtlas::get_or_queue(
       e
     }
     None => {
-      let cell_h = if size < 1 { 1 } else { size }
+      let default_h = if size < 1 { 1 } else { size }
+      let mut ht = match cell_h {
+        None => default_h
+        Some(h) => h
+      }
+      if ht < 1 {
+        ht = 1
+      }
+      let cell_h = ht
       let mut cw = match cell_w {
         None => cell_h
         Some(w) => w
