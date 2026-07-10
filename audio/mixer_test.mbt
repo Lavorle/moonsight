@@ -114,3 +114,34 @@ test "bgm fade stop reaches zero then stops" {
   assert_true(m.bgm is None)
   guard q.get(q.len() - 1) is Some(StopBgm) else { fail("StopBgm at end") }
 }
+
+///|
+test "bgm tick non-positive dt is no-op" {
+  let q = QueueBackend::new()
+  let m = Mixer::with_backend((q : &AudioBackend))
+  m.play_bgm("a", volume=0.0)
+  q.clear()
+  m.fade_bgm_to(1.0, 1.0)
+  m.tick(0.0)
+  assert_eq(m.bgm_volume, 0.0)
+  assert_true(m.bgm_fade_to is Some(1.0))
+  assert_eq(q.len(), 0)
+  m.tick(-0.1)
+  assert_eq(m.bgm_volume, 0.0)
+  assert_eq(q.len(), 0)
+}
+
+///|
+test "bgm fade completion does not double SetBgmVolume" {
+  let q = QueueBackend::new()
+  let m = Mixer::with_backend((q : &AudioBackend))
+  m.play_bgm("a", volume=0.0)
+  q.clear()
+  m.fade_bgm_to(1.0, 1.0)
+  m.tick(1.0)
+  assert_true(m.bgm_volume >= 0.99)
+  // One SetBgmVolume for the completing step (no duplicate at target).
+  assert_eq(q.len(), 1)
+  guard q.get(0) is Some(SetBgmVolume(volume~)) else { fail("SetBgmVolume") }
+  assert_true(volume >= 0.99)
+}

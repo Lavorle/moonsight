@@ -5,8 +5,8 @@
 /// (volume, loop, SE sequence, linear BGM fade) and notifies an `AudioBackend`
 /// on changes.
 ///
-/// Output volume = logical × prefs.master × prefs.bgm (prefs multiply by 1.0
-/// until the prefs system lands).
+/// Output volume = logical × prefs.master × prefs.channel (prefs multiply by
+/// 1.0 until the prefs system lands). BGM and SE use separate channel gains.
 
 ///|
 pub(all) struct Mixer {
@@ -27,9 +27,16 @@ pub(all) struct Mixer {
 }
 
 ///|
-/// Logical volume × preference gains (master/bgm default to 1.0).
-fn output_volume(logical : Double) -> Double {
-  // Prefs (master/bgm) land later; keep identity multipliers until then.
+/// Logical BGM volume × preference gains (master/bgm default to 1.0).
+fn output_bgm_volume(logical : Double) -> Double {
+  // Prefs (master × bgm) land later; keep identity multipliers until then.
+  logical * 1.0 * 1.0
+}
+
+///|
+/// Logical SE volume × preference gains (master/se default to 1.0).
+fn output_se_volume(logical : Double) -> Double {
+  // Prefs (master × se) land later; keep identity multipliers until then.
   logical * 1.0 * 1.0
 }
 
@@ -97,7 +104,7 @@ pub fn Mixer::play_bgm(
   self.bgm = Some(resource)
   self.bgm_loop = looped
   self.bgm_volume = volume
-  self.backend.play_bgm(resource, looped, output_volume(volume))
+  self.backend.play_bgm(resource, looped, output_bgm_volume(volume))
 }
 
 ///|
@@ -127,7 +134,7 @@ pub fn Mixer::fade_bgm_to(
   if duration <= 0.0 {
     self.bgm_volume = target
     self.clear_fade()
-    self.backend.set_bgm_volume(output_volume(target))
+    self.backend.set_bgm_volume(output_bgm_volume(target))
     if stop {
       self.stop_bgm()
     }
@@ -140,18 +147,24 @@ pub fn Mixer::fade_bgm_to(
 
 ///|
 /// Advance in-flight BGM fade by wall-clock `dt` seconds; emit volume events.
+///
+/// Non-positive `dt` is a no-op (does not snap-complete). Zero remaining snaps.
 pub fn Mixer::tick(self : Mixer, dt : Double) -> Unit {
   let target = match self.bgm_fade_to {
     None => return
     Some(t) => t
   }
+  // Non-positive dt: leave fade in progress (hosts may tick with 0 during setup).
+  if dt <= 0.0 {
+    return
+  }
   let cur = self.bgm_volume
   let rem = self.bgm_fade_remaining
-  if rem <= 0.0 || dt <= 0.0 {
+  if rem <= 0.0 {
     self.bgm_volume = target
     let do_stop = self.bgm_fade_stop
     self.clear_fade()
-    self.backend.set_bgm_volume(output_volume(target))
+    self.backend.set_bgm_volume(output_bgm_volume(target))
     if do_stop {
       self.stop_bgm()
     }
@@ -161,12 +174,12 @@ pub fn Mixer::tick(self : Mixer, dt : Double) -> Unit {
   let frac = step_t / rem
   self.bgm_volume = cur + (target - cur) * frac
   self.bgm_fade_remaining = rem - step_t
-  self.backend.set_bgm_volume(output_volume(self.bgm_volume))
+  self.backend.set_bgm_volume(output_bgm_volume(self.bgm_volume))
   if self.bgm_fade_remaining <= 0.0 {
+    // Last step already emitted the target volume; only stop if requested.
     self.bgm_volume = target
     let do_stop = self.bgm_fade_stop
     self.clear_fade()
-    self.backend.set_bgm_volume(output_volume(target))
     if do_stop {
       self.stop_bgm()
     }
@@ -183,7 +196,7 @@ pub fn Mixer::play_se(
   self.se = Some(resource)
   self.se_volume = volume
   self.se_seq = self.se_seq + 1
-  self.backend.play_se(resource, output_volume(volume))
+  self.backend.play_se(resource, output_se_volume(volume))
 }
 
 ///|
@@ -207,7 +220,7 @@ pub fn Mixer::apply_logic(
           if cur != id {
             self.play_bgm(id, looped=true, volume=volume)
           } else {
-            self.backend.set_bgm_volume(output_volume(volume))
+            self.backend.set_bgm_volume(output_bgm_volume(volume))
           }
         None => self.play_bgm(id, looped=true, volume=volume)
       }

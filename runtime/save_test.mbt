@@ -183,3 +183,43 @@ test "save roundtrip restores bgm_volume" {
   assert_eq(id, "bgm_soft")
   @audio.reset_global_mixer()
 }
+
+///|
+test "save mid fade-out restores audible fade toward stop" {
+  @audio.reset_global_mixer()
+  let q = @audio.QueueBackend::new()
+  let b : &@audio.AudioBackend = q
+  @audio.install_mixer(@audio.Mixer::with_backend(b))
+  let eng = load_min_demo_engine()
+  eng.stage.bgm = Some("bgm_soft")
+  @audio.global_mixer().play_bgm("bgm_soft", volume=1.0)
+  // Stop with fade: stage clears immediately; mixer still holds track + fade.
+  eng.stage.bgm = None
+  @audio.global_mixer().fade_bgm_to(0.0, 1.0, stop=true)
+  @audio.global_mixer().tick(0.5)
+  assert_true(@audio.global_mixer().bgm is Some(_))
+  assert_true(@audio.global_mixer().bgm_volume > 0.4 && @audio.global_mixer().bgm_volume < 0.6)
+  let blob = eng.save()
+  let game = @runtime.parse_save_game(blob)
+  // Blob must carry mixer identity + fade-stop mid-state (not null bgm).
+  guard game.audio.bgm is Some(saved_id) else { fail("saved bgm id") }
+  assert_eq(saved_id, "bgm_soft")
+  assert_true(game.audio.bgm_fade_stop is Some(true))
+  assert_true(game.audio.bgm_fade_remaining is Some(_))
+  @audio.reset_global_mixer()
+  let q2 = @audio.QueueBackend::new()
+  let b2 : &@audio.AudioBackend = q2
+  @audio.install_mixer(@audio.Mixer::with_backend(b2))
+  let eng2 = load_min_demo_engine()
+  eng2.load(blob)
+  guard @audio.global_mixer().bgm is Some(id) else { fail("mixer bgm after load") }
+  assert_eq(id, "bgm_soft")
+  assert_true(@audio.global_mixer().bgm_fade_stop)
+  assert_true(@audio.global_mixer().bgm_fade_remaining > 0.0)
+  // Finish the restored fade → StopBgm.
+  q2.clear()
+  @audio.global_mixer().tick(1.0)
+  assert_true(@audio.global_mixer().bgm is None)
+  guard q2.get(q2.len() - 1) is Some(@audio.StopBgm) else { fail("StopBgm") }
+  @audio.reset_global_mixer()
+}

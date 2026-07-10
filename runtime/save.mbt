@@ -308,13 +308,24 @@ fn apply_save_game(eng : Engine, game : SaveGame) -> Unit {
 
 ///|
 /// Snapshot Stage ids + live mixer volume / fade for the save blob.
+///
+/// During a fade-out stop, Stage clears `bgm` immediately while the mixer still
+/// holds the track. Prefer mixer identity so load can restore an audible fade.
 fn audio_logic_from_mixer(bgm : String?, se : String?) -> AudioLogicState {
   let m = @audio.global_mixer()
   let fade_to = m.bgm_fade_to
   let fade_rem = m.bgm_fade_remaining
   let fade_stop = m.bgm_fade_stop
+  let saved_bgm = if fade_stop {
+    match m.bgm {
+      Some(_) as id => id
+      None => bgm
+    }
+  } else {
+    bgm
+  }
   {
-    bgm,
+    bgm: saved_bgm,
     se,
     bgm_volume: Some(m.bgm_volume),
     bgm_fade_to: fade_to,
