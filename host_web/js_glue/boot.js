@@ -4,8 +4,13 @@
  * Expects:
  *   - ./webgpu_bridge.js (ES module)
  *   - ./host_web.wasm (or ?wasm= path) built from host_web package
- *   - optional ./manifest.json  { "resources": { "id": "url", ... } }
+ *   - optional ./manifest.json
+ *       { "resources": { "id": "url.png", ... },
+ *         "audio": { "id": "url.ogg", ... } }
  *   - optional ./game.msb or ./demo.yuki (source via load_source)
+ *
+ * Audio: prefer OGG, fallback MP3. Thin HTMLAudioElement glue (Web Audio API
+ * unlock on first user gesture).
  */
 
 import * as Gpu from "./webgpu_bridge.js";
@@ -13,6 +18,11 @@ import * as Gpu from "./webgpu_bridge.js";
 const PACK_HEADER = 4;
 const SPRITE_STRIDE = 7;
 const GLYPH_STRIDE = 10;
+
+/** Audio event kinds from host_web exports */
+const AUDIO_PLAY_BGM = 0;
+const AUDIO_STOP_BGM = 1;
+const AUDIO_PLAY_SE = 2;
 
 const SAVE_KEY = (slot) => `moonsight/save/${slot}`;
 
@@ -23,6 +33,16 @@ let exports_ = null;
 let pendingIntent = 0;
 let lastTs = 0;
 let saveSlot = 0;
+
+/** @type {Record<string, string>} logical audio id → primary URL */
+let audioUrls = Object.create(null);
+
+/** @type {HTMLAudioElement | null} */
+let bgmEl = null;
+/** @type {string | null} */
+let bgmId = null;
+/** @type {AudioContext | null} */
+let audioCtx = null;
 
 /**
  * Copy last packed frame into a Float32Array via frame_at.
@@ -105,6 +125,140 @@ function drawPack(pack) {
   Gpu.endFrame();
 }
 
+/**
+ * Ensure AudioContext is running after a user gesture (autoplay policy).
+ */
+function ensureAudioUnlocked() {
+  try {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume().catch(() => {});
+    }
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+/**
+ * Resolve a logical audio id to a playable URL.
+ * Prefer explicit manifest.audio entry; else try id.ogg then id.mp3.
+ */
+function resolveAudioUrl(id) {
+  if (!id) return null;
+  if (audioUrls[id]) return audioUrls[id];
+  // If the id already looks like a path with extension, use as-is.
+  if (/\.(ogg|mp3|wav|m4a)(\?.*)?$/i.test(id)) return id;
+  // Prefer OGG, fallback MP3 (browser picks via <source> or sequential try).
+  return { ogg: `${id}.ogg`, mp3: `${id}.mp3`, primary: `${id}.ogg` };
+}
+
+/**
+ * @param {string | {ogg:string, mp3:string, primary:string}} urlOrAlt
+ * @param {{loop?: boolean, volume?: number}} opts
+ */
+function makeAudio(urlOrAlt, opts = {}) {
+  const el = new Audio();
+  el.preload = "auto";
+  el.loop = !!opts.loop;
+  el.volume = Math.max(0, Math.min(1, opts.volume ?? 1));
+  if (typeof urlOrAlt === "string") {
+    el.src = urlOrAlt;
+  } else {
+    // Prefer OGG via <source>, then MP3.
+    const sOgg = document.createElement("source");
+    sOgg.src = urlOrAlt.ogg;
+    sOgg.type = "audio/ogg";
+    const sMp3 = document.createElement("source");
+    sMp3.src = urlOrAlt.mp3;
+    sMp3.type = "audio/mpeg";
+    el.appendChild(sOgg);
+    el.appendChild(sMp3);
+    // Some engines need .src even with sources.
+    el.src = urlOrAlt.primary;
+  }
+  return el;
+}
+
+function stopBgm() {
+  if (bgmEl) {
+    try {
+      bgmEl.pause();
+      bgmEl.removeAttribute("src");
+      bgmEl.load();
+    } catch (_) {
+      /* ignore */
+    }
+    bgmEl = null;
+  }
+  bgmId = null;
+}
+
+function playBgm(id, looped, volume) {
+  const url = resolveAudioUrl(id);
+  if (!url) {
+    console.warn("audio: no URL for BGM", id);
+    return;
+  }
+  if (bgmId === id && bgmEl && !bgmEl.paused) {
+    bgmEl.volume = Math.max(0, Math.min(1, volume));
+    bgmEl.loop = !!looped;
+    return;
+  }
+  stopBgm();
+  ensureAudioUnlocked();
+  const el = makeAudio(url, { loop: looped, volume });
+  bgmEl = el;
+  bgmId = id;
+  const p = el.play();
+  if (p && typeof p.catch === "function") {
+    p.catch((e) => console.warn("bgm play blocked/failed", id, e));
+  }
+}
+
+function playSe(id, volume) {
+  const url = resolveAudioUrl(id);
+  if (!url) {
+    console.warn("audio: no URL for SE", id);
+    return;
+  }
+  ensureAudioUnlocked();
+  const el = makeAudio(url, { loop: false, volume });
+  const p = el.play();
+  if (p && typeof p.catch === "function") {
+    p.catch((e) => console.warn("se play blocked/failed", id, e));
+  }
+}
+
+/**
+ * Drain mixer events exported by MoonBit and apply via HTMLAudioElement.
+ */
+function flushAudio(exports) {
+  if (typeof exports.audio_event_count !== "function") return;
+  const n = exports.audio_event_count() | 0;
+  if (n <= 0) return;
+  for (let i = 0; i < n; i++) {
+    const kind = exports.audio_event_kind(i) | 0;
+    if (kind === AUDIO_PLAY_BGM) {
+      const id = exports.audio_event_resource(i) || "";
+      const looped = (exports.audio_event_looped(i) | 0) !== 0;
+      const volume = +exports.audio_event_volume(i) || 1;
+      playBgm(id, looped, volume);
+    } else if (kind === AUDIO_STOP_BGM) {
+      stopBgm();
+    } else if (kind === AUDIO_PLAY_SE) {
+      const id = exports.audio_event_resource(i) || "";
+      const volume = +exports.audio_event_volume(i) || 1;
+      playSe(id, volume);
+    }
+  }
+  if (typeof exports.audio_clear_events === "function") {
+    exports.audio_clear_events();
+  }
+}
+
 function frame(ts) {
   requestAnimationFrame(frame);
   if (!exports_) return;
@@ -115,6 +269,7 @@ function frame(ts) {
   try {
     exports_.export_frame(intent, dt);
     flushPendingGlyphs(exports_);
+    flushAudio(exports_);
     // Glyphs marked ready appear next frame (Phase 1; no second export/tick).
     const pack = copyFrame(exports_);
     drawPack(pack);
@@ -124,6 +279,11 @@ function frame(ts) {
 }
 
 function bindInput(canvas) {
+  // First pointer/key unlocks autoplay policy for BGM/SE.
+  const unlock = () => ensureAudioUnlocked();
+  window.addEventListener("pointerdown", unlock, { once: true });
+  window.addEventListener("keydown", unlock, { once: true });
+
   window.addEventListener("keydown", (ev) => {
     switch (ev.key) {
       case "Enter":
@@ -244,16 +404,35 @@ async function loadManifest(url) {
 }
 
 /**
- * Upload textures listed in manifest.resources: { "resId": "path.png", ... }
+ * Upload textures listed in manifest.resources and register audio URLs.
+ *
+ * manifest shape:
+ *   {
+ *     "resources": { "resId": "path.png", ... },
+ *     "audio": { "bgm_soft": "assets/bgm_soft.ogg", "click": "assets/click.mp3" }
+ *   }
+ *
+ * Audio entries may omit extension; resolve prefers .ogg then .mp3 at play time.
  */
 async function applyManifest(manifest) {
-  if (!manifest || !manifest.resources) return;
-  for (const [id, path] of Object.entries(manifest.resources)) {
-    try {
-      await Gpu.uploadPngUrl(id, path);
-      console.info("texture", id, "←", path);
-    } catch (e) {
-      console.warn("texture failed", id, path, e);
+  if (!manifest) return;
+  if (manifest.resources) {
+    for (const [id, path] of Object.entries(manifest.resources)) {
+      try {
+        await Gpu.uploadPngUrl(id, path);
+        console.info("texture", id, "←", path);
+      } catch (e) {
+        console.warn("texture failed", id, path, e);
+      }
+    }
+  }
+  if (manifest.audio && typeof manifest.audio === "object") {
+    audioUrls = Object.create(null);
+    for (const [id, path] of Object.entries(manifest.audio)) {
+      if (typeof path === "string" && path.length) {
+        audioUrls[id] = path;
+        console.info("audio", id, "←", path);
+      }
     }
   }
 }

@@ -2,6 +2,24 @@
 package "moonsight/moonsight/host_web"
 
 // Values
+pub fn audio_bgm() -> String
+
+pub fn audio_clear_events() -> Int
+
+pub fn audio_event_count() -> Int
+
+pub fn audio_event_kind(Int) -> Int
+
+pub fn audio_event_looped(Int) -> Int
+
+pub fn audio_event_resource(Int) -> String
+
+pub fn audio_event_volume(Int) -> Float
+
+pub fn audio_se() -> String
+
+pub fn audio_se_seq() -> Int
+
 pub fn clear_pending_glyphs() -> Int
 
 pub fn export_frame(Int, Float) -> Int

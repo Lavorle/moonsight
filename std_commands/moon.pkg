@@ -1,5 +1,6 @@
 import {
   "moonsight/moonsight/runtime",
+  "moonsight/moonsight/audio",
 }
 
 import {

@@ -1,12 +1,13 @@
 ///|
-/// Browser host entry: export packed frames; JS owns WebGPU.
+/// Browser host entry: export packed frames; JS owns WebGPU and Web Audio.
 ///
 /// Architecture (Phase 1):
-/// - MoonBit: Engine tick + `build_draw_list` + float pack
-/// - JS: `MoonSightGpu` pipelines / textures / submit
+/// - MoonBit: Engine tick + `build_draw_list` + float pack + logical audio mixer
+/// - JS: `MoonSightGpu` pipelines / textures / submit; HTMLAudio / Web Audio playback
 ///
 /// Wasm-GC arrays are opaque to JS, so the pack is exposed via
-/// `export_frame` (returns length) + `frame_at`.
+/// `export_frame` (returns length) + `frame_at`. Audio events drain via
+/// `audio_event_*` exports.
 
 ///|
 struct HostSession {
@@ -15,6 +16,8 @@ struct HostSession {
   mut resources : @render.ResourceTable
   layout : @render.UiLayout
   mut frame : FixedArray[Float]
+  /// Shared with the installed global mixer (`QueueBackend` records play/stop).
+  mut audio_queue : @audio.QueueBackend
 }
 
 ///|
@@ -24,7 +27,16 @@ let session : Ref[HostSession] = Ref({
   resources: @render.ResourceTable::new(),
   layout: @render.UiLayout::default_fhd(),
   frame: (FixedArray::make(0, 0.0) : FixedArray[Float]),
+  audio_queue: @audio.QueueBackend::new(),
 })
+
+///|
+/// Point the process-global mixer at this session's queue backend.
+fn install_session_audio() -> Unit {
+  let s = session.val
+  let b : &@audio.AudioBackend = s.audio_queue
+  @audio.install_mixer(@audio.Mixer::with_backend(b))
+}
 
 ///|
 fn demo_source() -> String {
@@ -73,6 +85,9 @@ fn load_source_inner(src : String, file~ : String) -> Result[Unit, String] {
   s.atlas = @render.GlyphAtlas::new()
   s.resources = @render.ResourceTable::new()
   s.frame = (FixedArray::make(0, 0.0) : FixedArray[Float])
+  // Fresh audio queue for the new session; host commands write via global mixer.
+  s.audio_queue = @audio.QueueBackend::new()
+  install_session_audio()
   // Pre-intern common UI resources so JS can upload placeholders early.
   ignore(s.resources.intern(@render.ui_dialogue_box))
   ignore(s.resources.intern(@render.ui_nameplate))
@@ -153,7 +168,7 @@ pub fn save_json(slot : Int) -> String {
 }
 
 ///|
-/// Apply a save JSON blob (0 ok, 1 error).
+/// Apply a save JSON blob (0 ok, 1 error). Re-syncs mixer BGM from Stage.
 pub fn load_json(json : String) -> Int {
   let s = session.val
   match s.engine {
@@ -161,11 +176,95 @@ pub fn load_json(json : String) -> Int {
     Some(eng) =>
       try {
         eng.load(json)
+        // Restore logical BGM without replaying last SE.
+        @audio.global_mixer().apply_logic(eng.stage.bgm, eng.stage.se)
         0
       } catch {
         _ => 1
       }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Audio event drain for JS (QueueBackend behind the global mixer)
+//
+// kind codes: 0=PlayBgm, 1=StopBgm, 2=PlaySe
+// ---------------------------------------------------------------------------
+
+///|
+pub fn audio_event_count() -> Int {
+  session.val.audio_queue.len()
+}
+
+///|
+/// Event kind at index: 0 PlayBgm, 1 StopBgm, 2 PlaySe, -1 OOB.
+pub fn audio_event_kind(i : Int) -> Int {
+  match session.val.audio_queue.get(i) {
+    None => -1
+    Some(PlayBgm(..)) => 0
+    Some(StopBgm) => 1
+    Some(PlaySe(..)) => 2
+  }
+}
+
+///|
+/// Resource id for PlayBgm / PlaySe (empty for StopBgm / OOB).
+pub fn audio_event_resource(i : Int) -> String {
+  match session.val.audio_queue.get(i) {
+    Some(PlayBgm(resource~, ..)) => resource
+    Some(PlaySe(resource~, ..)) => resource
+    _ => ""
+  }
+}
+
+///|
+/// 1 if BGM should loop, else 0.
+pub fn audio_event_looped(i : Int) -> Int {
+  match session.val.audio_queue.get(i) {
+    Some(PlayBgm(looped~, ..)) => if looped { 1 } else { 0 }
+    _ => 0
+  }
+}
+
+///|
+pub fn audio_event_volume(i : Int) -> Float {
+  match session.val.audio_queue.get(i) {
+    Some(PlayBgm(volume~, ..)) => Float::from_double(volume)
+    Some(PlaySe(volume~, ..)) => Float::from_double(volume)
+    _ => 0.0
+  }
+}
+
+///|
+/// Clear the drained event queue after JS has applied them.
+pub fn audio_clear_events() -> Int {
+  let n = session.val.audio_queue.len()
+  session.val.audio_queue.clear()
+  n
+}
+
+///|
+/// Current logical BGM id (empty if none) — diagnostic / resume helpers.
+pub fn audio_bgm() -> String {
+  match @audio.global_mixer().bgm {
+    None => ""
+    Some(id) => id
+  }
+}
+
+///|
+/// Current logical SE id (empty if none).
+pub fn audio_se() -> String {
+  match @audio.global_mixer().se {
+    None => ""
+    Some(id) => id
+  }
+}
+
+///|
+/// SE sequence counter (increments on each play_se).
+pub fn audio_se_seq() -> Int {
+  @audio.global_mixer().se_seq
 }
 
 ///|
@@ -275,5 +374,6 @@ pub fn clear_pending_glyphs() -> Int {
 ///|
 fn main {
   // Linked as `_start`. Prefer explicit `init_demo` from JS after GPU init.
+  install_session_audio()
   println("moonsight host_web ready")
 }

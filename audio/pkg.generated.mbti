@@ -1,0 +1,67 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonsight/moonsight/audio"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn audio_package_name() -> String
+
+pub fn global_mixer() -> Mixer
+
+pub fn install_mixer(Mixer) -> Unit
+
+pub fn reset_global_mixer() -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) enum AudioEvent {
+  PlayBgm(resource~ : String, looped~ : Bool, volume~ : Double)
+  StopBgm
+  PlaySe(resource~ : String, volume~ : Double)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Mixer {
+  mut bgm : String?
+  mut bgm_loop : Bool
+  mut bgm_volume : Double
+  mut se : String?
+  mut se_volume : Double
+  mut se_seq : Int
+  mut backend : &AudioBackend
+}
+pub fn Mixer::apply_logic(Self, String?, String?) -> Unit
+pub fn Mixer::new() -> Self
+pub fn Mixer::play_bgm(Self, String, looped? : Bool, volume? : Double) -> Unit
+pub fn Mixer::play_se(Self, String, volume? : Double) -> Unit
+pub fn Mixer::set_backend(Self, &AudioBackend) -> Unit
+pub fn Mixer::stop_bgm(Self) -> Unit
+pub fn Mixer::with_backend(&AudioBackend) -> Self
+
+pub(all) struct NullBackend {
+  dummy : Int
+} derive(@debug.Debug)
+pub fn NullBackend::new() -> Self
+pub impl AudioBackend for NullBackend
+
+pub(all) struct QueueBackend {
+  mut events : Array[AudioEvent]
+} derive(@debug.Debug)
+pub fn QueueBackend::clear(Self) -> Unit
+pub fn QueueBackend::get(Self, Int) -> AudioEvent?
+pub fn QueueBackend::len(Self) -> Int
+pub fn QueueBackend::new() -> Self
+pub fn QueueBackend::take(Self) -> Array[AudioEvent]
+pub impl AudioBackend for QueueBackend
+
+// Type aliases
+
+// Traits
+pub(open) trait AudioBackend {
+  fn play_bgm(Self, String, Bool, Double) -> Unit
+  fn stop_bgm(Self) -> Unit
+  fn play_se(Self, String, Double) -> Unit
+}
+
