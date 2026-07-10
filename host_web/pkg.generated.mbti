@@ -40,8 +40,6 @@ pub fn load_json(String) -> Int
 
 pub fn load_msb(String) -> Int
 
-pub fn load_screens_json(String) -> Int
-
 pub fn load_source(String) -> Int
 
 pub fn mark_glyph_ready(Int, Int, Int, Int, Int, Int) -> Unit
@@ -71,6 +69,8 @@ pub fn save_json(Int) -> String
 pub fn save_slot_count() -> Int
 
 pub fn set_prefs_json(String) -> Int
+
+pub fn set_save_slots(Int) -> Int
 
 pub fn set_slot_json(Int, String) -> Int
 

@@ -858,10 +858,30 @@ function bytesToBinaryString(buf) {
 }
 
 /**
- * After narrative load: hydrate storage, prefs, cold-start title (UiApp modals).
- * Screen DSL / screens.json removed in Phase 4 — title comes from std_ui.
+ * Apply multi-slot capacity from manifest before hydrating localStorage slots.
+ * @param {unknown} manifest
  */
-function afterEngineReady() {
+function applySaveSlotsFromManifest(manifest) {
+  if (
+    !manifest ||
+    manifest.save_slots == null ||
+    typeof exports_?.set_save_slots !== "function"
+  ) {
+    return;
+  }
+  const n = Number(manifest.save_slots);
+  if (!Number.isFinite(n)) return;
+  const rc = exports_.set_save_slots(n | 0);
+  console.info("set_save_slots", n | 0, "rc=", rc);
+}
+
+/**
+ * After narrative load: save_slots, hydrate storage, prefs, cold-start title.
+ * Screen DSL / screens.json removed in Phase 4 — title comes from std_ui.
+ * @param {unknown} [manifest]
+ */
+function afterEngineReady(manifest) {
+  applySaveSlotsFromManifest(manifest);
   hydrateSlotsFromStorage();
   loadPrefsFromStorage();
   if (typeof exports_?.boot_title === "function") {
@@ -870,8 +890,11 @@ function afterEngineReady() {
   }
 }
 
-async function maybeLoadSource() {
-  // Prefer compiled multi-file game.msb when present; fallback demo.yuki / init_demo.
+/**
+ * Prefer compiled multi-file game.msb when present; fallback demo.yuki / init_demo.
+ * @param {unknown} [manifest]
+ */
+async function maybeLoadSource(manifest) {
   // Replacing mixer/source state: stop any JS-side BGM so it cannot desync.
   let loaded = false;
   try {
@@ -915,7 +938,7 @@ async function maybeLoadSource() {
     console.info("init_demo()");
     stopBgm();
   }
-  afterEngineReady();
+  afterEngineReady(manifest);
 }
 
 /** Fixed logical resolution; MoonBit packs all draw coords in FHD pixels. */
@@ -1013,13 +1036,15 @@ export async function boot(options = {}) {
 
     setStatus(`load wasm ${wasmUrl}…`);
     exports_ = await loadWasm(wasmUrl);
-    // _start may have run (println). Explicit demo init:
-    setStatus("init engine…");
-    await maybeLoadSource();
 
     const manifestUrl =
       options.manifestUrl || params.get("manifest") || "./manifest.json";
     const manifest = await loadManifest(manifestUrl);
+
+    // _start may have run (println). Explicit demo init:
+    // Pass manifest so save_slots applies before slot hydration / boot_title.
+    setStatus("init engine…");
+    await maybeLoadSource(manifest);
     await applyManifest(manifest);
 
     // Delay first frame one rAF so font/GPU state settles before typewriter.

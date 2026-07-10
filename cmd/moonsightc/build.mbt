@@ -16,6 +16,8 @@ fn build_staging_dir(out_dir : String) -> String {
 /// success. On failure, staging is deleted and any prior `out_dir` is left intact.
 fn cmd_build(project_dir : String, out_dir : String) -> Int {
   let staging = build_staging_dir(out_dir)
+  // Track whether we overwrote project_ui so failure paths restore the stub.
+  let mut linked_ui = false
   try {
     guard path_exists(project_dir) else {
       println("error: project dir not found: \{project_dir}")
@@ -37,6 +39,14 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     }
     let ir = compile_yuki_paths(yuki[:], entry_file=entry_path)
     let bytecode = @script.encode_module(ir)
+
+    // Link optional project UI into host_web/project_ui, then rebuild wasm when set.
+    prepare_project_ui(project_dir, cfg)
+    linked_ui = true
+    match cfg.ui_package {
+      Some(_) => rebuild_host_web_wasm()
+      None => ()
+    }
 
     // Drop leftover staging from a previous interrupted build.
     remove_tree_best_effort(staging)
@@ -72,6 +82,7 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     // Fail build when scripts reference string-literal resources not on disk.
     if !validate_literal_resources(ir, resources, audio) {
       remove_tree_best_effort(staging)
+      restore_project_ui_stub()
       return 1
     }
 
@@ -97,11 +108,18 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     }
     rename_path(staging, out_dir)
 
+    // Always restore committed stub (even if no ui_package was linked).
+    restore_project_ui_stub()
+    linked_ui = false
+
     println("build ok: \{cfg.name} → \{out_dir}")
     0
   } catch {
     IoError(msg) => {
       remove_tree_best_effort(staging)
+      if linked_ui {
+        restore_project_ui_stub()
+      }
       println("error: \{msg}")
       1
     }

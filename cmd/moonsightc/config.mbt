@@ -7,6 +7,10 @@ struct ProjectConfig {
   logical_height : Int
   /// Multi-slot save capacity (default 6, clamp 1..20).
   save_slots : Int
+  /// Optional MoonBit UI package path relative to the project root.
+  /// When set, moonsightc copies its `*.mbt` into `host_web/project_ui` before
+  /// rebuilding the host wasm (restored to the no-op stub after build).
+  ui_package : String?
 } derive(Debug)
 
 ///|
@@ -17,6 +21,7 @@ fn default_config() -> ProjectConfig {
     logical_width: 1920,
     logical_height: 1080,
     save_slots: 6,
+    ui_package: None,
   }
 }
 
@@ -61,6 +66,19 @@ fn parse_project_config(text : String) -> ProjectConfig raise {
     Some(Json::Number(n, ..)) =>
       cfg = { ..cfg, save_slots: clamp_save_slots(n.to_int()) }
     Some(_) => fail("moonsight.json: save_slots must be a number")
+    None => ()
+  }
+  match map.get("ui_package") {
+    Some(Json::String(s)) => {
+      let t = s.trim().to_owned()
+      if t.length() == 0 {
+        cfg = { ..cfg, ui_package: None }
+      } else {
+        cfg = { ..cfg, ui_package: Some(t) }
+      }
+    }
+    Some(Json::Null) => cfg = { ..cfg, ui_package: None }
+    Some(_) => fail("moonsight.json: ui_package must be a string")
     None => ()
   }
   cfg

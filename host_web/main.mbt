@@ -119,6 +119,8 @@ fn install_engine_from_ir(ir : @script.IrModule) -> Unit {
   let entry = ir.entry
   let app = @runtime.UiApp::new()
   @std_ui.register(app)
+  // Optional project UI overlay (stub no-op unless moonsightc linked ui_package).
+  @project_ui.register(app)
   let eng = @runtime.Engine::from_ir(
     ir,
     entry~,
@@ -141,16 +143,6 @@ fn install_engine_from_ir(ir : @script.IrModule) -> Unit {
   ignore(s.resources.intern(@render.ui_button))
   ignore(s.resources.intern(@render.ui_button_focus))
   ignore(s.resources.intern("bg/demo"))
-}
-
-///|
-/// Legacy export: Screen DSL / `screens.json` removed in Phase 4.
-/// Kept as a no-op for older JS glue; always returns 0 when an engine exists.
-pub fn load_screens_json(_json : String) -> Int {
-  match session.val.engine {
-    None => 1
-    Some(_) => 0
-  }
 }
 
 ///|
@@ -189,6 +181,19 @@ pub fn save_slot_count() -> Int {
   match session.val.engine {
     None => 0
     Some(eng) => eng.ui.save_slots
+  }
+}
+
+///|
+/// Apply multi-slot capacity from host manifest (`save_slots`, clamp 1..20).
+/// Returns 0 ok, 1 if no engine.
+pub fn set_save_slots(n : Int) -> Int {
+  match session.val.engine {
+    None => 1
+    Some(eng) => {
+      eng.set_save_slots(n)
+      0
+    }
   }
 }
 
