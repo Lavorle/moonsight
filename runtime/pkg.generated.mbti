@@ -133,6 +133,10 @@ pub(all) struct SaveGame {
   text : TextBlock?
   overlay_opacity : Double
   audio : AudioLogicState
+  wait : WaitKind
+  choices : Array[String]?
+  choose_result_var : String?
+  auto : Bool
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct StackFrame {
@@ -205,6 +209,7 @@ pub(all) struct Vm {
   mut halted : Bool
   mut wait : WaitKind
   mut choose_result_var : String?
+  mut last_error : String?
 } derive(@debug.Debug)
 pub fn Vm::from_module(@script.IrModule, entry~ : String) -> Self
 pub fn Vm::jump_scene(Self, String, Stage) -> Unit
@@ -215,7 +220,7 @@ pub(all) enum WaitKind {
   Yield
   Choose
   Halted
-} derive(Eq, @debug.Debug)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 // Type aliases
 

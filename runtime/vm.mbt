@@ -5,7 +5,7 @@ pub(all) enum WaitKind {
   Yield
   Choose
   Halted
-} derive(Debug, Eq)
+} derive(Debug, Eq, ToJson, FromJson)
 
 ///|
 /// IR interpreter: control flow + host calls through Director.
@@ -20,21 +20,38 @@ pub(all) struct Vm {
   mut wait : WaitKind
   /// Variable name that receives the selected choice index (while waiting Choose).
   mut choose_result_var : String?
+  /// Last soft host/VM error message (missing scene, host Error, …).
+  mut last_error : String?
 } derive(Debug)
 
 ///|
 /// Create a VM positioned at `entry` scene.
 pub fn Vm::from_module(ir : @script.IrModule, entry~ : String) -> Vm {
-  let ops = load_scene_ops(ir, entry)
-  {
-    ir,
-    ops,
-    ip: 0,
-    scene: entry,
-    stack: [],
-    halted: false,
-    wait: Running,
-    choose_result_var: None,
+  match load_scene_ops(ir, entry) {
+    Some(ops) =>
+      {
+        ir,
+        ops,
+        ip: 0,
+        scene: entry,
+        stack: [],
+        halted: false,
+        wait: Running,
+        choose_result_var: None,
+        last_error: None,
+      }
+    None =>
+      {
+        ir,
+        ops: [],
+        ip: 0,
+        scene: entry,
+        stack: [],
+        halted: true,
+        wait: Halted,
+        choose_result_var: None,
+        last_error: Some("unknown scene: \{entry}"),
+      }
   }
 }
 
@@ -77,7 +94,7 @@ pub fn Vm::run_until_wait(
             self.jump_scene(scene, stage)
           Error(msg) => {
             // Soft-fail: halt so tests can observe; no panic in Phase 1 kernel.
-            ignore(msg)
+            self.last_error = Some(msg)
             self.halted = true
             self.wait = Halted
           }
@@ -118,20 +135,30 @@ pub fn Vm::run_until_wait(
 ///|
 /// Switch to another scene by name (used later by flow.jump / JumpScene).
 pub fn Vm::jump_scene(self : Vm, name : String, stage : Stage) -> Unit {
-  self.ops = load_scene_ops(self.ir, name)
-  self.ip = 0
-  self.scene = name
-  stage.scene = name
-  self.halted = false
-  self.wait = Running
-  self.choose_result_var = None
+  match load_scene_ops(self.ir, name) {
+    Some(ops) => {
+      self.ops = ops
+      self.ip = 0
+      self.scene = name
+      stage.scene = name
+      self.halted = false
+      self.wait = Running
+      self.choose_result_var = None
+      self.last_error = None
+    }
+    None => {
+      self.last_error = Some("unknown scene: \{name}")
+      self.halted = true
+      self.wait = Halted
+    }
+  }
 }
 
 ///|
-fn load_scene_ops(ir : @script.IrModule, name : String) -> Array[@script.IrOp] {
+fn load_scene_ops(ir : @script.IrModule, name : String) -> Array[@script.IrOp]? {
   match ir.scenes.get(name) {
-    Some(scene) => @script.linearize_ops(scene.ops)
-    None => []
+    Some(scene) => Some(@script.linearize_ops(scene.ops))
+    None => None
   }
 }
 

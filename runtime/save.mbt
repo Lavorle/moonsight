@@ -1,6 +1,8 @@
 ///|
 /// Current save format version (Phase 1 JSON).
-pub let save_format_version : Int = 1
+///
+/// v2 adds explicit `wait`, `choices`, `choose_result_var`, and `auto`.
+pub let save_format_version : Int = 2
 
 ///|
 /// Call-stack frame reserved for nested scene calls.
@@ -31,6 +33,14 @@ pub(all) struct SaveGame {
   text : TextBlock?
   overlay_opacity : Double
   audio : AudioLogicState
+  /// VM wait kind at save time (Yield / Choose / …).
+  wait : WaitKind
+  /// Active choice labels when `wait` is Choose (None when no choice UI).
+  choices : Array[String]?
+  /// Variable that receives the choice index while waiting Choose.
+  choose_result_var : String?
+  /// Auto-advance flag.
+  auto : Bool
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
@@ -67,6 +77,10 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
   for k, v in self.stage.vars {
     vars[k] = v
   }
+  let choices : Array[String]? = match self.stage.choices {
+    None => None
+    Some(c) => Some(c.options.copy())
+  }
   let game : SaveGame = {
     format_version: save_format_version,
     module_id: "",
@@ -78,6 +92,10 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
     text: self.stage.text,
     overlay_opacity: self.stage.overlay_opacity,
     audio: { bgm: self.stage.bgm, se: self.stage.se },
+    wait: self.vm.wait,
+    choices,
+    choose_result_var: self.vm.choose_result_var,
+    auto: self.auto,
   }
   game.to_json().stringify()
 }
@@ -85,8 +103,8 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
 ///|
 /// Restore engine state from a JSON save blob.
 ///
-/// Rejects `format_version != 1`. Reloads scene ops for the saved scene name
-/// and applies `ip`, vars, layers, text, overlay, and audio fields.
+/// Rejects unsupported `format_version`. Reloads scene ops for the saved scene
+/// name and applies `ip`, vars, layers, text, overlay, audio, wait, and choices.
 pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
   apply_save_game(self, parse_save_game(blob))
 }
@@ -130,17 +148,24 @@ fn reject_unsupported_version(json : Json) -> Unit raise SaveError {
 
 ///|
 fn apply_save_game(eng : Engine, game : SaveGame) -> Unit {
-  eng.vm.ops = load_scene_ops(eng.vm.ir, game.scene)
+  match load_scene_ops(eng.vm.ir, game.scene) {
+    Some(ops) => {
+      eng.vm.ops = ops
+      eng.vm.halted = game.wait is Halted
+      eng.vm.last_error = None
+    }
+    None => {
+      eng.vm.ops = []
+      eng.vm.halted = true
+      eng.vm.last_error = Some("unknown scene: \{game.scene}")
+    }
+  }
   eng.vm.scene = game.scene
   eng.vm.ip = game.ip
   eng.vm.stack = []
-  eng.vm.halted = false
-  eng.vm.choose_result_var = None
-  // Saves are typically taken at a player-facing wait; prefer Yield when text is up.
-  eng.vm.wait = match game.text {
-    Some(_) => Yield
-    None => Running
-  }
+  eng.vm.choose_result_var = game.choose_result_var
+  eng.vm.wait = game.wait
+  eng.auto = game.auto
   eng.stage.scene = game.scene
   let vars : Map[String, Value] = {}
   for k, v in game.vars {
@@ -152,6 +177,9 @@ fn apply_save_game(eng : Engine, game : SaveGame) -> Unit {
   eng.stage.overlay_opacity = game.overlay_opacity
   eng.stage.bgm = game.audio.bgm
   eng.stage.se = game.audio.se
-  eng.stage.choices = None
+  match game.choices {
+    Some(opts) => eng.stage.set_choices(opts)
+    None => eng.stage.clear_choices()
+  }
   eng.stage.save_hint = false
 }
