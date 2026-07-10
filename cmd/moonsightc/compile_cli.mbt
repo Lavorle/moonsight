@@ -12,10 +12,6 @@ fn format_compile_error(err : @script.CompileError) -> String {
       "\{span.file}:\{span.line}:\{span.col}: duplicate scene `\{name}`"
     Resolve(@script.UnknownParent(name~, parent~, span~)) =>
       "\{span.file}:\{span.line}:\{span.col}: scene `\{name}` unknown parent `\{parent}`"
-    Screen(@script.InvalidShowMode(mode~, span~)) =>
-      "\{span.file}:\{span.line}:\{span.col}: invalid show_screen mode `\{mode}` (expected save|load)"
-    Screen(@script.InvalidSetPrefType(key~, span~)) =>
-      "\{span.file}:\{span.line}:\{span.col}: set_pref `\{key}` value must be number or bool"
     Bytecode(e) => "bytecode error: \{to_repr(e)}"
   }
 }

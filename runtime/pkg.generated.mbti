@@ -22,6 +22,10 @@ pub fn runtime_package_name() -> String
 
 pub let save_format_version : Int
 
+pub fn slot_label(SaveGame?) -> String
+
+pub fn split_host_args(Array[Value]) -> (Array[Value], Map[String, Value])
+
 pub fn value_as_double(Value) -> Double?
 
 pub fn value_as_int(Value) -> Int?
@@ -38,6 +42,10 @@ pub impl Show for SaveError
 pub(all) struct AudioLogicState {
   bgm : String?
   se : String?
+  bgm_volume : Double?
+  bgm_fade_to : Double?
+  bgm_fade_remaining : Double?
+  bgm_fade_stop : Bool?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) enum BuiltinHost {
@@ -47,6 +55,7 @@ pub(all) enum BuiltinHost {
   LayerShow
   LayerHide
   LayerMove
+  LayerSet
   VarSet
 } derive(Eq, @debug.Debug)
 
@@ -70,10 +79,24 @@ pub(all) struct Engine {
   director : Director
   mut stage : Stage
   mut auto : Bool
-} derive(@debug.Debug)
-pub fn Engine::from_ir(@script.IrModule, entry~ : String, director? : Director) -> Self
+  mut ui : UiRuntime
+  ir_entry : String
+  mut slot_blobs : Array[String?]
+}
+pub fn Engine::boot_title(Self) -> Unit
+pub fn Engine::clear_screens_to_playing(Self) -> Unit
+pub fn Engine::from_ir(@script.IrModule, entry~ : String, director? : Director, app? : UiApp, save_slots? : Int) -> Self
+pub fn Engine::get_slot_blob(Self, Int) -> String?
 pub fn Engine::load(Self, String) -> Unit raise SaveError
+pub fn Engine::occupied_slots(Self) -> Array[Bool]
+pub fn Engine::prefs_json(Self) -> String
+pub fn Engine::quit_to_title(Self) -> Unit
 pub fn Engine::save(Self, slot? : Int) -> String
+pub fn Engine::set_prefs_json(Self, String) -> Int
+pub fn Engine::set_save_slots(Self, Int) -> Unit
+pub fn Engine::set_slot_blob(Self, Int, String) -> Unit
+pub fn Engine::start_game(Self) -> Unit
+pub fn Engine::sync_ui_bind(Self) -> Unit
 pub fn Engine::tick(Self, Intent, dt? : Double) -> Unit
 pub fn Engine::view(Self) -> StageView
 
@@ -101,7 +124,11 @@ pub(all) enum Intent {
   SkipTyping
   OpenMenu
   ToggleAuto
+  MenuUp
+  MenuDown
 } derive(Eq, @debug.Debug)
+
+type LaidFocus derive(@debug.Debug)
 
 pub(all) enum LayerKind {
   Background
@@ -120,7 +147,37 @@ pub(all) struct LayerState {
   y : Double
   opacity : Double
   visible : Bool
+  tweens : Array[LayerTween]
+  pending_hide : Bool
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+type LayerStateV2 derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct LayerTween {
+  prop : TweenProp
+  to : Double
+  remaining : Double
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct ModalInstance {
+  name : String
+  mode : String?
+  focus : Int
+} derive(@debug.Debug)
+
+pub(all) struct Prefs {
+  text_speed : Double
+  auto_mode : Bool
+  master_volume : Double
+  bgm_volume : Double
+  se_volume : Double
+} derive(Eq, ToJson, @debug.Debug)
+pub fn Prefs::adjust(Self, String, Double) -> Self
+pub fn Prefs::clamp(Self) -> Self
+pub fn Prefs::default() -> Self
+pub fn Prefs::from_json_string(String) -> Self raise
+pub fn Prefs::set(Self, String, Value) -> Self
+pub fn Prefs::to_json_string(Self) -> String
 
 pub(all) struct SaveGame {
   format_version : Int
@@ -137,7 +194,13 @@ pub(all) struct SaveGame {
   choices : Array[String]?
   choose_result_var : String?
   auto : Bool
+  fade_to : Double
+  fade_remaining : Double
+  wait_remaining : Double
+  saved_at : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+type SaveGameV2 derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct StackFrame {
   scene : String
@@ -152,16 +215,21 @@ pub(all) struct Stage {
   mut scene : String
   mut overlay_opacity : Double
   mut fade_to : Double
-  mut fade_duration : Double
+  mut wait_remaining : Double
+  mut fade_remaining : Double
   mut bgm : String?
   mut se : String?
   mut save_hint : Bool
+  mut ui_ops : Array[UiHostOp]
 } derive(@debug.Debug)
+pub fn Stage::begin_hide_layer(Self, id~ : String, duration~ : Double) -> Unit
 pub fn Stage::begin_text(Self, speaker? : String) -> Unit
+pub fn Stage::choice_focus(Self) -> Int?
 pub fn Stage::clear_choices(Self) -> Unit
 pub fn Stage::complete_text(Self) -> Unit
 pub fn Stage::get_var(Self, String) -> Value
 pub fn Stage::hide_layer(Self, id~ : String) -> Unit
+pub fn Stage::move_choice_focus(Self, Int) -> Unit
 pub fn Stage::new() -> Self
 pub fn Stage::reveal_chars(Self, Int) -> Unit
 pub fn Stage::select_choice(Self, Int) -> Unit
@@ -169,6 +237,8 @@ pub fn Stage::set_choices(Self, Array[String]) -> Unit
 pub fn Stage::set_var(Self, String, Value) -> Unit
 pub fn Stage::show_layer(Self, id~ : String, layer~ : LayerKind, resource~ : String, z~ : Int, x? : Double, y? : Double, opacity? : Double) -> Unit
 pub fn Stage::snapshot_layers(Self) -> Array[LayerState]
+pub fn Stage::start_layer_tween(Self, id~ : String, prop~ : TweenProp, to~ : Double, duration~ : Double) -> Unit
+pub fn Stage::tick_layer_tweens(Self, Double) -> Unit
 pub fn Stage::type_more(Self, String) -> Unit
 
 pub(all) struct StageView {
@@ -184,12 +254,120 @@ pub(all) struct StageView {
 } derive(@debug.Debug)
 pub fn StageView::from_stage(Stage, wait~ : WaitKind, auto~ : Bool) -> Self
 
+pub(all) enum TextBindSrc {
+  Literal(String)
+  DialogueName
+  DialogueBody
+  Pref(String)
+  SlotLabel(Int)
+  Var(String)
+} derive(Eq, @debug.Debug)
+pub fn TextBindSrc::resolve(Self, UiBindCtx) -> String
+
 pub(all) struct TextBlock {
   speaker : String?
   full_text : String
   visible_chars : Int
   complete : Bool
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) enum TweenProp {
+  X
+  Y
+  Opacity
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) struct UiApp {
+  mut hud : UiNode?
+  mut modals : Map[String, UiNode]
+  mut handlers : Map[Int, (&Capabilities) -> Unit]
+  mut next_action_id : Int
+}
+pub fn UiApp::alloc_action(Self, (&Capabilities) -> Unit) -> Int
+pub fn UiApp::button(Self, String, (&Capabilities) -> Unit) -> UiNode
+pub fn UiApp::invoke(Self, Int, &Capabilities) -> Unit
+pub fn UiApp::new() -> Self
+pub fn UiApp::register_modal(Self, String, UiNode) -> Unit
+pub fn UiApp::set_hud(Self, UiNode) -> Unit
+
+pub(all) struct UiBindCtx {
+  has_text : Bool
+  has_choices : Bool
+  prefs : Prefs
+  occupied : Array[Bool]
+  modal_mode : String?
+  vars : Map[String, String]
+  choice_labels : Array[String]
+  dialogue_name : String
+  dialogue_body : String
+} derive(@debug.Debug)
+pub fn UiBindCtx::empty() -> Self
+
+pub(all) struct UiDrawOp {
+  kind : Int
+  resource : String
+  x : Float
+  y : Float
+  w : Float
+  h : Float
+  opacity : Float
+  z : Int
+  text : String?
+  font_size : Float
+  focused : Bool
+} derive(@debug.Debug)
+
+pub(all) enum UiFocusTarget {
+  Button(Int)
+  Choice(Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum UiHostOp {
+  Show(name~ : String, mode~ : String?)
+  Hide(name~ : String?)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum UiMode {
+  Title
+  Playing
+  Menu
+} derive(Eq, @debug.Debug)
+
+pub(all) enum UiNode {
+  VBox(x~ : Double?, y~ : Double?, children~ : Array[UiNode])
+  HBox(x~ : Double?, y~ : Double?, children~ : Array[UiNode])
+  Fixed(x~ : Double, y~ : Double, w~ : Double?, h~ : Double?, children~ : Array[UiNode])
+  Spacer(w~ : Double, h~ : Double)
+  Panel(resource~ : String, x~ : Double, y~ : Double, w~ : Double, h~ : Double, visible~ : VisiblePred)
+  Text(src~ : TextBindSrc, x~ : Double, y~ : Double, font_size~ : Double, visible~ : VisiblePred)
+  Image(resource~ : String, x~ : Double, y~ : Double, w~ : Double, h~ : Double, visible~ : VisiblePred)
+  Button(label~ : String, action_id~ : Int, visible~ : VisiblePred)
+  ChoiceList(x~ : Double, y~ : Double, w~ : Double, line_h~ : Double, visible~ : VisiblePred)
+} derive(@debug.Debug)
+
+pub(all) struct UiRuntime {
+  app : UiApp
+  mut mode : UiMode
+  mut stack : Array[ModalInstance]
+  mut save_slots : Int
+  mut prefs : Prefs
+  mut bind : UiBindCtx
+  mut hud_focus : Int
+}
+pub fn UiRuntime::activate(Self, &Capabilities) -> Unit
+pub fn UiRuntime::focus_delta(Self, &Capabilities, Int) -> Unit
+pub fn UiRuntime::focusables_top(Self, UiBindCtx) -> Array[UiFocusTarget]
+pub fn UiRuntime::from_app(UiApp, save_slots~ : Int) -> Self
+pub fn UiRuntime::handle_pointer(Self, &Capabilities, Double, Double) -> Unit
+pub fn UiRuntime::hide_modal(Self, name? : String) -> Unit
+pub fn UiRuntime::paint_hud(Self, canvas_w~ : Double, canvas_h~ : Double, bind~ : UiBindCtx) -> Array[UiDrawOp]
+pub fn UiRuntime::paint_modal(Self, canvas_w~ : Double, canvas_h~ : Double, bind~ : UiBindCtx) -> Array[UiDrawOp]
+pub fn UiRuntime::return_modal(Self) -> Unit
+pub fn UiRuntime::show_modal(Self, String, mode? : String) -> Unit
+pub fn UiRuntime::stack_depth(Self) -> Int
+pub fn UiRuntime::sync_bind(Self, UiBindCtx) -> Unit
+
+type UiWalkState derive(@debug.Debug)
 
 pub(all) enum Value {
   Int(Int)
@@ -199,6 +377,18 @@ pub(all) enum Value {
   None_
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn Value::truthy(Self) -> Bool
+
+pub(all) enum VisiblePred {
+  Always
+  Never
+  HasText
+  HasChoices
+  PrefBool(String)
+  SlotOccupied(Int)
+  ModeIs(String)
+  And(VisiblePred, VisiblePred)
+} derive(Eq, @debug.Debug)
+pub fn VisiblePred::eval(Self, UiBindCtx) -> Bool
 
 pub(all) struct Vm {
   ir : @script.IrModule
@@ -225,4 +415,21 @@ pub(all) enum WaitKind {
 // Type aliases
 
 // Traits
+pub(open) trait Capabilities {
+  fn start_game(Self) -> Unit
+  fn quit_to_title(Self) -> Unit
+  fn show_modal(Self, String, mode~ : String?) -> Unit
+  fn return_modal(Self) -> Unit
+  fn hide_modal(Self, name~ : String?) -> Unit
+  fn save_slot(Self, Int) -> Unit
+  fn load_slot(Self, Int) -> Unit
+  fn slot_occupied(Self, Int) -> Bool
+  fn slot_label(Self, Int) -> String
+  fn set_pref_f(Self, String, Double) -> Unit
+  fn set_pref_b(Self, String, Bool) -> Unit
+  fn adjust_pref(Self, String, Double) -> Unit
+  fn confirm_choice(Self, Int) -> Unit
+  fn advance(Self) -> Unit
+  fn prefs(Self) -> Prefs
+}
 

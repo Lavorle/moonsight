@@ -67,7 +67,7 @@ pub(all) struct ChoiceState {
 } derive(Debug)
 
 ///|
-/// Pending `@ui.show` / `@ui.hide` host ops (drained by Engine onto `ScreenState`).
+/// Pending `@ui.show` / `@ui.hide` host ops (drained by Engine onto `UiRuntime`).
 pub(all) enum UiHostOp {
   Show(name~ : String, mode~ : String?)
   Hide(name~ : String?)

@@ -858,34 +858,13 @@ function bytesToBinaryString(buf) {
 }
 
 /**
- * Load screens.json into engine defs. Returns true when screens were installed.
+ * After narrative load: hydrate storage, prefs, cold-start title (UiApp modals).
+ * Screen DSL / screens.json removed in Phase 4 — title comes from std_ui.
  */
-async function maybeLoadScreens() {
-  if (!exports_ || typeof exports_.load_screens_json !== "function") {
-    return false;
-  }
-  try {
-    const res = await fetch("./screens.json");
-    if (!res.ok) return false;
-    const text = await res.text();
-    if (!text || !text.length) return false;
-    const rc = exports_.load_screens_json(text);
-    console.info("load_screens_json rc=", rc, "bytes=", text.length);
-    return rc === 0;
-  } catch (e) {
-    console.warn("screens.json load error", e);
-    return false;
-  }
-}
-
-/**
- * After narrative + screens load: hydrate storage, prefs, optional cold-start title.
- * @param {boolean} hasScreens
- */
-function afterEngineReady(hasScreens) {
+function afterEngineReady() {
   hydrateSlotsFromStorage();
   loadPrefsFromStorage();
-  if (hasScreens && typeof exports_?.boot_title === "function") {
+  if (typeof exports_?.boot_title === "function") {
     const rc = exports_.boot_title();
     console.info("boot_title rc=", rc);
   }
@@ -936,8 +915,7 @@ async function maybeLoadSource() {
     console.info("init_demo()");
     stopBgm();
   }
-  const hasScreens = await maybeLoadScreens();
-  afterEngineReady(hasScreens);
+  afterEngineReady();
 }
 
 /** Fixed logical resolution; MoonBit packs all draw coords in FHD pixels. */

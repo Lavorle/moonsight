@@ -144,23 +144,12 @@ fn install_engine_from_ir(ir : @script.IrModule) -> Unit {
 }
 
 ///|
-/// Load `screens.json` (ScreenDef array + save_slots). Returns 0 ok, 1 error.
-pub fn load_screens_json(json : String) -> Int {
-  let s = session.val
-  match s.engine {
+/// Legacy export: Screen DSL / `screens.json` removed in Phase 4.
+/// Kept as a no-op for older JS glue; always returns 0 when an engine exists.
+pub fn load_screens_json(_json : String) -> Int {
+  match session.val.engine {
     None => 1
-    Some(eng) =>
-      try {
-        let file = @script.decode_screens_file(json)
-        let defs : Map[String, @script.ScreenDef] = {}
-        for d in file.defs {
-          defs[d.name] = d
-        }
-        eng.install_screens(defs, save_slots=file.save_slots)
-        0
-      } catch {
-        _ => 1
-      }
+    Some(_) => 0
   }
 }
 

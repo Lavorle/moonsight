@@ -229,29 +229,19 @@ impl Capabilities for Engine with fn prefs(self) {
 }
 
 ///|
-/// Update save slot count (and grow `slot_blobs`). ScreenDef path is retired;
-/// retained UI trees come from `UiApp` at `from_ir` time. Kept for host_web
-/// `load_screens_json` which still ships `screens.json` save_slots.
-pub fn Engine::install_screens(
-  self : Engine,
-  _defs : Map[String, @script.ScreenDef],
-  save_slots? : Int,
-) -> Unit {
-  match save_slots {
-    None => ()
-    Some(s) => {
-      let n = if s < 1 {
-        1
-      } else if s > 20 {
-        20
-      } else {
-        s
-      }
-      self.ui.save_slots = n
-      while self.slot_blobs.length() < n {
-        self.slot_blobs.push(None)
-      }
-    }
+/// Update save slot count (and grow `slot_blobs`). Retained UI trees come from
+/// `UiApp` at `from_ir` time. Optional host path for slot count overrides.
+pub fn Engine::set_save_slots(self : Engine, save_slots : Int) -> Unit {
+  let n = if save_slots < 1 {
+    1
+  } else if save_slots > 20 {
+    20
+  } else {
+    save_slots
+  }
+  self.ui.save_slots = n
+  while self.slot_blobs.length() < n {
+    self.slot_blobs.push(None)
   }
 }
 

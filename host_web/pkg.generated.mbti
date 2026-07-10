@@ -20,6 +20,8 @@ pub fn audio_se() -> String
 
 pub fn audio_se_seq() -> Int
 
+pub fn boot_title() -> Int
+
 pub fn clear_pending_glyphs() -> Int
 
 pub fn export_frame(Int, Float) -> Int
@@ -28,6 +30,8 @@ pub fn frame_at(Int) -> Float
 
 pub fn frame_len() -> Int
 
+pub fn get_slot_json(Int) -> String
+
 pub fn init_demo() -> Unit
 
 pub fn last_error() -> String
@@ -35,6 +39,8 @@ pub fn last_error() -> String
 pub fn load_json(String) -> Int
 
 pub fn load_msb(String) -> Int
+
+pub fn load_screens_json(String) -> Int
 
 pub fn load_source(String) -> Int
 
@@ -54,11 +60,19 @@ pub fn pending_glyph_cp(Int) -> Int
 
 pub fn pending_glyph_size(Int) -> Int
 
+pub fn prefs_json() -> String
+
 pub fn resource_count() -> Int
 
 pub fn resource_name(Int) -> String
 
 pub fn save_json(Int) -> String
+
+pub fn save_slot_count() -> Int
+
+pub fn set_prefs_json(String) -> Int
+
+pub fn set_slot_json(Int, String) -> Int
 
 // Errors
 

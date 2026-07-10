@@ -1,8 +1,0 @@
-# In-game system menu (Esc)
-- screen "game_menu"
-  vbox x=760 y=300:
-    button "Continue" action=return
-    button "Save" action=show_screen("save_load", mode=save)
-    button "Load" action=show_screen("save_load", mode=load)
-    button "Settings" action=show_screen("settings")
-    button "Title" action=quit_to_title

@@ -2,5 +2,4 @@
 import {
   "moonbitlang/core/string" @str,
   "moonbitlang/core/encoding/utf8",
-  "moonbitlang/core/json",
 }

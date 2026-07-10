@@ -1,7 +1,7 @@
 ///|
 /// Standard system modals: title, game_menu, save_load, settings.
 ///
-/// Labels and actions port `std_screens/*.yuki` onto `UiApp` + `Capabilities`.
+/// Labels and actions for system modals on `UiApp` + `Capabilities`.
 
 ///|
 fn build_title(app : @runtime.UiApp) -> @runtime.UiNode {

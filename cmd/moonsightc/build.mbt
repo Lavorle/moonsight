@@ -37,8 +37,6 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     }
     let ir = compile_yuki_paths(yuki[:], entry_file=entry_path)
     let bytecode = @script.encode_module(ir)
-    let screens = merge_project_screens(yuki[:])
-    let screens_json = @script.encode_screens_file(screens, save_slots=cfg.save_slots)
 
     // Drop leftover staging from a previous interrupted build.
     remove_tree_best_effort(staging)
@@ -47,12 +45,6 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     let msb_path = join_path(staging, "game.msb")
     write_bytes_to_file(msb_path, bytecode)
     println("wrote \{msb_path} (\{bytecode.length()} bytes, entry=\{ir.entry})")
-
-    let screens_path = join_path(staging, "screens.json")
-    write_string_to_file(screens_path, screens_json)
-    println(
-      "wrote \{screens_path} (\{screens.length()} screens, save_slots=\{cfg.save_slots})",
-    )
 
     // Host runtime first (may include a placeholder manifest.json).
     match find_js_glue() {
@@ -139,100 +131,6 @@ fn build_manifest_json(
     "audio": Json::object(audio_obj),
   }
   Json::object(root).stringify(indent=2) + "\n"
-}
-
-///|
-/// Merge engine `std_screens` with project screens (project wins on same name).
-fn merge_project_screens(
-  project_yuki : ArrayView[String],
-) -> Array[@script.ScreenDef] raise IoError {
-  let by_name : Map[String, @script.ScreenDef] = {}
-  // std first
-  match find_std_screens_dir() {
-    None =>
-      println("warning: std_screens/ not found; building without engine defaults")
-    Some(dir) => {
-      let std_files = collect_yuki_files(dir)
-      for path in std_files {
-        let defs = compile_screens_file(path)
-        for d in defs {
-          by_name[d.name] = d
-        }
-      }
-      println("loaded std screens from \{dir} (\{std_files.length()} files)")
-    }
-  }
-  // project overrides
-  for path in project_yuki {
-    let defs = compile_screens_file(path)
-    for d in defs {
-      by_name[d.name] = d
-    }
-  }
-  // Stable order: title, game_menu, save_load, settings, then others by name.
-  let preferred = ["title", "game_menu", "save_load", "settings"]
-  let out : Array[@script.ScreenDef] = []
-  let seen : Map[String, Bool] = {}
-  for name in preferred {
-    match by_name.get(name) {
-      Some(d) => {
-        out.push(d)
-        seen[name] = true
-      }
-      None => ()
-    }
-  }
-  let rest : Array[String] = []
-  for name, _ in by_name {
-    if !seen.contains(name) {
-      rest.push(name)
-    }
-  }
-  rest.sort()
-  for name in rest {
-    match by_name.get(name) {
-      Some(d) => out.push(d)
-      None => ()
-    }
-  }
-  out
-}
-
-///|
-fn compile_screens_file(path : String) -> Array[@script.ScreenDef] raise IoError {
-  let src = read_file_to_string(path)
-  @script.compile_screens(src, file=path) catch {
-    e => raise IoError(format_compile_error(e))
-  }
-}
-
-///|
-/// Locate repo-root `std_screens/` relative to cwd or parents.
-fn find_std_screens_dir() -> String? {
-  let candidates = ["std_screens", "./std_screens", "../std_screens"]
-  for c in candidates {
-    if path_exists(join_path(c, "title.yuki")) {
-      return Some(c)
-    }
-  }
-  match @env.current_dir() {
-    Some(cwd) => {
-      let mut dir = cwd
-      for _ in 0..<8 {
-        let cand = join_path(dir, "std_screens")
-        if path_exists(join_path(cand, "title.yuki")) {
-          return Some(cand)
-        }
-        let parent = dirname(dir)
-        if parent == dir {
-          break
-        }
-        dir = parent
-      }
-      None
-    }
-    None => None
-  }
 }
 
 ///|

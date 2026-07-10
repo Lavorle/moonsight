@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonsight/moonsight/std_ui"
+
+import {
+  "moonsight/moonsight/runtime",
+}
+
+// Values
+pub fn register(@runtime.UiApp) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+
