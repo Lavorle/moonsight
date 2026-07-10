@@ -8,9 +8,21 @@ import {
 // Values
 pub fn builtin_externs() -> Array[ExternDecl]
 
+pub fn compile_source(String, file~ : String) -> CompileResult raise CompileError
+
+pub fn compile_to_ir(String, file~ : String) -> IrModule raise CompileError
+
+pub fn decode_module(Bytes) -> IrModule raise BytecodeError
+
+pub fn encode_module(IrModule) -> Bytes
+
 pub fn expand_macros(ScriptUnit) -> ScriptUnit raise MacroError
 
 pub fn lex(String, file~ : String) -> Array[Token]
+
+pub fn linearize_ops(Array[IrOp]) -> Array[IrOp]
+
+pub fn lower_unit(ResolvedUnit) -> IrModule
 
 pub fn parse_source(String, file~ : String) -> ScriptUnit raise ParseError
 
@@ -19,6 +31,21 @@ pub fn resolve_unit(ScriptUnit, Array[ExternDecl]) -> ResolvedUnit raise Resolve
 pub fn script_package_name() -> String
 
 // Errors
+pub(all) suberror BytecodeError {
+  InvalidMagic
+  UnsupportedVersion(Int)
+  Truncated(message~ : String)
+  BadOpcode(Byte)
+  BadValueTag(Byte)
+} derive(Eq, @debug.Debug)
+
+pub(all) suberror CompileError {
+  Parse(ParseError)
+  Macro(MacroError)
+  Resolve(ResolveError)
+  Bytecode(BytecodeError)
+} derive(Eq, @debug.Debug)
+
 pub(all) suberror MacroError {
   RecursionLimit(name~ : String, span~ : SourceSpan)
 } derive(Eq, @debug.Debug)
@@ -38,6 +65,12 @@ pub(all) enum Arg {
   Positional(Expr)
   Named(name~ : String, Expr)
   Flag(String)
+} derive(@debug.Debug)
+
+pub(all) struct CompileResult {
+  ir : IrModule
+  bytecode : Bytes
+  diags : Array[Diagnostic]
 } derive(@debug.Debug)
 
 pub(all) struct Diagnostic {
@@ -60,6 +93,37 @@ pub(all) struct ExternDecl {
   params : Array[ParamDecl]
   span : SourceSpan
 } derive(@debug.Debug)
+
+pub(all) struct IrModule {
+  scenes : Map[String, IrScene]
+  entry : String
+} derive(@debug.Debug)
+
+pub(all) enum IrOp {
+  Nop
+  Host(name~ : String, args~ : Array[IrValue])
+  Jump(label~ : Int)
+  JumpIf(cond~ : IrValue, label~ : Int)
+  JumpIfNot(cond~ : IrValue, label~ : Int)
+  Label(Int)
+  Yield
+  Choose(options~ : Array[String], result_var~ : String)
+  Return
+} derive(Eq, @debug.Debug)
+
+pub(all) struct IrScene {
+  name : String
+  ops : Array[IrOp]
+} derive(@debug.Debug)
+
+pub(all) enum IrValue {
+  Int(Int)
+  Float(Double)
+  Bool(Bool)
+  Str(String)
+  Var(String)
+  None_
+} derive(Eq, @debug.Debug)
 
 pub(all) struct MacroDecl {
   name : String
