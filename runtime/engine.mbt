@@ -81,8 +81,9 @@ pub fn Engine::boot_title(self : Engine) -> Unit {
   if self.screens.defs.contains("title") {
     self.screens.mode = Title
     self.screens.show("title")
+  } else {
+    self.screens.mode = Playing
   }
-  // else: keep Playing (from_ir default) — no title UI available
 }
 
 ///|
