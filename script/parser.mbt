@@ -382,8 +382,9 @@ fn parse_param_list(p : Parser) -> Array[ParamDecl] raise ParseError {
       Newline | Eof => break
       Ident(name) => {
         p.advance() |> ignore
-        // optional default: next token is a value expr
-        let default = match try_peek_expr(p) {
+        // Defaults are only literals (and unary-minus numbers). Bare Ident is
+        // the next param name, not a default expression.
+        let default = match try_peek_param_default(p) {
           Some(_) => Some(parse_expr(p))
           None => None
         }
@@ -396,6 +397,21 @@ fn parse_param_list(p : Parser) -> Array[ParamDecl] raise ParseError {
     }
   }
   params
+}
+
+///|
+/// Peek for a param default value. Unlike `try_peek_expr`, bare `Ident` is not
+/// a default (it starts the next parameter).
+fn try_peek_param_default(p : Parser) -> Unit? {
+  match p.peek().kind {
+    IntLit(_) | FloatLit(_) | BoolLit(_) | StringLit(_) => Some(())
+    Minus =>
+      match p.tokens.get(p.pos + 1) {
+        Some({ kind: IntLit(_) | FloatLit(_), .. }) => Some(())
+        _ => None
+      }
+    _ => None
+  }
 }
 
 ///|

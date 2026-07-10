@@ -78,7 +78,9 @@ test "parse extern macro scene dialogue command" {
     fail("inline command")
   }
   assert_eq(icmd, "wait")
-  assert_true(iargs.length() >= 1)
+  guard iargs is [Flag("time"), Positional(Int(1))] else {
+    fail("expected [Flag(time), Positional(Int(1))]")
+  }
 
   guard unit.scenes[0].items[1] is Command(cmd=pcmd, args=pargs, ..) else {
     fail("pause command")
@@ -86,6 +88,25 @@ test "parse extern macro scene dialogue command" {
   assert_eq(pcmd, "pause")
   guard pargs is [Positional(Int(pn))] else { fail("pause arg") }
   assert_eq(pn, 2)
+}
+
+///|
+test "parse multi-param extern without defaults" {
+  let src =
+    #|- extern f a b
+    #|
+  let unit = @script.parse_source(src, file="multi.yuki")
+  assert_eq(unit.externs.length(), 1)
+  assert_eq(unit.externs[0].name, "f")
+  assert_eq(unit.externs[0].params.length(), 2)
+  assert_eq(unit.externs[0].params[0].name, "a")
+  guard unit.externs[0].params[0].default is None else {
+    fail("param a should have no default")
+  }
+  assert_eq(unit.externs[0].params[1].name, "b")
+  guard unit.externs[0].params[1].default is None else {
+    fail("param b should have no default")
+  }
 }
 
 ///|
