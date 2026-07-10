@@ -5,6 +5,8 @@ struct ProjectConfig {
   entry : String
   logical_width : Int
   logical_height : Int
+  /// Multi-slot save capacity (default 6, clamp 1..20).
+  save_slots : Int
 } derive(Debug)
 
 ///|
@@ -14,6 +16,19 @@ fn default_config() -> ProjectConfig {
     entry: "main.yuki",
     logical_width: 1920,
     logical_height: 1080,
+    save_slots: 6,
+  }
+}
+
+///|
+/// Clamp save slot count into the legal range 1..20.
+fn clamp_save_slots(n : Int) -> Int {
+  if n < 1 {
+    1
+  } else if n > 20 {
+    20
+  } else {
+    n
   }
 }
 
@@ -40,6 +55,12 @@ fn parse_project_config(text : String) -> ProjectConfig raise {
   match map.get("logical_height") {
     Some(Json::Number(n, ..)) => cfg = { ..cfg, logical_height: n.to_int() }
     Some(_) => fail("moonsight.json: logical_height must be a number")
+    None => ()
+  }
+  match map.get("save_slots") {
+    Some(Json::Number(n, ..)) =>
+      cfg = { ..cfg, save_slots: clamp_save_slots(n.to_int()) }
+    Some(_) => fail("moonsight.json: save_slots must be a number")
     None => ()
   }
   cfg

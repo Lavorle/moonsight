@@ -38,6 +38,8 @@ pub fn build_draw_list(
   view : @runtime.StageView,
   layout : UiLayout,
   screens? : @runtime.ScreenState,
+  /// When drawing `mode=load` save slots, true means slot i has a save blob.
+  occupied_slots? : Array[Bool],
 ) -> DrawList {
   let atlas = GlyphAtlas::new()
   build_draw_list_with_atlas(
@@ -46,6 +48,7 @@ pub fn build_draw_list(
     atlas,
     measure=approximate_measure(layout.font_size),
     screens?,
+    occupied_slots?,
   )
 }
 
@@ -54,12 +57,16 @@ pub fn build_draw_list(
 ///
 /// When `measure` is omitted, each run uses `approximate_measure(font_size)`
 /// for that run's pixel size (name / body / choice sizes stay consistent).
+///
+/// `occupied_slots` keeps focus highlight indices aligned with runtime
+/// `focusables` when load mode skips empty slots.
 pub fn build_draw_list_with_atlas(
   view : @runtime.StageView,
   layout : UiLayout,
   atlas : GlyphAtlas,
   measure? : (Char) -> Float,
   screens? : @runtime.ScreenState,
+  occupied_slots? : Array[Bool],
 ) -> DrawList {
   let sprites : Array[SpriteDraw] = []
   let glyphs : Array[GlyphDraw] = []
@@ -217,6 +224,14 @@ pub fn build_draw_list_with_atlas(
               Some(m) => m
               None => approximate_measure(layout.screen_font_size)
             }
+            let load_mode = match top.mode {
+              Some("load") => true
+              _ => false
+            }
+            let occ = match occupied_slots {
+              Some(a) => a
+              None => ([] : Array[Bool])
+            }
             let btn_counter : Array[Int] = [0]
             ignore(
               emit_screen_node(
@@ -230,6 +245,8 @@ pub fn build_draw_list_with_atlas(
                 ss.prefs,
                 top.focus,
                 btn_counter,
+                load_mode,
+                occ,
                 measure=m_screen,
               ),
             )
@@ -245,6 +262,9 @@ pub fn build_draw_list_with_atlas(
 ///|
 /// Mutable button walk index (length-1 array) shared across the tree walk.
 ///
+/// Focus indices match runtime `focusables`: in load mode, empty Save/Load
+/// slots are drawn but do not advance the focus counter.
+///
 /// Returns `(advance_w, advance_h)` consumed for the parent vbox/hbox step.
 fn emit_screen_node(
   node : @script.SNode,
@@ -257,6 +277,8 @@ fn emit_screen_node(
   prefs : @runtime.Prefs,
   focus : Int,
   btn_counter : Array[Int],
+  load_mode : Bool,
+  occupied : Array[Bool],
   measure~ : (Char) -> Float,
 ) -> (Float, Float) {
   match node {
@@ -277,6 +299,8 @@ fn emit_screen_node(
           prefs,
           focus,
           btn_counter,
+          load_mode,
+          occupied,
           measure~,
         )
         if w > max_w {
@@ -305,6 +329,8 @@ fn emit_screen_node(
           prefs,
           focus,
           btn_counter,
+          load_mode,
+          occupied,
           measure~,
         )
         if h > max_h {
@@ -332,6 +358,8 @@ fn emit_screen_node(
           prefs,
           focus,
           btn_counter,
+          load_mode,
+          occupied,
           measure~,
         )
         cy = cy + h
@@ -355,12 +383,25 @@ fn emit_screen_node(
       )
       (layout.screen_button_w, layout.screen_line_h)
     }
-    @script.SNode::Button(label~, ..) => {
-      let idx = btn_counter[0]
-      btn_counter[0] = idx + 1
-      let focused = idx == focus
+    @script.SNode::Button(label~, action~) => {
+      // Align focus index with runtime focusables (skip empty load slots).
+      let skip_focus = load_mode &&
+        @runtime.screen_button_skipped_in_load(action, occupied)
+      let focused = if skip_focus {
+        false
+      } else {
+        let idx = btn_counter[0]
+        btn_counter[0] = idx + 1
+        idx == focus
+      }
       let res = if focused { ui_button_focus } else { ui_button }
-      let opacity : Float = if focused { 1.0 } else { 0.75 }
+      let opacity : Float = if focused {
+        1.0
+      } else if skip_focus {
+        0.45
+      } else {
+        0.75
+      }
       sprites.push({
         resource: res,
         x: origin_x,

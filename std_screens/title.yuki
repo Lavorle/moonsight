@@ -1,0 +1,7 @@
+# Standard cold-start title screen
+- screen "title"
+  vbox x=760 y=360:
+    text "MoonSight"
+    button "Start" action=start_game
+    button "Load" action=show_screen("save_load", mode=load)
+    button "Settings" action=show_screen("settings")

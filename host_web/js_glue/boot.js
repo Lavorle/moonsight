@@ -29,6 +29,16 @@ const AUDIO_PLAY_SE = 2;
 const AUDIO_SET_BGM_VOLUME = 3;
 
 const SAVE_KEY = (slot) => `moonsight/save/${slot}`;
+const PREFS_KEY = "moonsight/prefs";
+
+/** Intent codes (docs/draw-list-pack.md + MenuUp/Down) */
+const INTENT_NONE = 0;
+const INTENT_ADVANCE = 1;
+const INTENT_SKIP = 2;
+const INTENT_OPEN_MENU = 3;
+const INTENT_TOGGLE_AUTO = 4;
+const INTENT_MENU_UP = 5;
+const INTENT_MENU_DOWN = 6;
 
 /** @type {WebAssembly.Exports | null} */
 let exports_ = null;
@@ -37,6 +47,18 @@ let exports_ = null;
 let pendingIntent = 0;
 let lastTs = 0;
 let saveSlot = 0;
+
+/** @type {{ text_speed: number, auto_mode: boolean, master_volume: number, bgm_volume: number, se_volume: number }} */
+let prefs = {
+  text_speed: 1.0,
+  auto_mode: false,
+  master_volume: 1.0,
+  bgm_volume: 1.0,
+  se_volume: 1.0,
+};
+
+/** Last logical BGM volume from mixer events (before prefs multiply). */
+let lastLogicalBgmVol = 1.0;
 
 /** @type {Record<string, string>} logical audio id → primary URL */
 let audioUrls = Object.create(null);
@@ -190,6 +212,147 @@ function clampVolume(v) {
 }
 
 /**
+ * Output BGM gain = logical × master × bgm prefs.
+ * @param {number} logical
+ */
+function effectiveBgmVolume(logical) {
+  return clampVolume(
+    Number(logical) * prefs.master_volume * prefs.bgm_volume,
+  );
+}
+
+/**
+ * Output SE gain = logical × master × se prefs.
+ * @param {number} logical
+ */
+function effectiveSeVolume(logical) {
+  return clampVolume(Number(logical) * prefs.master_volume * prefs.se_volume);
+}
+
+/**
+ * Load prefs from localStorage into JS + wasm engine.
+ */
+function loadPrefsFromStorage() {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (raw && typeof exports_?.set_prefs_json === "function") {
+      const rc = exports_.set_prefs_json(raw);
+      if (rc === 0 && typeof exports_.prefs_json === "function") {
+        const applied = exports_.prefs_json();
+        if (applied) {
+          try {
+            const p = JSON.parse(applied);
+            prefs = {
+              text_speed: Number(p.text_speed ?? 1),
+              auto_mode: !!p.auto_mode,
+              master_volume: clampVolume(p.master_volume ?? 1),
+              bgm_volume: clampVolume(p.bgm_volume ?? 1),
+              se_volume: clampVolume(p.se_volume ?? 1),
+            };
+          } catch (_) {
+            /* keep defaults */
+          }
+        }
+      }
+    } else if (raw) {
+      try {
+        const p = JSON.parse(raw);
+        prefs = {
+          text_speed: Number(p.text_speed ?? 1),
+          auto_mode: !!p.auto_mode,
+          master_volume: clampVolume(p.master_volume ?? 1),
+          bgm_volume: clampVolume(p.bgm_volume ?? 1),
+          se_volume: clampVolume(p.se_volume ?? 1),
+        };
+      } catch (_) {
+        /* keep defaults */
+      }
+    }
+  } catch (_) {
+    /* private mode / blocked storage */
+  }
+  applyPrefsToAudio();
+}
+
+/**
+ * Persist engine prefs to localStorage when present.
+ */
+function savePrefsToStorage() {
+  try {
+    if (typeof exports_?.prefs_json === "function") {
+      const json = exports_.prefs_json();
+      if (json && json.length) {
+        localStorage.setItem(PREFS_KEY, json);
+        try {
+          const p = JSON.parse(json);
+          prefs = {
+            text_speed: Number(p.text_speed ?? prefs.text_speed),
+            auto_mode: !!p.auto_mode,
+            master_volume: clampVolume(p.master_volume ?? prefs.master_volume),
+            bgm_volume: clampVolume(p.bgm_volume ?? prefs.bgm_volume),
+            se_volume: clampVolume(p.se_volume ?? prefs.se_volume),
+          };
+        } catch (_) {
+          /* ignore parse */
+        }
+      }
+    }
+  } catch (_) {
+    /* ignore */
+  }
+  applyPrefsToAudio();
+}
+
+/** Re-apply prefs gains to the current BGM element. */
+function applyPrefsToAudio() {
+  if (bgmEl) {
+    bgmEl.volume = effectiveBgmVolume(lastLogicalBgmVol);
+  }
+}
+
+/**
+ * Seed engine slot_blobs from localStorage multi-slot keys.
+ */
+function hydrateSlotsFromStorage() {
+  if (!exports_ || typeof exports_.set_slot_json !== "function") return;
+  const n =
+    typeof exports_.save_slot_count === "function"
+      ? exports_.save_slot_count() | 0
+      : 6;
+  for (let i = 0; i < Math.max(n, 1); i++) {
+    try {
+      const json = localStorage.getItem(SAVE_KEY(i));
+      if (json && json.length) {
+        exports_.set_slot_json(i, json);
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+}
+
+/**
+ * Mirror engine slot_blobs back to localStorage (menu save path).
+ */
+function syncSlotsToStorage() {
+  if (!exports_ || typeof exports_.get_slot_json !== "function") return;
+  const n =
+    typeof exports_.save_slot_count === "function"
+      ? exports_.save_slot_count() | 0
+      : 6;
+  for (let i = 0; i < Math.max(n, 1); i++) {
+    try {
+      const json = exports_.get_slot_json(i);
+      if (json && json.length) {
+        localStorage.setItem(SAVE_KEY(i), json);
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+}
+
+/**
  * Hard-fail audio load — same surface as texture hard-fail in applyManifest:
  * log `audio load failed: {id}`, optional #status DOM message, then throw.
  * Does not pretend playback succeeded.
@@ -295,11 +458,13 @@ function stopBgm() {
 
 /**
  * Apply mid-fade / volume-only BGM change without restarting the track.
+ * `volume` is logical mixer volume; prefs multiply on output.
  * @param {number} volume
  */
 function setBgmVolume(volume) {
+  lastLogicalBgmVol = clampVolume(volume);
   if (bgmEl) {
-    bgmEl.volume = clampVolume(volume);
+    bgmEl.volume = effectiveBgmVolume(lastLogicalBgmVol);
   }
 }
 
@@ -312,7 +477,8 @@ function playBgm(id, looped, volume) {
   if (!url) {
     audioLoadFailed(id, "no URL for BGM");
   }
-  const vol = clampVolume(volume);
+  lastLogicalBgmVol = clampVolume(volume);
+  const vol = effectiveBgmVolume(lastLogicalBgmVol);
   if (bgmId === id && bgmEl && !bgmEl.paused) {
     bgmEl.volume = vol;
     bgmEl.loop = !!looped;
@@ -351,7 +517,10 @@ function playSe(id, volume) {
     audioLoadFailed(id, "no URL for SE");
   }
   ensureAudioUnlocked();
-  const el = makeAudio(url, { loop: false, volume: clampVolume(volume) });
+  const el = makeAudio(url, {
+    loop: false,
+    volume: effectiveSeVolume(volume),
+  });
   armAudioLoadHardFail(el, id);
   const p = el.play();
   if (p && typeof p.catch === "function") {
@@ -409,6 +578,11 @@ function frame(ts) {
     exports_.export_frame(intent, dt);
     flushPendingGlyphs(exports_);
     flushAudio(exports_);
+    // After UI actions: prefs + multi-slot may have changed in-engine.
+    if (intent !== INTENT_NONE) {
+      savePrefsToStorage();
+      syncSlotsToStorage();
+    }
     // Glyphs marked ready appear next frame (Phase 1; no second export/tick).
     const pack = copyFrame(exports_);
     drawPack(pack);
@@ -429,22 +603,37 @@ function bindInput(canvas) {
       case " ":
       case "z":
       case "Z":
-        pendingIntent = 1; // Advance
+        pendingIntent = INTENT_ADVANCE;
         ev.preventDefault();
         break;
-      case "Control":
-        pendingIntent = 2; // SkipTyping
+      case "Escape":
+        pendingIntent = INTENT_OPEN_MENU;
+        ev.preventDefault();
         break;
-      case "a":
-      case "A":
-        pendingIntent = 4; // ToggleAuto
+      case "ArrowUp":
+      case "w":
+      case "W":
+        pendingIntent = INTENT_MENU_UP;
+        ev.preventDefault();
         break;
+      case "ArrowDown":
       case "s":
       case "S":
+        // Plain S is MenuDown; Ctrl/Cmd+S is quick-save.
         if (ev.ctrlKey || ev.metaKey) {
           doSave();
           ev.preventDefault();
+        } else {
+          pendingIntent = INTENT_MENU_DOWN;
+          ev.preventDefault();
         }
+        break;
+      case "Control":
+        pendingIntent = INTENT_SKIP;
+        break;
+      case "a":
+      case "A":
+        pendingIntent = INTENT_TOGGLE_AUTO;
         break;
       case "l":
       case "L":
@@ -470,7 +659,7 @@ function bindInput(canvas) {
   });
 
   canvas.addEventListener("pointerdown", () => {
-    pendingIntent = 1; // Advance
+    pendingIntent = INTENT_ADVANCE;
   });
 }
 
@@ -479,6 +668,9 @@ function doSave() {
   const json = exports_.save_json(saveSlot);
   if (json && json.length) {
     localStorage.setItem(SAVE_KEY(saveSlot), json);
+    if (typeof exports_.set_slot_json === "function") {
+      exports_.set_slot_json(saveSlot, json);
+    }
     console.info("saved", SAVE_KEY(saveSlot), json.length, "bytes");
   }
 }
@@ -489,6 +681,9 @@ function doLoad() {
   if (!json) {
     console.warn("no save at", SAVE_KEY(saveSlot));
     return;
+  }
+  if (typeof exports_.set_slot_json === "function") {
+    exports_.set_slot_json(saveSlot, json);
   }
   const rc = exports_.load_json(json);
   console.info("load", SAVE_KEY(saveSlot), "rc=", rc);
@@ -591,9 +786,44 @@ function bytesToBinaryString(buf) {
   return raw;
 }
 
+/**
+ * Load screens.json into engine defs. Returns true when screens were installed.
+ */
+async function maybeLoadScreens() {
+  if (!exports_ || typeof exports_.load_screens_json !== "function") {
+    return false;
+  }
+  try {
+    const res = await fetch("./screens.json");
+    if (!res.ok) return false;
+    const text = await res.text();
+    if (!text || !text.length) return false;
+    const rc = exports_.load_screens_json(text);
+    console.info("load_screens_json rc=", rc, "bytes=", text.length);
+    return rc === 0;
+  } catch (e) {
+    console.warn("screens.json load error", e);
+    return false;
+  }
+}
+
+/**
+ * After narrative + screens load: hydrate storage, prefs, optional cold-start title.
+ * @param {boolean} hasScreens
+ */
+function afterEngineReady(hasScreens) {
+  hydrateSlotsFromStorage();
+  loadPrefsFromStorage();
+  if (hasScreens && typeof exports_?.boot_title === "function") {
+    const rc = exports_.boot_title();
+    console.info("boot_title rc=", rc);
+  }
+}
+
 async function maybeLoadSource() {
   // Prefer compiled multi-file game.msb when present; fallback demo.yuki / init_demo.
   // Replacing mixer/source state: stop any JS-side BGM so it cannot desync.
+  let loaded = false;
   try {
     const msbRes = await fetch("./game.msb");
     if (
@@ -606,28 +836,37 @@ async function maybeLoadSource() {
         const rc = exports_.load_msb(bytesToBinaryString(buf));
         console.info("load_msb game.msb rc=", rc, "bytes=", buf.length);
         stopBgm();
-        if (rc === 0) return;
-        console.warn("load_msb failed; falling back to demo.yuki");
+        if (rc === 0) {
+          loaded = true;
+        } else {
+          console.warn("load_msb failed; falling back to demo.yuki");
+        }
       }
     }
   } catch (e) {
     console.warn("game.msb load error", e);
   }
-  try {
-    const res = await fetch("./demo.yuki");
-    if (res.ok) {
-      const src = await res.text();
-      const rc = exports_.load_source(src);
-      console.info("load_source demo.yuki rc=", rc);
-      stopBgm();
-      return;
+  if (!loaded) {
+    try {
+      const res = await fetch("./demo.yuki");
+      if (res.ok) {
+        const src = await res.text();
+        const rc = exports_.load_source(src);
+        console.info("load_source demo.yuki rc=", rc);
+        stopBgm();
+        loaded = rc === 0;
+      }
+    } catch {
+      /* fall through */
     }
-  } catch {
-    /* fall through */
   }
-  exports_.init_demo();
-  console.info("init_demo()");
-  stopBgm();
+  if (!loaded) {
+    exports_.init_demo();
+    console.info("init_demo()");
+    stopBgm();
+  }
+  const hasScreens = await maybeLoadScreens();
+  afterEngineReady(hasScreens);
 }
 
 /** Fixed logical resolution; MoonBit packs all draw coords in FHD pixels. */

@@ -1,0 +1,12 @@
+# Multi-slot save/load. Author buttons use save_slot(i); when instance.mode is
+# "load", runtime reinterprets SaveSlot(i) as LoadSlot(i) and skips empty slots.
+- screen "save_load"
+  vbox x=600 y=120:
+    text "Save / Load"
+    button "Slot 0" action=save_slot(0)
+    button "Slot 1" action=save_slot(1)
+    button "Slot 2" action=save_slot(2)
+    button "Slot 3" action=save_slot(3)
+    button "Slot 4" action=save_slot(4)
+    button "Slot 5" action=save_slot(5)
+    button "Back" action=return

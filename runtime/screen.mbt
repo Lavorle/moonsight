@@ -46,12 +46,46 @@ pub fn ScreenState::new(
   defs : Map[String, @script.ScreenDef],
   save_slots~ : Int = 6,
 ) -> ScreenState {
+  let n = if save_slots < 1 {
+    1
+  } else if save_slots > 20 {
+    20
+  } else {
+    save_slots
+  }
   {
     mode: Title,
     stack: [],
     defs,
     prefs: Prefs::default(),
-    save_slots,
+    save_slots: n,
+  }
+}
+
+///|
+/// Build a new ScreenState with updated defs, preserving mode/stack/prefs/slots.
+pub fn ScreenState::with_defs(
+  self : ScreenState,
+  defs : Map[String, @script.ScreenDef],
+  save_slots? : Int,
+) -> ScreenState {
+  let n = match save_slots {
+    Some(s) =>
+      if s < 1 {
+        1
+      } else if s > 20 {
+        20
+      } else {
+        s
+      }
+    None => self.save_slots
+  }
+  {
+    mode: self.mode,
+    stack: self.stack,
+    defs,
+    prefs: self.prefs,
+    save_slots: n,
   }
 }
 
@@ -79,8 +113,10 @@ pub fn ScreenState::return_(self : ScreenState) -> Unit {
 ///|
 /// Focusable buttons on the top screen: `(label, action)`.
 ///
-/// When the top instance has `mode=load`, `LoadSlot` buttons for empty slots
-/// are omitted (not focusable).
+/// When the top instance has `mode=load`:
+/// - `SaveSlot(i)` is **reinterpreted** as `LoadSlot(i)` (std screens author
+///   save_slot for both modes; runtime picks load vs save via instance.mode).
+/// - Empty slots (neither SaveSlot nor LoadSlot when unoccupied) are omitted.
 pub fn ScreenState::focusables(
   self : ScreenState,
   host : &ScreenHost,
@@ -101,15 +137,36 @@ pub fn ScreenState::focusables(
   for pair in raw {
     let (label, action) = pair
     match action {
-      @script.ScreenAction::LoadSlot(i) => {
+      @script.ScreenAction::LoadSlot(i) | @script.ScreenAction::SaveSlot(i) => {
         if host.slot_occupied(i) {
-          out.push((label, action))
+          // Always dispatch as LoadSlot when instance.mode=load.
+          out.push((label, @script.ScreenAction::LoadSlot(i)))
         }
       }
       _ => out.push((label, action))
     }
   }
   out
+}
+
+///|
+/// True when a button should be skipped for focus while `mode=load`.
+///
+/// Matches `focusables` filtering so render highlight indices stay in sync.
+pub fn screen_button_skipped_in_load(
+  action : @script.ScreenAction,
+  occupied : Array[Bool],
+) -> Bool {
+  match action {
+    @script.ScreenAction::LoadSlot(i) | @script.ScreenAction::SaveSlot(i) => {
+      if i < 0 || i >= occupied.length() {
+        true
+      } else {
+        !occupied[i]
+      }
+    }
+    _ => false
+  }
 }
 
 ///|

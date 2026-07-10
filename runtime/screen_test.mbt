@@ -176,23 +176,52 @@ test "screen focus wraps" {
 
 ///|
 test "load mode empty slots not focusable" {
-  // Slot 0 occupied, 1 empty
+  // Slot 0 occupied, 1 empty, 2 empty — SaveSlot buttons reinterpreted as load
   let host = FakeHost::new(occupied=[true, false, false])
   let h : &ScreenHost = host
   let ss = ScreenState::new(make_defs())
   ss.mode = Playing
   ss.show("save_load", mode="load")
   let items = ss.focusables(h)
-  // LoadSlot(0) kept, LoadSlot(1) dropped, SaveSlot(2) and Back kept
-  assert_eq(items.length(), 3)
+  // LoadSlot(0) kept (from SaveSlot/LoadSlot), empty dropped, Back kept
+  // save_load_def has LoadSlot(0), LoadSlot(1), SaveSlot(2), Back
+  assert_eq(items.length(), 2)
   assert_eq(items[0].0, "Slot 0")
-  assert_eq(items[1].0, "Slot 2")
-  assert_eq(items[2].0, "Back")
-  // save mode keeps all including empty load slots if any
+  guard items[0].1 is @script.ScreenAction::LoadSlot(0) else {
+    fail("reinterpret LoadSlot(0)")
+  }
+  assert_eq(items[1].0, "Back")
+  // save mode keeps all
   ss.return_()
   ss.show("save_load", mode="save")
   let save_items = ss.focusables(h)
   assert_eq(save_items.length(), 4)
+}
+
+///|
+test "load mode reinterprets SaveSlot as LoadSlot" {
+  let host = FakeHost::new(occupied=[true, true, true, true, true, true])
+  let h : &ScreenHost = host
+  let defs : Map[String, @script.ScreenDef] = {
+    "save_load": {
+      name: "save_load",
+      root: vbox([
+        button("Slot 0", @script.ScreenAction::SaveSlot(0)),
+        button("Slot 1", @script.ScreenAction::SaveSlot(1)),
+        button("Back", @script.ScreenAction::Return),
+      ]),
+    },
+  }
+  let ss = ScreenState::new(defs)
+  ss.mode = Playing
+  ss.show("save_load", mode="load")
+  let items = ss.focusables(h)
+  assert_eq(items.length(), 3)
+  guard items[0].1 is @script.ScreenAction::LoadSlot(0) else { fail("slot0") }
+  guard items[1].1 is @script.ScreenAction::LoadSlot(1) else { fail("slot1") }
+  ss.activate(h)
+  assert_eq(host.load_slot_calls.length(), 1)
+  assert_eq(host.load_slot_calls[0], 0)
 }
 
 ///|
@@ -267,7 +296,7 @@ test "activate load and save slots" {
   let ss = ScreenState::new(make_defs())
   ss.mode = Playing
   ss.show("save_load", mode="load")
-  // focusables: Slot0, Slot2(save), Back — activate load 0
+  // focusables: Slot0 (LoadSlot), Back — activate load 0
   ss.activate(h)
   assert_eq(host.load_slot_calls.length(), 1)
   assert_eq(host.load_slot_calls[0], 0)

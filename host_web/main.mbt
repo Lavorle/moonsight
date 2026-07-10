@@ -134,7 +134,95 @@ fn install_engine_from_ir(ir : @script.IrModule) -> Unit {
   ignore(s.resources.intern(@render.ui_dialogue_box))
   ignore(s.resources.intern(@render.ui_nameplate))
   ignore(s.resources.intern(@render.ui_choice_row))
+  ignore(s.resources.intern(@render.ui_menu_dim))
+  ignore(s.resources.intern(@render.ui_button))
+  ignore(s.resources.intern(@render.ui_button_focus))
   ignore(s.resources.intern("bg/demo"))
+}
+
+///|
+/// Load `screens.json` (ScreenDef array + save_slots). Returns 0 ok, 1 error.
+pub fn load_screens_json(json : String) -> Int {
+  let s = session.val
+  match s.engine {
+    None => 1
+    Some(eng) =>
+      try {
+        let file = @script.decode_screens_file(json)
+        let defs : Map[String, @script.ScreenDef] = {}
+        for d in file.defs {
+          defs[d.name] = d
+        }
+        eng.install_screens(defs, save_slots=file.save_slots)
+        0
+      } catch {
+        _ => 1
+      }
+  }
+}
+
+///|
+/// Cold start: Title mode + push `title` when registered. Returns 0 ok, 1 no engine.
+pub fn boot_title() -> Int {
+  match session.val.engine {
+    None => 1
+    Some(eng) => {
+      eng.boot_title()
+      0
+    }
+  }
+}
+
+///|
+/// Current prefs JSON (empty if no engine).
+pub fn prefs_json() -> String {
+  match session.val.engine {
+    None => ""
+    Some(eng) => eng.prefs_json()
+  }
+}
+
+///|
+/// Apply prefs JSON (0 ok, 1 error).
+pub fn set_prefs_json(json : String) -> Int {
+  match session.val.engine {
+    None => 1
+    Some(eng) => eng.set_prefs_json(json)
+  }
+}
+
+///|
+/// Configured save slot count.
+pub fn save_slot_count() -> Int {
+  match session.val.engine {
+    None => 0
+    Some(eng) => eng.screens.save_slots
+  }
+}
+
+///|
+/// In-memory slot blob (empty string if empty/missing).
+pub fn get_slot_json(slot : Int) -> String {
+  match session.val.engine {
+    None => ""
+    Some(eng) =>
+      match eng.get_slot_blob(slot) {
+        None => ""
+        Some(b) => b
+      }
+  }
+}
+
+///|
+/// Seed / update in-memory slot blob (host localStorage mirror). 0 ok, 1 error.
+pub fn set_slot_json(slot : Int, json : String) -> Int {
+  match session.val.engine {
+    None => 1
+    Some(eng) => {
+      eng.set_slot_blob(slot, json)
+      0
+    }
+  }
 }
 
 ///|
@@ -158,8 +246,15 @@ pub fn export_frame(intent_code : Int, dt_ms : Float) -> Int {
       let intent = @render.intent_from_code(intent_code)
       eng.tick(intent, dt~)
       let view = eng.view()
-      // Per-run approximate_measure(font_size) inside build (name/body/choice).
-      let dl = @render.build_draw_list_with_atlas(view, s.layout, s.atlas)
+      let occ = eng.occupied_slots()
+      // Screen-aware draw list (menu dim + widgets; skips dialogue in Title/Menu).
+      let dl = @render.build_draw_list_with_atlas(
+        view,
+        s.layout,
+        s.atlas,
+        screens=eng.screens,
+        occupied_slots=occ,
+      )
       s.frame = @render.pack_draw_list(dl, s.resources)
       s.frame.length()
     }

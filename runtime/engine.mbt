@@ -160,6 +160,84 @@ impl ScreenHost for Engine with fn slot_occupied(self, i) {
 ///|
 impl ScreenHost for Engine with fn apply_prefs(self, p) {
   self.auto = p.auto_mode
+  self.screens.prefs = p
+}
+
+///|
+/// Install screen defs (from host `screens.json`) and optional save_slots.
+///
+/// Preserves UiMode / stack / prefs. Resizes `slot_blobs` when slot count grows.
+pub fn Engine::install_screens(
+  self : Engine,
+  defs : Map[String, @script.ScreenDef],
+  save_slots? : Int,
+) -> Unit {
+  self.screens = self.screens.with_defs(defs, save_slots?)
+  let n = self.screens.save_slots
+  while self.slot_blobs.length() < n {
+    self.slot_blobs.push(None)
+  }
+}
+
+///|
+/// Read/write in-memory slot blobs (host mirrors to localStorage).
+pub fn Engine::get_slot_blob(self : Engine, i : Int) -> String? {
+  if i < 0 || i >= self.slot_blobs.length() {
+    None
+  } else {
+    self.slot_blobs[i]
+  }
+}
+
+///|
+pub fn Engine::set_slot_blob(self : Engine, i : Int, blob : String) -> Unit {
+  if i < 0 {
+    return
+  }
+  while self.slot_blobs.length() <= i {
+    self.slot_blobs.push(None)
+  }
+  if blob.length() == 0 {
+    self.slot_blobs[i] = None
+  } else {
+    self.slot_blobs[i] = Some(blob)
+  }
+}
+
+///|
+/// Current prefs as JSON string.
+pub fn Engine::prefs_json(self : Engine) -> String {
+  self.screens.prefs.to_json_string()
+}
+
+///|
+/// Apply prefs JSON (0 ok, 1 error). Updates auto flag.
+pub fn Engine::set_prefs_json(self : Engine, json : String) -> Int {
+  try {
+    let p = Prefs::from_json_string(json)
+    self.screens.prefs = p
+    self.auto = p.auto_mode
+    0
+  } catch {
+    _ => 1
+  }
+}
+
+///|
+/// Occupancy flags for each save slot (length = `screens.save_slots`).
+pub fn Engine::occupied_slots(self : Engine) -> Array[Bool] {
+  let n = self.screens.save_slots
+  let out : Array[Bool] = []
+  for i in 0..<n {
+    out.push(
+      if i < self.slot_blobs.length() {
+        self.slot_blobs[i] is Some(_)
+      } else {
+        false
+      },
+    )
+  }
+  out
 }
 
 ///|
