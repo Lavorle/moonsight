@@ -48,10 +48,12 @@ function resolveRes(resId) {
 
 /**
  * Rasterize pending glyphs reported by MoonBit atlas bookkeeping.
+ * On partial failure, skip clear_pending so failed entries retry next frame.
  */
 function flushPendingGlyphs(exports) {
   const n = exports.pending_glyph_count() | 0;
   if (n <= 0) return;
+  let anyFailed = false;
   for (let i = 0; i < n; i++) {
     const cp = exports.pending_glyph_cp(i) | 0;
     const size = exports.pending_glyph_size(i) | 0;
@@ -74,10 +76,15 @@ function flushPendingGlyphs(exports) {
       );
       exports.mark_glyph_ready(cp, size, atlasX, atlasY, atlasW, atlasH);
     } catch (e) {
+      anyFailed = true;
       console.warn("glyph rasterize failed", ch, e);
     }
   }
-  exports.clear_pending_glyphs();
+  // Do not permanently drop failed glyphs: only clear when every stamp succeeded.
+  // Successes re-stamped on a later retry are harmless (idempotent atlas write).
+  if (!anyFailed) {
+    exports.clear_pending_glyphs();
+  }
 }
 
 function drawPack(pack) {
@@ -108,12 +115,7 @@ function frame(ts) {
   try {
     exports_.export_frame(intent, dt);
     flushPendingGlyphs(exports_);
-    // Re-pack after glyph marks so UVs stay consistent (mark may update rects)
-    if ((exports_.pending_glyph_count() | 0) === 0) {
-      // second export with None keeps stage; only rebuilds draw list
-      // Actually export_frame always ticks — use intent 0 only once per frame.
-      // Glyphs marked ready will appear next frame; acceptable for Phase 1.
-    }
+    // Glyphs marked ready appear next frame (Phase 1; no second export/tick).
     const pack = copyFrame(exports_);
     drawPack(pack);
   } catch (e) {
@@ -273,15 +275,21 @@ async function maybeLoadSource() {
   console.info("init_demo()");
 }
 
+/** Fixed logical resolution; MoonBit packs all draw coords in FHD pixels. */
+const LOGICAL_W = 1920;
+const LOGICAL_H = 1080;
+
+/**
+ * Keep a fixed 1920×1080 WebGPU backbuffer. CSS scales the canvas element to
+ * the viewport — never set canvas.width/height from window×DPR (that would
+ * desync NDC mapping from the logical pack coords).
+ */
 function fitCanvas(canvas) {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const w = Math.max(1, Math.floor(window.innerWidth * dpr));
-  const h = Math.max(1, Math.floor(window.innerHeight * dpr));
-  canvas.width = w;
-  canvas.height = h;
+  canvas.width = LOGICAL_W;
+  canvas.height = LOGICAL_H;
   canvas.style.width = "100%";
   canvas.style.height = "100%";
-  Gpu.resize(w, h);
+  Gpu.resize(LOGICAL_W, LOGICAL_H);
 }
 
 export async function boot(options = {}) {
@@ -320,14 +328,6 @@ export async function boot(options = {}) {
     await applyManifest(manifest);
 
     // Map numeric resource ids that already exist after init
-    const rc = exports_.resource_count() | 0;
-    for (let id = 0; id < rc; id++) {
-      const name = exports_.resource_name(id);
-      if (name && !Gpu._textures.has(name) && name.length) {
-        // keep placeholder until manifest provides file
-      }
-    }
-
     setStatus("running (click / Enter to advance)");
     requestAnimationFrame(frame);
   } catch (e) {

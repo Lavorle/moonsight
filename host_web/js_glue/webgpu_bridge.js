@@ -437,7 +437,11 @@ export function drawSprites(spriteBuffer, resolveRes) {
   const count = Math.floor(data.length / SPRITE_STRIDE);
   if (count <= 0) return;
 
-  // Group by texture for fewer bind-group switches
+  // Group by texture for fewer bind-group switches.
+  // NOTE (Phase 1): Map insertion order means same-texture batches are drawn
+  // together, which can reorder interleaving across textures and ignore pack `z`.
+  // Safe while draw-list layers are mostly texture-sorted; fix with z-aware
+  // multi-draw or depth if overlapping cross-texture order matters.
   /** @type {Map<GPUTextureView, number[]>} */
   const groups = new Map();
   for (let i = 0; i < count; i++) {
