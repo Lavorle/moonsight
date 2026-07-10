@@ -1,0 +1,91 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonsight/moonsight/runtime"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub let logical_height : Int
+
+pub let logical_width : Int
+
+pub fn runtime_package_name() -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct ChoiceState {
+  options : Array[String]
+  selected : Int?
+} derive(@debug.Debug)
+
+pub(all) enum Intent {
+  None_
+  Advance
+  Select(Int)
+  SkipTyping
+  OpenMenu
+  ToggleAuto
+} derive(Eq, @debug.Debug)
+
+pub(all) enum LayerKind {
+  Background
+  Character
+  Effect
+  UI
+  Overlay
+} derive(Eq, @debug.Debug)
+
+pub(all) struct LayerState {
+  id : String
+  kind : LayerKind
+  resource : String
+  z : Int
+  x : Double
+  y : Double
+  opacity : Double
+  visible : Bool
+} derive(@debug.Debug)
+
+pub(all) struct Stage {
+  mut layers : Array[LayerState]
+  mut text : TextBlock?
+  mut choices : ChoiceState?
+  mut vars : Map[String, Value]
+  mut scene : String
+  mut overlay_opacity : Double
+} derive(@debug.Debug)
+pub fn Stage::begin_text(Self, speaker? : String) -> Unit
+pub fn Stage::clear_choices(Self) -> Unit
+pub fn Stage::complete_text(Self) -> Unit
+pub fn Stage::get_var(Self, String) -> Value
+pub fn Stage::hide_layer(Self, id~ : String) -> Unit
+pub fn Stage::new() -> Self
+pub fn Stage::select_choice(Self, Int) -> Unit
+pub fn Stage::set_choices(Self, Array[String]) -> Unit
+pub fn Stage::set_var(Self, String, Value) -> Unit
+pub fn Stage::show_layer(Self, id~ : String, layer~ : LayerKind, resource~ : String, z~ : Int, x? : Double, y? : Double, opacity? : Double) -> Unit
+pub fn Stage::snapshot_layers(Self) -> Array[LayerState]
+pub fn Stage::type_more(Self, String) -> Unit
+
+pub(all) struct TextBlock {
+  speaker : String?
+  full_text : String
+  visible_chars : Int
+  complete : Bool
+} derive(@debug.Debug)
+
+pub(all) enum Value {
+  Int(Int)
+  Float(Double)
+  Bool(Bool)
+  Str(String)
+  None_
+} derive(Eq, @debug.Debug)
+pub fn Value::truthy(Self) -> Bool
+
+// Type aliases
+
+// Traits
+
