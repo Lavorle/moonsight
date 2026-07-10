@@ -7,7 +7,10 @@
 
 ///|
 /// Run a shell command via `stub_system.c` (`moonsight_system` → libc system).
-/// Return 0 means the child exited with status 0.
+///
+/// `system(3)` returns the wait status; 0 means the child exited 0. Any non-zero
+/// value (encoded exit code, signal, etc.) is treated as failure — sufficient for
+/// `moon build` success/fail checks.
 #borrow(cmd)
 extern "C" fn system_ffi(cmd : Bytes) -> Int = "moonsight_system"
 
@@ -152,20 +155,28 @@ fn prepare_project_ui(project_dir : String, cfg : ProjectConfig) -> Unit raise I
           guard is_dir(src) else {
             raise IoError("ui_package is not a directory: \{src}")
           }
-          ensure_dir(ui_dir)
-          clear_project_ui_mbt(ui_dir)
-          write_string_to_file(join_path(ui_dir, "moon.pkg"), project_ui_moon_pkg())
-          let mut copied = 0
-          for name in read_dir(src) {
-            if name.has_suffix(".mbt") {
-              copy_file(join_path(src, name), join_path(ui_dir, name))
-              copied = copied + 1
+          // Mutation starts at clear: any failure after that must restore the stub.
+          try {
+            ensure_dir(ui_dir)
+            clear_project_ui_mbt(ui_dir)
+            write_string_to_file(join_path(ui_dir, "moon.pkg"), project_ui_moon_pkg())
+            let mut copied = 0
+            for name in read_dir(src) {
+              if name.has_suffix(".mbt") {
+                copy_file(join_path(src, name), join_path(ui_dir, name))
+                copied = copied + 1
+              }
+            }
+            if copied == 0 {
+              raise IoError("ui_package has no .mbt files: \{src}")
+            }
+            println("project_ui: linked \{copied} file(s) from \{src}")
+          } catch {
+            IoError(msg) => {
+              restore_project_ui_stub()
+              raise IoError(msg)
             }
           }
-          if copied == 0 {
-            raise IoError("ui_package has no .mbt files: \{src}")
-          }
-          println("project_ui: linked \{copied} file(s) from \{src}")
         }
       }
   }

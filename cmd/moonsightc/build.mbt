@@ -41,8 +41,10 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     let bytecode = @script.encode_module(ir)
 
     // Link optional project UI into host_web/project_ui, then rebuild wasm when set.
-    prepare_project_ui(project_dir, cfg)
+    // Mark linked before prepare so catch restores even if prepare mutates then fails
+    // (e.g. clears project_ui/*.mbt then raises on empty ui_package).
     linked_ui = true
+    prepare_project_ui(project_dir, cfg)
     match cfg.ui_package {
       Some(_) => rebuild_host_web_wasm()
       None => ()
