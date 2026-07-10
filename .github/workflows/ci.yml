@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  moon:
+    name: moon check / test / moonsightc smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Moon version
+        run: moon version
+
+      - name: moon check
+        run: moon check
+
+      - name: moon test
+        run: moon test
+
+      # Native CLI links C runtime; force gcc (tcc is unreliable on some hosts).
+      - name: moonsightc check (demo)
+        env:
+          CC: gcc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc
+          moon run cmd/moonsightc --target native -- version
+          moon run cmd/moonsightc --target native -- check demo/game
