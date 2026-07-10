@@ -11,9 +11,9 @@ pub fn approximate_advance_em(Char) -> Float
 
 pub fn approximate_measure(Float) -> (Char) -> Float
 
-pub fn build_draw_list(@runtime.StageView, UiLayout) -> DrawList
+pub fn build_draw_list(@runtime.StageView, UiLayout, ui_ops? : Array[@runtime.UiDrawOp]) -> DrawList
 
-pub fn build_draw_list_with_atlas(@runtime.StageView, UiLayout, GlyphAtlas, measure? : (Char) -> Float) -> DrawList
+pub fn build_draw_list_with_atlas(@runtime.StageView, UiLayout, GlyphAtlas, measure? : (Char) -> Float, ui_ops? : Array[@runtime.UiDrawOp]) -> DrawList
 
 pub fn fixed_width_measure(Float) -> (Char) -> Float
 
@@ -28,6 +28,8 @@ pub fn intent_to_code(@runtime.Intent) -> Int
 pub fn layout_text(String, max_width~ : Float, font_size~ : Float, measure~ : (Char) -> Float) -> Array[TextRun]
 
 pub fn measure_string(String, measure~ : (Char) -> Float) -> Float
+
+pub fn noto_advance_em(Char) -> Float
 
 pub fn pack_byte_length(Int, Int) -> Int
 
@@ -51,9 +53,15 @@ pub fn render_package_name() -> String
 
 pub let sprite_stride : Int
 
+pub let ui_button : String
+
+pub let ui_button_focus : String
+
 pub let ui_choice_row : String
 
 pub let ui_dialogue_box : String
+
+pub let ui_menu_dim : String
 
 pub let ui_nameplate : String
 
@@ -100,7 +108,7 @@ pub(all) struct GlyphAtlas {
 } derive(@debug.Debug)
 pub fn GlyphAtlas::contains(Self, Char, Int) -> Bool
 pub fn GlyphAtlas::get_entry(Self, Char, Int) -> AtlasEntry?
-pub fn GlyphAtlas::get_or_queue(Self, Char, Int, cell_w? : Int) -> AtlasEntry
+pub fn GlyphAtlas::get_or_queue(Self, Char, Int, cell_w? : Int, cell_h? : Int) -> AtlasEntry
 pub fn GlyphAtlas::mark_ready(Self, Char, Int, atlas_x~ : Int, atlas_y~ : Int, atlas_w~ : Int, atlas_h~ : Int) -> Unit
 pub fn GlyphAtlas::new(width? : Int, height? : Int) -> Self
 pub fn GlyphAtlas::take_pending(Self) -> Array[(Char, Int)]
@@ -148,29 +156,9 @@ pub(all) struct TextRun {
 pub(all) struct UiLayout {
   canvas_w : Float
   canvas_h : Float
-  dialogue_x : Float
-  dialogue_y : Float
-  dialogue_w : Float
-  dialogue_h : Float
-  nameplate_x : Float
-  nameplate_y : Float
-  nameplate_w : Float
-  nameplate_h : Float
-  text_x : Float
-  text_y : Float
-  text_w : Float
-  text_h : Float
-  choice_x : Float
-  choice_y : Float
-  choice_w : Float
-  choice_line_h : Float
   font_size : Float
-  name_font_size : Float
-  choice_font_size : Float
   default_char_advance : Float
   text_color : Color
-  name_color : Color
-  choice_color : Color
 } derive(@debug.Debug)
 pub fn UiLayout::default_fhd() -> Self
 
