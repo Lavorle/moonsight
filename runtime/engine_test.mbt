@@ -71,14 +71,17 @@ test "fade transition eases overlay toward target" {
   let eng = @runtime.Engine::from_ir(ir, entry="s")
   eng.stage.overlay_opacity = 0.0
   eng.stage.fade_to = 1.0
-  eng.stage.fade_duration = 0.3
-  // One frame at dt=0.1 of a 0.3s unit fade → +1/3
-  eng.tick(None_, dt=0.1)
-  assert_true(eng.stage.overlay_opacity > 0.3)
-  assert_true(eng.stage.overlay_opacity < 0.4)
-  // Finish remaining distance
-  eng.tick(None_, dt=0.3)
+  eng.stage.fade_remaining = 0.5
+  // Wall-clock: duration 0.5 from 0→1 is halfway after 0.25s total
+  eng.tick(None_, dt=0.25)
+  assert_true(eng.stage.overlay_opacity > 0.45)
+  assert_true(eng.stage.overlay_opacity < 0.55)
+  assert_true(eng.stage.fade_remaining > 0.2)
+  assert_true(eng.stage.fade_remaining < 0.3)
+  // Finish remaining wall-clock time → reaches ~1.0 after 0.5s total
+  eng.tick(None_, dt=0.25)
   assert_eq(eng.stage.overlay_opacity, 1.0)
+  assert_eq(eng.stage.fade_remaining, 0.0)
 }
 
 ///|

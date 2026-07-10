@@ -6,14 +6,14 @@ test "layer.show and trans.fade mutate stage" {
   assert_eq(stage.layers.length(), 1)
   assert_eq(stage.layers[0].resource, "bg_room")
   ignore(reg.call("trans.fade", stage, [Float(0.0), Float(1.0), Float(0.3)]))
-  // duration > 0: start at `from`; engine eases toward `fade_to`.
+  // duration > 0: start at `from`; wall-clock fade_remaining for engine tick.
   assert_eq(stage.overlay_opacity, 0.0)
   assert_eq(stage.fade_to, 1.0)
-  assert_eq(stage.fade_duration, 0.3)
+  assert_eq(stage.fade_remaining, 0.3)
   // Zero duration still snaps to target.
   ignore(reg.call("trans.fade", stage, [Float(0.0), Float(1.0)]))
   assert_eq(stage.overlay_opacity, 1.0)
-  assert_eq(stage.fade_duration, 0.0)
+  assert_eq(stage.fade_remaining, 0.0)
 }
 
 ///|

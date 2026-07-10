@@ -167,27 +167,27 @@ fn Engine::apply_intent(self : Engine, intent : Intent) -> Unit {
 }
 
 ///|
-/// Ease `overlay_opacity` toward `fade_to` using `fade_duration` seconds per unit range.
+/// Ease `overlay_opacity` toward `fade_to` over wall-clock `fade_remaining` seconds.
 fn Engine::tick_transitions(self : Engine, dt : Double) -> Unit {
   let target = self.stage.fade_to
   let cur = self.stage.overlay_opacity
-  let diff = target - cur
-  if diff == 0.0 {
+  if cur == target {
+    self.stage.fade_remaining = 0.0
     return
   }
-  let duration = self.stage.fade_duration
-  if duration <= 0.0 || dt <= 0.0 {
+  let rem = self.stage.fade_remaining
+  if rem <= 0.0 || dt <= 0.0 {
     self.stage.overlay_opacity = target
+    self.stage.fade_remaining = 0.0
     return
   }
-  // Unit opacity range takes `duration` seconds (matches from→to of size 1.0).
-  let step = dt / duration
-  if diff.abs() <= step {
+  let step_t = if dt < rem { dt } else { rem }
+  let frac = step_t / rem
+  self.stage.overlay_opacity = cur + (target - cur) * frac
+  self.stage.fade_remaining = rem - step_t
+  if self.stage.fade_remaining <= 0.0 {
     self.stage.overlay_opacity = target
-  } else if diff > 0.0 {
-    self.stage.overlay_opacity = cur + step
-  } else {
-    self.stage.overlay_opacity = cur - step
+    self.stage.fade_remaining = 0.0
   }
 }
 

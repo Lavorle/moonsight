@@ -79,9 +79,6 @@ pub(all) struct Stage {
   mut overlay_opacity : Double
   /// Fade target; engine eases `overlay_opacity` toward this each tick.
   mut fade_to : Double
-  /// Seconds per unit opacity range for the current fade (0 = snap).
-  /// Kept until Task 4 migrates engine/trans to `fade_remaining`.
-  mut fade_duration : Double
   /// Seconds left for timed @flow.wait; 0 means not in timed wait.
   mut wait_remaining : Double
   /// Wall-clock seconds left for overlay fade to `fade_to` (0 = done / snap).
@@ -105,7 +102,6 @@ pub fn Stage::new() -> Stage {
     scene: "",
     overlay_opacity: 0.0,
     fade_to: 0.0,
-    fade_duration: 0.0,
     wait_remaining: 0.0,
     fade_remaining: 0.0,
     bgm: None,

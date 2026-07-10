@@ -1,8 +1,8 @@
 ///|
-/// `trans.fade from to duration` — sets overlay start/`fade_to`/`fade_duration`.
+/// `trans.fade from to duration` — sets overlay start/`fade_to`/`fade_remaining`.
 ///
 /// When `duration > 0`, opacity starts at `from` and the engine eases toward
-/// `fade_to` over time. Zero/omitted duration snaps to `to` immediately.
+/// `fade_to` over wall-clock `duration` seconds. Zero/omitted duration snaps to `to`.
 pub fn cmd_trans_fade(
   stage : @runtime.Stage,
   args : Array[@runtime.Value],
@@ -17,11 +17,12 @@ pub fn cmd_trans_fade(
         ) {
         (Some(f), Some(t), Some(d)) => {
           stage.fade_to = t
-          stage.fade_duration = d
           if d <= 0.0 {
             stage.overlay_opacity = t
+            stage.fade_remaining = 0.0
           } else {
             stage.overlay_opacity = f
+            stage.fade_remaining = d
           }
           Ok
         }
@@ -31,7 +32,7 @@ pub fn cmd_trans_fade(
       match (@runtime.value_as_double(from), @runtime.value_as_double(to)) {
         (Some(_f), Some(t)) => {
           stage.fade_to = t
-          stage.fade_duration = 0.0
+          stage.fade_remaining = 0.0
           stage.overlay_opacity = t
           Ok
         }
@@ -41,7 +42,7 @@ pub fn cmd_trans_fade(
       match @runtime.value_as_double(to) {
         Some(t) => {
           stage.fade_to = t
-          stage.fade_duration = 0.0
+          stage.fade_remaining = 0.0
           stage.overlay_opacity = t
           Ok
         }
