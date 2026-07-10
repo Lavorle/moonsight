@@ -163,3 +163,23 @@ test "load v2 save still works" {
   assert_eq(eng.stage.fade_to, 0.0)
   assert_eq(eng.stage.fade_remaining, 0.0)
 }
+
+///|
+test "save roundtrip restores bgm_volume" {
+  @audio.reset_global_mixer()
+  let eng = load_min_demo_engine()
+  eng.stage.bgm = Some("bgm_soft")
+  @audio.global_mixer().play_bgm("bgm_soft", volume=0.42)
+  let blob = eng.save()
+  let game = @runtime.parse_save_game(blob)
+  assert_true(game.audio.bgm_volume is Some(0.42))
+  @audio.reset_global_mixer()
+  let eng2 = load_min_demo_engine()
+  eng2.load(blob)
+  guard eng2.stage.bgm is Some(stage_bgm) else { fail("stage bgm") }
+  assert_eq(stage_bgm, "bgm_soft")
+  assert_eq(@audio.global_mixer().bgm_volume, 0.42)
+  guard @audio.global_mixer().bgm is Some(id) else { fail("mixer bgm") }
+  assert_eq(id, "bgm_soft")
+  @audio.reset_global_mixer()
+}

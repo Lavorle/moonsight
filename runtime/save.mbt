@@ -16,10 +16,22 @@ pub(all) struct StackFrame {
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
-/// Logical audio snapshot (mirrors Stage bgm/se until audio package owns state).
+/// Logical audio snapshot (Stage bgm/se ids + mixer volume).
+///
+/// `bgm_volume` is optional in JSON so legacy `"audio":{}` blobs still decode;
+/// missing volume is treated as 1.0 on load. Optional fade mid-state fields
+/// restore in-flight fades when present.
 pub(all) struct AudioLogicState {
   bgm : String?
   se : String?
+  /// Logical BGM gain (None = legacy / default 1.0).
+  bgm_volume : Double?
+  /// Fade target when a fade was in progress at save time.
+  bgm_fade_to : Double?
+  /// Seconds left on BGM fade (None/0 = not fading).
+  bgm_fade_remaining : Double?
+  /// When true, stop BGM after the restored fade completes.
+  bgm_fade_stop : Bool?
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
@@ -139,7 +151,7 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
     layers: self.stage.layers.copy(),
     text: self.stage.text,
     overlay_opacity: self.stage.overlay_opacity,
-    audio: { bgm: self.stage.bgm, se: self.stage.se },
+    audio: audio_logic_from_mixer(self.stage.bgm, self.stage.se),
     wait: self.vm.wait,
     choices,
     choose_result_var: self.vm.choose_result_var,
@@ -286,9 +298,49 @@ fn apply_save_game(eng : Engine, game : SaveGame) -> Unit {
   eng.stage.wait_remaining = game.wait_remaining
   eng.stage.bgm = game.audio.bgm
   eng.stage.se = game.audio.se
+  restore_mixer_from_audio(game.audio)
   match game.choices {
     Some(opts) => eng.stage.set_choices(opts)
     None => eng.stage.clear_choices()
   }
   eng.stage.save_hint = false
+}
+
+///|
+/// Snapshot Stage ids + live mixer volume / fade for the save blob.
+fn audio_logic_from_mixer(bgm : String?, se : String?) -> AudioLogicState {
+  let m = @audio.global_mixer()
+  let fade_to = m.bgm_fade_to
+  let fade_rem = m.bgm_fade_remaining
+  let fade_stop = m.bgm_fade_stop
+  {
+    bgm,
+    se,
+    bgm_volume: Some(m.bgm_volume),
+    bgm_fade_to: fade_to,
+    bgm_fade_remaining: if fade_rem > 0.0 { Some(fade_rem) } else { None },
+    bgm_fade_stop: if fade_stop { Some(true) } else { None },
+  }
+}
+
+///|
+/// Restore logical mixer volume (and optional mid-fade) after Stage ids apply.
+fn restore_mixer_from_audio(audio : AudioLogicState) -> Unit {
+  let vol = match audio.bgm_volume {
+    Some(v) => v
+    None => 1.0
+  }
+  let m = @audio.global_mixer()
+  m.apply_logic(audio.bgm, audio.se, volume=vol)
+  match (audio.bgm_fade_to, audio.bgm_fade_remaining) {
+    (Some(target), Some(rem)) =>
+      if rem > 0.0 {
+        let stop = match audio.bgm_fade_stop {
+          Some(true) => true
+          _ => false
+        }
+        m.fade_bgm_to(target, rem, stop=stop)
+      }
+    _ => ()
+  }
 }

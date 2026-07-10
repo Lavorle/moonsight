@@ -81,3 +81,36 @@ test "global mixer install and host-style play" {
   assert_eq(q.len(), 2)
   reset_global_mixer()
 }
+
+///|
+test "bgm fade approaches target volume" {
+  let q = QueueBackend::new()
+  let m = Mixer::with_backend((q : &AudioBackend))
+  m.play_bgm("a", volume=0.0)
+  q.clear()
+  m.fade_bgm_to(1.0, 1.0)
+  m.tick(0.5)
+  // volume mid ~0.5
+  assert_true(m.bgm_volume > 0.4 && m.bgm_volume < 0.6)
+  m.tick(0.5)
+  assert_true(m.bgm_volume >= 0.99)
+  // Mid-fade and end emit SetBgmVolume (not PlayBgm).
+  assert_true(q.len() >= 2)
+  guard q.get(0) is Some(SetBgmVolume(volume~)) else { fail("SetBgmVolume") }
+  assert_true(volume > 0.4 && volume < 0.6)
+}
+
+///|
+test "bgm fade stop reaches zero then stops" {
+  let q = QueueBackend::new()
+  let m = Mixer::with_backend((q : &AudioBackend))
+  m.play_bgm("a", volume=1.0)
+  q.clear()
+  m.fade_bgm_to(0.0, 1.0, stop=true)
+  m.tick(0.5)
+  assert_true(m.bgm is Some(_))
+  assert_true(m.bgm_volume > 0.4 && m.bgm_volume < 0.6)
+  m.tick(0.5)
+  assert_true(m.bgm is None)
+  guard q.get(q.len() - 1) is Some(StopBgm) else { fail("StopBgm at end") }
+}

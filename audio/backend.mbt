@@ -10,6 +10,8 @@ pub(all) enum AudioEvent {
   PlayBgm(resource~ : String, looped~ : Bool, volume~ : Double)
   StopBgm
   PlaySe(resource~ : String, volume~ : Double)
+  /// Mid-stream volume change (fade ticks); does not restart the track.
+  SetBgmVolume(volume~ : Double)
 } derive(Debug, Eq)
 
 ///|
@@ -18,6 +20,7 @@ pub(open) trait AudioBackend {
   fn play_bgm(Self, resource : String, looped : Bool, volume : Double) -> Unit
   fn stop_bgm(Self) -> Unit
   fn play_se(Self, resource : String, volume : Double) -> Unit
+  fn set_bgm_volume(Self, volume : Double) -> Unit
 }
 
 ///|
@@ -58,6 +61,12 @@ pub impl AudioBackend for NullBackend with fn play_se(self, resource, volume) {
 }
 
 ///|
+pub impl AudioBackend for NullBackend with fn set_bgm_volume(self, volume) {
+  ignore(self)
+  ignore(volume)
+}
+
+///|
 /// Records events for a host (or test) to drain and apply.
 pub(all) struct QueueBackend {
   mut events : Array[AudioEvent]
@@ -86,6 +95,11 @@ pub impl AudioBackend for QueueBackend with fn stop_bgm(self) {
 ///|
 pub impl AudioBackend for QueueBackend with fn play_se(self, resource, volume) {
   self.events.push(PlaySe(resource~, volume~))
+}
+
+///|
+pub impl AudioBackend for QueueBackend with fn set_bgm_volume(self, volume) {
+  self.events.push(SetBgmVolume(volume~))
 }
 
 ///|

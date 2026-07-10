@@ -49,7 +49,7 @@ pub fn Engine::from_ir(
 ///
 /// Tick order (spec §4): effective intent → gate while timed-wait → apply_intent →
 /// tick_wait → run_until_wait if Running → tick_transitions → tick_layer_tweens →
-/// tick_typewriter.
+/// BGM fade → tick_typewriter.
 pub fn Engine::tick(
   self : Engine,
   intent : Intent,
@@ -73,6 +73,8 @@ pub fn Engine::tick(
   }
   self.tick_transitions(dt)
   self.stage.tick_layer_tweens(dt)
+  // Fire-and-forget linear BGM fade (global mixer; host installs QueueBackend).
+  @audio.global_mixer().tick(dt)
   self.tick_typewriter(dt)
 }
 

@@ -204,7 +204,9 @@ pub fn save_json(slot : Int) -> String {
 }
 
 ///|
-/// Apply a save JSON blob (0 ok, 1 error). Re-syncs mixer BGM from Stage.
+/// Apply a save JSON blob (0 ok, 1 error).
+///
+/// `Engine::load` restores mixer BGM/volume/fade from the save audio block.
 pub fn load_json(json : String) -> Int {
   let s = session.val
   match s.engine {
@@ -212,8 +214,6 @@ pub fn load_json(json : String) -> Int {
     Some(eng) =>
       try {
         eng.load(json)
-        // Restore logical BGM without replaying last SE.
-        @audio.global_mixer().apply_logic(eng.stage.bgm, eng.stage.se)
         0
       } catch {
         _ => 1
@@ -224,7 +224,7 @@ pub fn load_json(json : String) -> Int {
 // ---------------------------------------------------------------------------
 // Audio event drain for JS (QueueBackend behind the global mixer)
 //
-// kind codes: 0=PlayBgm, 1=StopBgm, 2=PlaySe
+// kind codes: 0=PlayBgm, 1=StopBgm, 2=PlaySe, 3=SetBgmVolume
 // ---------------------------------------------------------------------------
 
 ///|
@@ -233,18 +233,19 @@ pub fn audio_event_count() -> Int {
 }
 
 ///|
-/// Event kind at index: 0 PlayBgm, 1 StopBgm, 2 PlaySe, -1 OOB.
+/// Event kind at index: 0 PlayBgm, 1 StopBgm, 2 PlaySe, 3 SetBgmVolume, -1 OOB.
 pub fn audio_event_kind(i : Int) -> Int {
   match session.val.audio_queue.get(i) {
     None => -1
     Some(PlayBgm(..)) => 0
     Some(StopBgm) => 1
     Some(PlaySe(..)) => 2
+    Some(SetBgmVolume(..)) => 3
   }
 }
 
 ///|
-/// Resource id for PlayBgm / PlaySe (empty for StopBgm / OOB).
+/// Resource id for PlayBgm / PlaySe (empty for StopBgm / SetBgmVolume / OOB).
 pub fn audio_event_resource(i : Int) -> String {
   match session.val.audio_queue.get(i) {
     Some(PlayBgm(resource~, ..)) => resource
@@ -267,6 +268,7 @@ pub fn audio_event_volume(i : Int) -> Float {
   match session.val.audio_queue.get(i) {
     Some(PlayBgm(volume~, ..)) => Float::from_double(volume)
     Some(PlaySe(volume~, ..)) => Float::from_double(volume)
+    Some(SetBgmVolume(volume~)) => Float::from_double(volume)
     _ => 0.0
   }
 }

@@ -194,14 +194,64 @@ test "flow.choice sets options and yields" {
 test "audio.bgm se and sys.save_hint" {
   let stage = @runtime.Stage::new()
   let reg = @std_commands.standard_registry()
+  @audio.reset_global_mixer()
   assert_true(reg.call("audio.bgm", stage, [Str("bgm_soft")]) == Ok)
   guard stage.bgm is Some(bgm) else { fail("bgm") }
   assert_eq(bgm, "bgm_soft")
+  assert_eq(@audio.global_mixer().bgm_volume, 1.0)
   assert_true(reg.call("audio.se", stage, [Str("click")]) == Ok)
   guard stage.se is Some(se) else { fail("se") }
   assert_eq(se, "click")
   assert_true(reg.call("sys.save_hint", stage, []) == Ok)
   assert_true(stage.save_hint)
+  @audio.reset_global_mixer()
+}
+
+///|
+test "audio.bgm volume and fade named args" {
+  let stage = @runtime.Stage::new()
+  let reg = @std_commands.standard_registry()
+  @audio.reset_global_mixer()
+  // Immediate volume.
+  assert_true(
+    reg.call(
+      "audio.bgm",
+      stage,
+      [Str("bgm_soft"), Str("#:volume"), Float(0.5)],
+    ) ==
+    Ok,
+  )
+  assert_eq(@audio.global_mixer().bgm_volume, 0.5)
+  // Fade in on new id: start 0 → approach target.
+  assert_true(
+    reg.call(
+      "audio.bgm",
+      stage,
+      [
+        Str("bgm_other"),
+        Str("#:volume"),
+        Float(0.8),
+        Str("#:fade"),
+        Float(1.0),
+      ],
+    ) ==
+    Ok,
+  )
+  assert_eq(@audio.global_mixer().bgm_volume, 0.0)
+  @audio.global_mixer().tick(0.5)
+  assert_true(
+    @audio.global_mixer().bgm_volume > 0.3 &&
+    @audio.global_mixer().bgm_volume < 0.5,
+  )
+  // Stop with fade.
+  assert_true(
+    reg.call("audio.bgm", stage, [None_, Str("#:fade"), Float(0.4)]) == Ok,
+  )
+  assert_true(stage.bgm is None)
+  assert_true(@audio.global_mixer().bgm is Some(_))
+  @audio.global_mixer().tick(0.4)
+  assert_true(@audio.global_mixer().bgm is None)
+  @audio.reset_global_mixer()
 }
 
 ///|

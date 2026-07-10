@@ -26,6 +26,7 @@ const GLYPH_STRIDE = 12;
 const AUDIO_PLAY_BGM = 0;
 const AUDIO_STOP_BGM = 1;
 const AUDIO_PLAY_SE = 2;
+const AUDIO_SET_BGM_VOLUME = 3;
 
 const SAVE_KEY = (slot) => `moonsight/save/${slot}`;
 
@@ -293,6 +294,16 @@ function stopBgm() {
 }
 
 /**
+ * Apply mid-fade / volume-only BGM change without restarting the track.
+ * @param {number} volume
+ */
+function setBgmVolume(volume) {
+  if (bgmEl) {
+    bgmEl.volume = clampVolume(volume);
+  }
+}
+
+/**
  * Play BGM by logical id. Missing URL or media load failure hard-fails
  * (see audioLoadFailed); autoplay / AbortError only warn.
  */
@@ -378,6 +389,8 @@ function flushAudio(exports) {
       const id = exports.audio_event_resource(i) || "";
       const volume = clampVolume(exports.audio_event_volume(i));
       playSe(id, volume);
+    } else if (kind === AUDIO_SET_BGM_VOLUME) {
+      setBgmVolume(exports.audio_event_volume(i));
     }
   }
   if (typeof exports.audio_clear_events === "function") {
