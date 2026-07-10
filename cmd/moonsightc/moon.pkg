@@ -1,0 +1,9 @@
+import {
+  "moonsight/moonsight/script",
+}
+
+supported_targets = "native+wasm-gc"
+
+options(
+  "is-main": true,
+)

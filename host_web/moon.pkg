@@ -1,0 +1,10 @@
+import {
+  "moonsight/moonsight/runtime",
+  "moonsight/moonsight/std_commands",
+  "moonsight/moonsight/render",
+  "moonsight/moonsight/audio",
+}
+
+options(
+  "is-main": true,
+)

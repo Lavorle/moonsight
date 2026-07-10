@@ -1,5 +1,8 @@
 .superpowers/
 .omc/
-target/
+_build/
+.target/
+.repos/
 node_modules/
 *.wasm
+host_desktop/tauri/src-tauri/target/
