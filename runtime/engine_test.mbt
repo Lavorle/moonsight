@@ -255,6 +255,40 @@ test "sync_ui_bind fills backlog_lines after dialogue complete" {
 }
 
 ///|
+test "sync_ui_bind fills slot_labels" {
+  let src =
+    #|- scene "s"
+    #|Hero:Hi
+    #|
+  let ir = @script.compile_to_ir(src, file="slot_lbl.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", save_slots=4)
+  eng.sync_ui_bind()
+  assert_eq(eng.ui.bind.slot_labels.length(), 4)
+  assert_eq(eng.ui.bind.slot_labels[0], "Slot 0 (empty)")
+  assert_eq(
+    @runtime.TextBindSrc::SlotLabel(0).resolve(eng.ui.bind),
+    "Slot 0 (empty)",
+  )
+  // Occupied with saved_at in blob.
+  let stamped =
+    #|{"format_version":3,"module_id":"","scene":"s","ip":0,"call_stack":[],"vars":{},"layers":[],"overlay_opacity":0,"audio":{},"wait":"Running","auto":false,"fade_to":0,"fade_remaining":0,"wait_remaining":0,"saved_at":"2026-07-10T12:00:00Z"}
+  eng.set_slot_blob(1, stamped)
+  // Occupied without saved_at.
+  let bare =
+    #|{"format_version":3,"module_id":"","scene":"s","ip":0,"call_stack":[],"vars":{},"layers":[],"overlay_opacity":0,"audio":{},"wait":"Running","auto":false,"fade_to":0,"fade_remaining":0,"wait_remaining":0}
+  eng.set_slot_blob(2, bare)
+  eng.sync_ui_bind()
+  assert_eq(eng.ui.bind.slot_labels[1], "Slot 1 · 2026-07-10T12:00:00Z")
+  assert_eq(eng.ui.bind.slot_labels[2], "Slot 2 · saved")
+  assert_eq(eng.ui.bind.slot_labels[3], "Slot 3 (empty)")
+  assert_eq(
+    @runtime.TextBindSrc::SlotLabel(1).resolve(eng.ui.bind),
+    "Slot 1 · 2026-07-10T12:00:00Z",
+  )
+  assert_eq(@runtime.TextBindSrc::SlotLabel(99).resolve(eng.ui.bind), "Slot 99 (empty)")
+}
+
+///|
 test "jump_if branches Talk vs Leave to different scenes" {
   let src =
     #|- scene "s"

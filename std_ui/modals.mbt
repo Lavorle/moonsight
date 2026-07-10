@@ -153,16 +153,26 @@ fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
     let load_id = app.alloc_action(fn(c : &@runtime.Capabilities) {
       c.load_slot(slot)
     })
+    // Dynamic label (timestamp / empty) from bind.slot_labels via SlotLabel.
+    children.push(
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::SlotLabel(slot),
+        x=0.0,
+        y=0.0,
+        font_size=22.0,
+        visible=@runtime.VisiblePred::Always,
+      ),
+    )
     children.push(
       @runtime.UiNode::Button(
-        label="Slot \{slot}",
+        label="Save",
         action_id=save_id,
         visible=@runtime.VisiblePred::ModeIs("save"),
       ),
     )
     children.push(
       @runtime.UiNode::Button(
-        label="Slot \{slot}",
+        label="Load",
         action_id=load_id,
         visible=@runtime.VisiblePred::And(
           @runtime.VisiblePred::ModeIs("load"),

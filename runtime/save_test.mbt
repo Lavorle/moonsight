@@ -208,7 +208,8 @@ test "save header saved_at roundtrip and missing defaults empty" {
 
 ///|
 test "slot_label empty and filled" {
-  assert_eq(slot_label(None), "Empty")
+  assert_eq(slot_label(0, None), "Slot 0 (empty)")
+  assert_eq(slot_label(3, None), "Slot 3 (empty)")
   let bare : SaveGame = {
     format_version: 3,
     module_id: "",
@@ -229,9 +230,9 @@ test "slot_label empty and filled" {
     wait_remaining: 0.0,
     saved_at: "",
   }
-  assert_eq(slot_label(Some(bare)), "chapter1")
+  assert_eq(slot_label(1, Some(bare)), "Slot 1 · saved")
   let stamped = { ..bare, saved_at: "2026-07-10T12:00:00Z" }
-  assert_eq(slot_label(Some(stamped)), "chapter1 · 2026-07-10T12:00:00Z")
+  assert_eq(slot_label(2, Some(stamped)), "Slot 2 · 2026-07-10T12:00:00Z")
 }
 
 ///|

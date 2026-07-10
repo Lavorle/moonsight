@@ -248,15 +248,15 @@ pub impl Capabilities for Engine with fn slot_occupied(self, i) {
 ///|
 pub impl Capabilities for Engine with fn slot_label(self, i) {
   if i < 0 || i >= self.slot_blobs.length() {
-    return slot_label(None)
+    return slot_label(i, None)
   }
   match self.slot_blobs[i] {
-    None => slot_label(None)
+    None => slot_label(i, None)
     Some(blob) =>
       try {
-        slot_label(Some(parse_save_game(blob)))
+        slot_label(i, Some(parse_save_game(blob)))
       } catch {
-        _ => "Slot \{i}"
+        _ => "Slot \{i} (empty)"
       }
   }
 }
@@ -581,6 +581,11 @@ pub fn Engine::sync_ui_bind(self : Engine) -> Unit {
   }
   // Last 12 backlog lines (oldest first among the window; newest last).
   let backlog_lines = format_backlog_lines(self.backlog, 12)
+  let n_slots = self.ui.save_slots
+  let slot_labels : Array[String] = []
+  for i in 0..<n_slots {
+    slot_labels.push(self.slot_label(i))
+  }
   self.ui.sync_bind(
     {
       has_text,
@@ -593,6 +598,7 @@ pub fn Engine::sync_ui_bind(self : Engine) -> Unit {
       dialogue_name,
       dialogue_body,
       backlog_lines,
+      slot_labels,
     },
   )
 }

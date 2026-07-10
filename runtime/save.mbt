@@ -229,17 +229,19 @@ fn ensure_saved_at_default(json : Json) -> Json {
 }
 
 ///|
-/// UI label for a save slot: `"Empty"` or `"\{scene} · \{saved_at}"`.
+/// UI label for save slot `i`.
 ///
-/// When `saved_at` is empty, returns just the scene name.
-pub fn slot_label(saved : SaveGame?) -> String {
+/// - empty: `"Slot {i} (empty)"`
+/// - occupied with `saved_at`: `"Slot {i} · {saved_at}"`
+/// - occupied without timestamp: `"Slot {i} · saved"`
+pub fn slot_label(i : Int, saved : SaveGame?) -> String {
   match saved {
-    None => "Empty"
+    None => "Slot \{i} (empty)"
     Some(game) =>
       if game.saved_at == "" {
-        game.scene
+        "Slot \{i} · saved"
       } else {
-        "\{game.scene} · \{game.saved_at}"
+        "Slot \{i} · \{game.saved_at}"
       }
   }
 }

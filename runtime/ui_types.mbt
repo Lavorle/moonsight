@@ -138,6 +138,8 @@ pub(all) struct UiBindCtx {
   dialogue_body : String
   /// Last 12 backlog lines preformatted as "Name: text" (or bare text); newest last.
   backlog_lines : Array[String]
+  /// Per-slot labels (length = save_slots); resolved by `TextBindSrc::SlotLabel`.
+  slot_labels : Array[String]
 } derive(Debug)
 
 ///|
@@ -154,6 +156,7 @@ pub fn UiBindCtx::empty() -> UiBindCtx {
     dialogue_name: "",
     dialogue_body: "",
     backlog_lines: [],
+    slot_labels: [],
   }
 }
 
@@ -199,12 +202,10 @@ pub fn TextBindSrc::resolve(self : TextBindSrc, bind : UiBindCtx) -> String {
     DialogueBody => bind.dialogue_body
     Pref(key) => format_pref_bind(bind.prefs, key)
     SlotLabel(i) => {
-      if i < 0 || i >= bind.occupied.length() {
-        "Slot \{i}"
-      } else if bind.occupied[i] {
-        "Slot \{i}"
-      } else {
+      if i < 0 || i >= bind.slot_labels.length() {
         "Slot \{i} (empty)"
+      } else {
+        bind.slot_labels[i]
       }
     }
     Var(name) =>
