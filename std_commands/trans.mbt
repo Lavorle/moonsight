@@ -1,6 +1,8 @@
 ///|
-/// `trans.fade from to duration` — Phase 1 applies `to` immediately and
-/// records duration for a later animation system.
+/// `trans.fade from to duration` — sets overlay start/`fade_to`/`fade_duration`.
+///
+/// When `duration > 0`, opacity starts at `from` and the engine eases toward
+/// `fade_to` over time. Zero/omitted duration snaps to `to` immediately.
 pub fn cmd_trans_fade(
   stage : @runtime.Stage,
   args : Array[@runtime.Value],
@@ -14,18 +16,20 @@ pub fn cmd_trans_fade(
           @runtime.value_as_double(duration),
         ) {
         (Some(f), Some(t), Some(d)) => {
-          ignore(f)
           stage.fade_to = t
           stage.fade_duration = d
-          stage.overlay_opacity = t
+          if d <= 0.0 {
+            stage.overlay_opacity = t
+          } else {
+            stage.overlay_opacity = f
+          }
           Ok
         }
         _ => Error("trans.fade: expected from/to/duration numbers")
       }
     [from, to] =>
       match (@runtime.value_as_double(from), @runtime.value_as_double(to)) {
-        (Some(f), Some(t)) => {
-          ignore(f)
+        (Some(_f), Some(t)) => {
           stage.fade_to = t
           stage.fade_duration = 0.0
           stage.overlay_opacity = t

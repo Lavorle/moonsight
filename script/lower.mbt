@@ -38,8 +38,55 @@ fn lower_scene(scene : SceneDecl) -> IrScene {
 ///|
 fn lower_stmt(stmt : Stmt, ops : Array[IrOp]) -> Unit {
   match stmt {
-    Command(cmd~, args~, ..) => ops.push(Host(name=cmd, args=lower_args(args)))
+    Command(cmd~, args~, ..) =>
+      if cmd == "flow.choice" {
+        lower_choice(args, ops)
+      } else {
+        ops.push(Host(name=cmd, args=lower_args(args)))
+      }
     Dialogue(speaker~, text~, ..) => lower_dialogue(speaker, text, ops)
+  }
+}
+
+///|
+/// Lower `@flow.choice` to `IrOp::Choose`.
+///
+/// Supported forms:
+/// - `@flow.choice "Yes" "No" --result c`
+/// - `@flow.choice result="c" "Yes" "No"`
+/// - `@flow.choice "Yes" "No" result=c`
+///
+/// Positional string/ident args become option labels. Missing result defaults to `"_"`.
+fn lower_choice(args : Array[Arg], ops : Array[IrOp]) -> Unit {
+  let options : Array[String] = []
+  let mut result_var = "_"
+  let mut i = 0
+  while i < args.length() {
+    match args[i] {
+      Named(name="result", e) => result_var = result_name_from_expr(e)
+      Flag("result") => {
+        i = i + 1
+        if i < args.length() {
+          match args[i] {
+            Positional(e) | Named(e, ..) =>
+              result_var = result_name_from_expr(e)
+            Flag(_) => ()
+          }
+        }
+      }
+      Positional(Str(s)) | Positional(Ident(s)) => options.push(s)
+      Named(_, ..) | Flag(_) | Positional(_) => ()
+    }
+    i = i + 1
+  }
+  ops.push(Choose(options~, result_var~))
+}
+
+///|
+fn result_name_from_expr(e : Expr) -> String {
+  match e {
+    Ident(s) | Str(s) => s
+    _ => "_"
   }
 }
 

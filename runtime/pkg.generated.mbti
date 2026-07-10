@@ -69,11 +69,13 @@ pub(all) struct Engine {
   mut vm : Vm
   director : Director
   mut stage : Stage
+  mut auto : Bool
 } derive(@debug.Debug)
 pub fn Engine::from_ir(@script.IrModule, entry~ : String, director? : Director) -> Self
 pub fn Engine::load(Self, String) -> Unit raise SaveError
 pub fn Engine::save(Self, slot? : Int) -> String
-pub fn Engine::tick(Self, Intent) -> Unit
+pub fn Engine::tick(Self, Intent, dt? : Double) -> Unit
+pub fn Engine::view(Self) -> StageView
 
 pub(all) struct HostCall {
   name : String
@@ -157,12 +159,26 @@ pub fn Stage::complete_text(Self) -> Unit
 pub fn Stage::get_var(Self, String) -> Value
 pub fn Stage::hide_layer(Self, id~ : String) -> Unit
 pub fn Stage::new() -> Self
+pub fn Stage::reveal_chars(Self, Int) -> Unit
 pub fn Stage::select_choice(Self, Int) -> Unit
 pub fn Stage::set_choices(Self, Array[String]) -> Unit
 pub fn Stage::set_var(Self, String, Value) -> Unit
 pub fn Stage::show_layer(Self, id~ : String, layer~ : LayerKind, resource~ : String, z~ : Int, x? : Double, y? : Double, opacity? : Double) -> Unit
 pub fn Stage::snapshot_layers(Self) -> Array[LayerState]
 pub fn Stage::type_more(Self, String) -> Unit
+
+pub(all) struct StageView {
+  layers : Array[LayerState]
+  text : TextBlock?
+  choices : ChoiceState?
+  scene : String
+  overlay_opacity : Double
+  bgm : String?
+  se : String?
+  wait : WaitKind
+  auto : Bool
+} derive(@debug.Debug)
+pub fn StageView::from_stage(Stage, wait~ : WaitKind, auto~ : Bool) -> Self
 
 pub(all) struct TextBlock {
   speaker : String?

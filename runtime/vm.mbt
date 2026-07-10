@@ -23,14 +23,6 @@ pub(all) struct Vm {
 } derive(Debug)
 
 ///|
-/// Headless engine: VM + Director + Stage with intent-driven ticks.
-pub(all) struct Engine {
-  mut vm : Vm
-  director : Director
-  mut stage : Stage
-} derive(Debug)
-
-///|
 /// Create a VM positioned at `entry` scene.
 pub fn Vm::from_module(ir : @script.IrModule, entry~ : String) -> Vm {
   let ops = load_scene_ops(ir, entry)
@@ -43,64 +35,6 @@ pub fn Vm::from_module(ir : @script.IrModule, entry~ : String) -> Vm {
     halted: false,
     wait: Running,
     choose_result_var: None,
-  }
-}
-
-///|
-/// Load IR into an engine with built-in host handlers.
-///
-/// Pass `director` to inject a full registry (e.g. `@std_commands.standard_registry()`).
-pub fn Engine::from_ir(
-  ir : @script.IrModule,
-  entry~ : String,
-  director? : Director,
-) -> Engine {
-  let stage = Stage::new()
-  stage.scene = entry
-  let dir = match director {
-    Some(d) => d
-    None => Director::with_builtins()
-  }
-  { vm: Vm::from_module(ir, entry~), director: dir, stage }
-}
-
-///|
-/// Apply player intent, then run the VM until it waits or halts.
-pub fn Engine::tick(self : Engine, intent : Intent) -> Unit {
-  self.apply_intent(intent)
-  if self.vm.wait is Running {
-    self.vm.run_until_wait(self.director, self.stage)
-  }
-}
-
-///|
-fn Engine::apply_intent(self : Engine, intent : Intent) -> Unit {
-  match self.vm.wait {
-    Yield =>
-      match intent {
-        Advance | SkipTyping =>
-          // Typewriter: first Advance completes incomplete text; stay on Yield.
-          match self.stage.text {
-            Some({ complete: false, .. }) => self.stage.complete_text()
-            _ => self.vm.wait = Running
-          }
-        None_ | Select(_) | OpenMenu | ToggleAuto => ()
-      }
-    Choose =>
-      match intent {
-        Select(index) => {
-          self.stage.select_choice(index)
-          match self.vm.choose_result_var {
-            Some(name) => self.stage.set_var(name, Int(index))
-            None => ()
-          }
-          self.stage.clear_choices()
-          self.vm.choose_result_var = None
-          self.vm.wait = Running
-        }
-        _ => ()
-      }
-    Running | Halted => ()
   }
 }
 

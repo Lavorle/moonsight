@@ -34,6 +34,21 @@ test "lower flow.jump command to host op" {
 }
 
 ///|
+test "lower flow.choice to Choose op" {
+  let src =
+    #|- scene "s"
+    #|@flow.choice "Yes" "No" --result c
+    #|
+  let ir = @script.compile_to_ir(src, file="choice.yuki")
+  let ops = ir.scenes["s"].ops
+  guard ops[0] is Choose(options~, result_var~) else { fail("Choose") }
+  assert_eq(result_var, "c")
+  assert_eq(options.length(), 2)
+  assert_eq(options[0], "Yes")
+  assert_eq(options[1], "No")
+}
+
+///|
 test "lower dialogue with inline command" {
   // wait is not a builtin; file extern required
   // Inline markup is `[cmd args]` (Yukimi-style brackets).

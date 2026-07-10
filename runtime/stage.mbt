@@ -59,9 +59,9 @@ pub(all) struct Stage {
   mut vars : Map[String, Value]
   mut scene : String
   mut overlay_opacity : Double
-  /// Last fade target (Phase 1 applies immediately to `overlay_opacity`).
+  /// Fade target; engine eases `overlay_opacity` toward this each tick.
   mut fade_to : Double
-  /// Last requested fade duration in seconds (animation later).
+  /// Seconds per unit opacity range for the current fade (0 = snap).
   mut fade_duration : Double
   /// Current BGM resource id (logical; Task 13 wires audio backend).
   mut bgm : String?
@@ -190,6 +190,34 @@ pub fn Stage::complete_text(self : Stage) -> Unit {
         visible_chars: t.full_text.length(),
         complete: true,
       })
+  }
+}
+
+///|
+/// Reveal up to `n` additional typewriter characters (clamped to full text).
+///
+/// Marks the block complete when all characters are visible. No-op if no text
+/// is active or the block is already complete.
+pub fn Stage::reveal_chars(self : Stage, n : Int) -> Unit {
+  if n <= 0 {
+    return
+  }
+  match self.text {
+    None => ()
+    Some(t) => {
+      if t.complete {
+        return
+      }
+      let len = t.full_text.length()
+      let next = t.visible_chars + n
+      let visible = if next >= len { len } else { next }
+      self.text = Some({
+        speaker: t.speaker,
+        full_text: t.full_text,
+        visible_chars: visible,
+        complete: visible >= len,
+      })
+    }
   }
 }
 
