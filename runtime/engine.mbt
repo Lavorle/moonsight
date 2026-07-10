@@ -59,7 +59,7 @@ pub fn Engine::from_ir(
   for _ in 0..<n {
     slot_blobs.push(None)
   }
-  {
+  let eng : Engine = {
     vm: Vm::from_module(ir, entry~),
     director: dir,
     stage,
@@ -68,6 +68,19 @@ pub fn Engine::from_ir(
     ir_entry: entry,
     slot_blobs,
   }
+  eng.sync_mixer_prefs()
+  eng
+}
+
+///|
+/// Push current prefs master/BGM/SE volumes into the global mixer gains.
+fn Engine::sync_mixer_prefs(self : Engine) -> Unit {
+  let p = self.ui.prefs
+  @audio.global_mixer().set_pref_gains(
+    master=p.master_volume,
+    bgm=p.bgm_volume,
+    se=p.se_volume,
+  )
 }
 
 ///|
@@ -111,32 +124,32 @@ pub fn Engine::quit_to_title(self : Engine) -> Unit {
 }
 
 ///|
-impl Capabilities for Engine with fn start_game(self) {
+pub impl Capabilities for Engine with fn start_game(self) {
   self.start_game()
 }
 
 ///|
-impl Capabilities for Engine with fn quit_to_title(self) {
+pub impl Capabilities for Engine with fn quit_to_title(self) {
   self.quit_to_title()
 }
 
 ///|
-impl Capabilities for Engine with fn show_modal(self, name, mode~) {
+pub impl Capabilities for Engine with fn show_modal(self, name, mode~) {
   self.ui.show_modal(name, mode?)
 }
 
 ///|
-impl Capabilities for Engine with fn return_modal(self) {
+pub impl Capabilities for Engine with fn return_modal(self) {
   self.ui.return_modal()
 }
 
 ///|
-impl Capabilities for Engine with fn hide_modal(self, name~) {
+pub impl Capabilities for Engine with fn hide_modal(self, name~) {
   self.ui.hide_modal(name?)
 }
 
 ///|
-impl Capabilities for Engine with fn save_slot(self, i) {
+pub impl Capabilities for Engine with fn save_slot(self, i) {
   if i < 0 {
     return
   }
@@ -147,7 +160,7 @@ impl Capabilities for Engine with fn save_slot(self, i) {
 }
 
 ///|
-impl Capabilities for Engine with fn load_slot(self, i) {
+pub impl Capabilities for Engine with fn load_slot(self, i) {
   if i < 0 || i >= self.slot_blobs.length() {
     return
   }
@@ -171,7 +184,7 @@ pub fn Engine::clear_screens_to_playing(self : Engine) -> Unit {
 }
 
 ///|
-impl Capabilities for Engine with fn slot_occupied(self, i) {
+pub impl Capabilities for Engine with fn slot_occupied(self, i) {
   if i < 0 || i >= self.slot_blobs.length() {
     false
   } else {
@@ -180,7 +193,7 @@ impl Capabilities for Engine with fn slot_occupied(self, i) {
 }
 
 ///|
-impl Capabilities for Engine with fn slot_label(self, i) {
+pub impl Capabilities for Engine with fn slot_label(self, i) {
   if i < 0 || i >= self.slot_blobs.length() {
     return slot_label(None)
   }
@@ -196,35 +209,38 @@ impl Capabilities for Engine with fn slot_label(self, i) {
 }
 
 ///|
-impl Capabilities for Engine with fn set_pref_f(self, key, value) {
+pub impl Capabilities for Engine with fn set_pref_f(self, key, value) {
   self.ui.prefs = self.ui.prefs.set(key, Float(value))
   self.auto = self.ui.prefs.auto_mode
+  self.sync_mixer_prefs()
 }
 
 ///|
-impl Capabilities for Engine with fn set_pref_b(self, key, value) {
+pub impl Capabilities for Engine with fn set_pref_b(self, key, value) {
   self.ui.prefs = self.ui.prefs.set(key, Bool(value))
   self.auto = self.ui.prefs.auto_mode
+  self.sync_mixer_prefs()
 }
 
 ///|
-impl Capabilities for Engine with fn adjust_pref(self, key, delta) {
+pub impl Capabilities for Engine with fn adjust_pref(self, key, delta) {
   self.ui.prefs = self.ui.prefs.adjust(key, delta)
   self.auto = self.ui.prefs.auto_mode
+  self.sync_mixer_prefs()
 }
 
 ///|
-impl Capabilities for Engine with fn confirm_choice(self, index) {
+pub impl Capabilities for Engine with fn confirm_choice(self, index) {
   self.confirm_choice(index)
 }
 
 ///|
-impl Capabilities for Engine with fn advance(self) {
+pub impl Capabilities for Engine with fn advance(self) {
   self.apply_intent(Advance)
 }
 
 ///|
-impl Capabilities for Engine with fn prefs(self) {
+pub impl Capabilities for Engine with fn prefs(self) {
   self.ui.prefs
 }
 
@@ -283,6 +299,7 @@ pub fn Engine::set_prefs_json(self : Engine, json : String) -> Int {
     let p = Prefs::from_json_string(json)
     self.ui.prefs = p
     self.auto = p.auto_mode
+    self.sync_mixer_prefs()
     0
   } catch {
     _ => 1

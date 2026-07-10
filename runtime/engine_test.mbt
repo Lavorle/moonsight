@@ -629,3 +629,26 @@ test "load clears screen stack to Playing" {
   assert_eq(eng.ui.stack_depth(), 0)
   assert_true(eng.ui.mode is Playing)
 }
+
+///|
+/// Pref volume mutations must multiply into global mixer output gains.
+test "set_pref volume updates global mixer gains" {
+  @audio.reset_global_mixer()
+  let q = @audio.QueueBackend::new()
+  @audio.install_mixer(@audio.Mixer::with_backend((q : &@audio.AudioBackend)))
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let ir = @script.compile_to_ir(src, file="t.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  // set_pref_f is on Capabilities; pub impl on Engine (see engine.mbt).
+  let caps : &@runtime.Capabilities = eng
+  caps.set_pref_f("master_volume", 0.5)
+  caps.set_pref_f("bgm_volume", 0.5)
+  @audio.global_mixer().play_bgm("x", volume=1.0)
+  guard q.get(0) is Some(@audio.PlayBgm(volume~, ..)) else { fail("PlayBgm") }
+  // 1.0 * 0.5 * 0.5 = 0.25
+  assert_true(volume > 0.24 && volume < 0.26)
+  @audio.reset_global_mixer()
+}

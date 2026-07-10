@@ -178,6 +178,8 @@ pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
   apply_save_game(self, parse_save_game(blob))
   // Spec: load returns to narrative play with no residual modal stack.
   self.clear_screens_to_playing()
+  // Prefs are not in the save blob; re-apply current gains after mixer restore.
+  self.sync_mixer_prefs()
 }
 
 ///|
