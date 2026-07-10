@@ -3,8 +3,8 @@
 pub fn standard_host_names() -> Array[String] {
   [
     "audio.bgm", "audio.se", "flow.choice", "flow.jump", "flow.jump_if", "flow.jump_if_not",
-    "flow.wait", "flow.yield", "layer.hide", "layer.move", "layer.show", "sys.save_hint",
-    "text.begin", "text.end", "text.type", "trans.fade", "var.set",
+    "flow.wait", "flow.yield", "layer.hide", "layer.move", "layer.set", "layer.show",
+    "sys.save_hint", "text.begin", "text.end", "text.type", "trans.fade", "var.set",
   ]
 }
 
@@ -20,6 +20,7 @@ pub fn standard_registry() -> @runtime.Director {
   dir.register_fn("layer.show", cmd_layer_show)
   dir.register_fn("layer.hide", cmd_layer_hide)
   dir.register_fn("layer.move", cmd_layer_move)
+  dir.register_fn("layer.set", cmd_layer_set)
   dir.register_fn("flow.jump", cmd_flow_jump)
   dir.register_fn("flow.jump_if", cmd_flow_jump_if)
   dir.register_fn("flow.jump_if_not", cmd_flow_jump_if_not)

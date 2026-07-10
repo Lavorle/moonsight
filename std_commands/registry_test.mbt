@@ -5,6 +5,8 @@ test "layer.show and trans.fade mutate stage" {
   assert_true(reg.call("layer.show", stage, [Str("bg"), Str("bg_room")]) == Ok)
   assert_eq(stage.layers.length(), 1)
   assert_eq(stage.layers[0].resource, "bg_room")
+  // Default kind is Character (Phase 2).
+  assert_true(stage.layers[0].kind == @runtime.LayerKind::Character)
   ignore(reg.call("trans.fade", stage, [Float(0.0), Float(1.0), Float(0.3)]))
   // duration > 0: start at `from`; wall-clock fade_remaining for engine tick.
   assert_eq(stage.overlay_opacity, 0.0)
@@ -14,6 +16,47 @@ test "layer.show and trans.fade mutate stage" {
   ignore(reg.call("trans.fade", stage, [Float(0.0), Float(1.0)]))
   assert_eq(stage.overlay_opacity, 1.0)
   assert_eq(stage.fade_remaining, 0.0)
+}
+
+///|
+test "layer.show respects kind and duration opacity" {
+  let reg = @std_commands.standard_registry()
+  let stage = @runtime.Stage::new()
+  // Simulate lowered args: id, res, #:kind, character, #:duration, 0.4, and opacity target via #:opacity
+  ignore(
+    reg.call("layer.show", stage, [
+      Str("y"),
+      Str("char_y"),
+      Str("#:kind"),
+      Str("character"),
+      Str("#:opacity"),
+      Float(1.0),
+      Str("#:duration"),
+      Float(0.4),
+    ]),
+  )
+  assert_true(stage.layers[0].kind == @runtime.LayerKind::Character)
+  assert_eq(stage.layers[0].opacity, 0.0) // new layer starts 0 when duration>0
+  stage.tick_layer_tweens(0.4)
+  assert_eq(stage.layers[0].opacity, 1.0)
+}
+
+///|
+test "layer.set errors on missing id" {
+  let reg = @std_commands.standard_registry()
+  let stage = @runtime.Stage::new()
+  let r = reg.call(
+    "layer.set",
+    stage,
+    [Str("nope"), Str("#:opacity"), Float(1.0)],
+  )
+  guard r is Error(msg) else { fail("expected error") }
+  // Must be registered (not "unknown host") and soft-halt on missing layer id.
+  assert_true(!msg.contains("unknown"), msg="got: \{msg}")
+  assert_true(
+    msg.contains("layer.set") || msg.contains("nope") || msg.contains("missing"),
+    msg="got: \{msg}",
+  )
 }
 
 ///|

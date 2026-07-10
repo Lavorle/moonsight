@@ -91,7 +91,7 @@ test "builtin_externs covers std host names" {
     need in [
       "text.begin", "text.type", "text.end", "flow.jump", "flow.jump_if", "flow.jump_if_not",
       "flow.yield", "flow.choice", "flow.wait", "layer.show", "layer.hide", "layer.move",
-      "trans.fade", "var.set", "audio.bgm", "audio.se", "sys.save_hint",
+      "layer.set", "trans.fade", "var.set", "audio.bgm", "audio.se", "sys.save_hint",
     ] {
     assert_true(names.contains(need), msg="missing builtin \{need}")
   }

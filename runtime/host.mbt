@@ -56,6 +56,7 @@ pub(all) enum BuiltinHost {
   LayerShow
   LayerHide
   LayerMove
+  LayerSet
   VarSet
 } derive(Debug, Eq)
 
@@ -83,6 +84,7 @@ pub fn dispatch_builtin(
     "layer.show" => builtin_layer_show(stage, args)
     "layer.hide" => builtin_layer_hide(stage, args)
     "layer.move" => builtin_layer_move(stage, args)
+    "layer.set" => builtin_layer_set(stage, args)
     "var.set" => builtin_var_set(stage, args)
     "var.eq" => builtin_var_eq(stage, args)
     _ => Error("unknown host op: \{op}")
@@ -103,6 +105,7 @@ pub fn dispatch_builtin_kind(
     LayerShow => builtin_layer_show(stage, args)
     LayerHide => builtin_layer_hide(stage, args)
     LayerMove => builtin_layer_move(stage, args)
+    LayerSet => builtin_layer_set(stage, args)
     VarSet => builtin_var_set(stage, args)
   }
 }
@@ -177,60 +180,200 @@ pub fn value_as_int(v : Value) -> Int? {
 }
 
 ///|
-/// `layer.show id resource [z] [x] [y] [opacity]`
-/// Kind defaults to Background; z defaults to 0.
-/// z/x/y/opacity accept Int or Float.
+/// Parse `LayerKind` from host value (case-insensitive Str).
+fn parse_kind(v : Value) -> LayerKind? {
+  match v {
+    Str(s) => {
+      let k = s.to_lower()
+      match k {
+        "background" => Some(Background)
+        "character" => Some(Character)
+        "effect" => Some(Effect)
+        "ui" => Some(UI)
+        "overlay" => Some(Overlay)
+        _ => None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+fn named_double(named : Map[String, Value], key : String) -> Double? {
+  match named.get(key) {
+    Some(v) => value_as_double(v)
+    None => None
+  }
+}
+
+///|
+fn named_int(named : Map[String, Value], key : String) -> Int? {
+  match named.get(key) {
+    Some(v) => value_as_int(v)
+    None => None
+  }
+}
+
+///|
+fn find_layer_index(stage : Stage, id : String) -> Int? {
+  for i in 0..<stage.layers.length() {
+    if stage.layers[i].id == id {
+      return Some(i)
+    }
+  }
+  None
+}
+
+///|
+/// `layer.show id resource [z] [x] [y] [opacity]` plus named kind/duration/etc.
+/// Kind defaults to **Character**. New + duration>0: opacity starts at 0.
 fn builtin_layer_show(stage : Stage, args : Array[Value]) -> HostResult {
-  match args {
-    [Str(id), Str(resource), .. rest] => {
-      let z = match rest {
-        [z0, ..] =>
-          match value_as_int(z0) {
-            Some(n) => n
-            None => 0
-          }
-        _ => 0
+  let (pos, named) = split_host_args(args)
+  let id = match pos {
+    [Str(s), ..] => s
+    _ => return Error("layer.show: expected id Str and resource Str")
+  }
+  let resource = match pos {
+    [_, Str(s), ..] => s
+    [_, ..] => return Error("layer.show: expected id Str and resource Str")
+    _ => ""
+  }
+  let kind = match named.get("kind") {
+    Some(v) =>
+      match parse_kind(v) {
+        Some(k) => k
+        None => return Error("layer.show: invalid kind")
       }
-      let x = match rest {
-        [_, x0, ..] =>
-          match value_as_double(x0) {
-            Some(n) => n
-            None => 0.0
-          }
-        _ => 0.0
+    None => Character
+  }
+  let z_opt : Int? = match named_int(named, "z") {
+    Some(n) => Some(n)
+    None =>
+      match pos {
+        [_, _, z0, ..] => value_as_int(z0)
+        _ => None
       }
-      let y = match rest {
-        [_, _, y0, ..] =>
-          match value_as_double(y0) {
-            Some(n) => n
-            None => 0.0
-          }
-        _ => 0.0
+  }
+  let x_opt : Double? = match named_double(named, "x") {
+    Some(n) => Some(n)
+    None =>
+      match pos {
+        [_, _, _, x0, ..] => value_as_double(x0)
+        _ => None
       }
-      let opacity = match rest {
-        [_, _, _, o, ..] =>
-          match value_as_double(o) {
-            Some(n) => n
-            None => 1.0
-          }
-        _ => 1.0
+  }
+  let y_opt : Double? = match named_double(named, "y") {
+    Some(n) => Some(n)
+    None =>
+      match pos {
+        [_, _, _, _, y0, ..] => value_as_double(y0)
+        _ => None
       }
-      stage.show_layer(id~, layer=Background, resource~, z~, x~, y~, opacity~)
+  }
+  let opacity_opt : Double? = match named_double(named, "opacity") {
+    Some(n) => Some(n)
+    None =>
+      match pos {
+        [_, _, _, _, _, o, ..] => value_as_double(o)
+        _ => None
+      }
+  }
+  let duration = match named_double(named, "duration") {
+    Some(d) => d
+    None => 0.0
+  }
+  let z = match z_opt {
+    Some(n) => n
+    None => 0
+  }
+  let x = match x_opt {
+    Some(n) => n
+    None => 0.0
+  }
+  let y = match y_opt {
+    Some(n) => n
+    None => 0.0
+  }
+  let opacity_target = match opacity_opt {
+    Some(n) => n
+    None => 1.0
+  }
+  match find_layer_index(stage, id) {
+    Some(i) => {
+      let cur = stage.layers[i]
+      let new_z = match z_opt {
+        Some(n) => n
+        None => cur.z
+      }
+      stage.layers[i] = {
+        id: cur.id,
+        kind,
+        resource,
+        z: new_z,
+        x: cur.x,
+        y: cur.y,
+        opacity: cur.opacity,
+        visible: true,
+        tweens: cur.tweens,
+        pending_hide: false,
+      }
+      match x_opt {
+        Some(xv) => stage.start_layer_tween(id~, prop=X, to=xv, duration~)
+        None => ()
+      }
+      match y_opt {
+        Some(yv) => stage.start_layer_tween(id~, prop=Y, to=yv, duration~)
+        None => ()
+      }
+      match opacity_opt {
+        Some(ov) => stage.start_layer_tween(id~, prop=Opacity, to=ov, duration~)
+        None => ()
+      }
       Ok
     }
-    [Str(id)] => {
-      stage.show_layer(id~, layer=Background, resource="", z=0)
+    None => {
+      if duration > 0.0 {
+        stage.show_layer(
+          id~,
+          layer=kind,
+          resource~,
+          z~,
+          x~,
+          y~,
+          opacity=0.0,
+        )
+        stage.start_layer_tween(
+          id~,
+          prop=Opacity,
+          to=opacity_target,
+          duration~,
+        )
+      } else {
+        stage.show_layer(
+          id~,
+          layer=kind,
+          resource~,
+          z~,
+          x~,
+          y~,
+          opacity=opacity_target,
+        )
+      }
       Ok
     }
-    _ => Error("layer.show: expected id Str and resource Str")
   }
 }
 
 ///|
 fn builtin_layer_hide(stage : Stage, args : Array[Value]) -> HostResult {
-  match args {
+  let (pos, named) = split_host_args(args)
+  match pos {
     [Str(id), ..] => {
-      stage.hide_layer(id~)
+      let duration = match named_double(named, "duration") {
+        Some(d) => d
+        None => 0.0
+      }
+      stage.begin_hide_layer(id~, duration~)
       Ok
     }
     _ => Error("layer.hide: expected id Str")
@@ -238,36 +381,62 @@ fn builtin_layer_hide(stage : Stage, args : Array[Value]) -> HostResult {
 }
 
 ///|
-/// `layer.move id x y` — update position of an existing layer (no-op if missing).
+/// `layer.move id x y` — optional `#:duration` tweens position (no-op if missing).
 fn builtin_layer_move(stage : Stage, args : Array[Value]) -> HostResult {
-  let coords : (String, Double, Double)? = match args {
-    [Str(id), Float(x), Float(y), ..] => Some((id, x, y))
-    [Str(id), Int(xi), Int(yi), ..] =>
-      Some((id, xi.to_double(), yi.to_double()))
-    [Str(id), Float(x), Int(yi), ..] => Some((id, x, yi.to_double()))
-    [Str(id), Int(xi), Float(y), ..] => Some((id, xi.to_double(), y))
+  let (pos, named) = split_host_args(args)
+  let coords : (String, Double, Double)? = match pos {
+    [Str(id), x, y, ..] =>
+      match (value_as_double(x), value_as_double(y)) {
+        (Some(xd), Some(yd)) => Some((id, xd, yd))
+        _ => None
+      }
     _ => None
   }
   match coords {
     None => Error("layer.move: expected id Str and x/y numbers")
     Some((id, x, y)) => {
-      for i in 0..<stage.layers.length() {
-        if stage.layers[i].id == id {
-          let cur = stage.layers[i]
-          stage.layers[i] = {
-            id: cur.id,
-            kind: cur.kind,
-            resource: cur.resource,
-            z: cur.z,
-            x,
-            y,
-            opacity: cur.opacity,
-            visible: cur.visible,
-            tweens: cur.tweens,
-            pending_hide: cur.pending_hide,
-          }
-          break
+      let duration = match named_double(named, "duration") {
+        Some(d) => d
+        None => 0.0
+      }
+      match find_layer_index(stage, id) {
+        None => Ok
+        Some(_) => {
+          stage.start_layer_tween(id~, prop=X, to=x, duration~)
+          stage.start_layer_tween(id~, prop=Y, to=y, duration~)
+          Ok
         }
+      }
+    }
+  }
+}
+
+///|
+/// `layer.set id` with named x/y/opacity/duration. Missing id → Error.
+fn builtin_layer_set(stage : Stage, args : Array[Value]) -> HostResult {
+  let (pos, named) = split_host_args(args)
+  let id = match pos {
+    [Str(s), ..] => s
+    _ => return Error("layer.set: expected id Str")
+  }
+  match find_layer_index(stage, id) {
+    None => Error("layer.set: missing layer id '\{id}'")
+    Some(_) => {
+      let duration = match named_double(named, "duration") {
+        Some(d) => d
+        None => 0.0
+      }
+      match named_double(named, "x") {
+        Some(xv) => stage.start_layer_tween(id~, prop=X, to=xv, duration~)
+        None => ()
+      }
+      match named_double(named, "y") {
+        Some(yv) => stage.start_layer_tween(id~, prop=Y, to=yv, duration~)
+        None => ()
+      }
+      match named_double(named, "opacity") {
+        Some(ov) => stage.start_layer_tween(id~, prop=Opacity, to=ov, duration~)
+        None => ()
       }
       Ok
     }

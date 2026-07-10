@@ -18,6 +18,7 @@ pub fn Director::with_builtins() -> Director {
       "layer.show": Builtin(LayerShow),
       "layer.hide": Builtin(LayerHide),
       "layer.move": Builtin(LayerMove),
+      "layer.set": Builtin(LayerSet),
       "var.set": Builtin(VarSet),
     },
   }
