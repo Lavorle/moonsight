@@ -77,6 +77,29 @@ test "lower rejects invalid show_screen mode" {
 }
 
 ///|
+test "screens encode decode round-trip" {
+  let src =
+    #|- screen "title"
+    #|  vbox x=760 y=360:
+    #|    text "MoonSight"
+    #|    button "Start" action=start_game
+    #|    button "Load" action=show_screen("save_load", mode=load)
+    #|    button "Settings" action=show_screen("settings")
+    #|
+  let screens = @script.compile_screens(src, file="rt.yuki")
+  let json = @script.encode_screens_file(screens, save_slots=6)
+  let file = @script.decode_screens_file(json)
+  assert_eq(file.save_slots, 6)
+  assert_eq(file.defs.length(), 1)
+  assert_eq(file.defs[0].name, "title")
+  // Structural equality via JSON (ScreenDef derives ToJson, not Eq).
+  assert_eq(file.defs[0].to_json().stringify(), screens[0].to_json().stringify())
+  let again = @script.encode_screens_file(file.defs, save_slots=file.save_slots)
+  let file2 = @script.decode_screens_file(again)
+  assert_eq(file2.defs[0].to_json().stringify(), screens[0].to_json().stringify())
+}
+
+///|
 test "compile_to_ir still works for scene-only files" {
   let src =
     #|- scene "s"

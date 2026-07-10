@@ -1,11 +1,12 @@
 # MoonSight
 
-MoonBit + WebGPU visual novel engine (Phase 1 runtime kernel + Phase 2 layer
-presentation).
+MoonBit + WebGPU visual novel engine (Phases 1–3: runtime kernel, layer
+presentation, Screen UI / system menu).
 
 MoonYuki scripts compile to IR/bytecode, run on a VM + Stage/Director, and
-render through a packed draw list consumed by a JS WebGPU host. Desktop uses
-the same web build inside a minimal Tauri shell.
+render through a packed draw list consumed by a JS WebGPU host. System menus
+use a small Screen DSL. Desktop uses the same web build inside a minimal Tauri
+shell.
 
 ## Quickstart
 
@@ -62,9 +63,11 @@ brave-browser --enable-unsafe-webgpu --enable-features=Vulkan --use-angle=vulkan
 
 Always serve via **`http://localhost`** (or https). Opening `file://` blocks WebGPU.
 
-**Input:** click / Enter / Space / Z advance; 1–9 select choices; Ctrl+S / Ctrl+L
-save & load (localStorage). Timed `@flow.wait` ignores Advance until the
-countdown finishes.
+**Input:** cold start on **title** (Start → entry scene). Click / Enter / Space /
+Z advance (or activate focused menu button); **Esc** system menu; **↑↓** / W/S
+focus; 1–9 select choices; A auto; Ctrl+S / Ctrl+L quick save & load slot 0
+(`localStorage`). Timed `@flow.wait` ignores Advance until the countdown
+finishes. Menus pause narrative Advance.
 
 **Desktop shell:** build `dist/demo` first, then see
 [`host_desktop/README.md`](./host_desktop/README.md).
@@ -73,19 +76,21 @@ countdown finishes.
 
 | Path | Role |
 |------|------|
-| `script` | MoonYuki → IR / `MSB1` bytecode |
-| `runtime` | VM, Director, Stage, save (v3), tweens |
-| `render` | Draw list pack, text layout, kind+z sort |
-| `audio` | Logical BGM/SE mixer |
-| `std_commands` | Standard `@` host commands (`layer.set`, kinds, duration) |
-| `host_web` | Browser wasm + `js_glue` |
+| `script` | MoonYuki → IR / `MSB1` + ScreenDef / `screens.json` |
+| `runtime` | VM, Director, Stage, Screen stack, prefs, save (v3), tweens |
+| `render` | Draw list pack, text layout, kind+z sort, screen widgets |
+| `audio` | Logical BGM/SE mixer (volume / fade) |
+| `std_commands` | Standard `@` host commands (layers, ui.show/hide, audio) |
+| `std_screens` | Default title / game_menu / save_load / settings |
+| `host_web` | Browser wasm + `js_glue` (WebGPU, prefs, multi-slot) |
 | `host_desktop` | Tauri 2 shell |
-| `cmd/moonsightc` | `check` / `build` CLI (literal resource check) |
+| `cmd/moonsightc` | `check` / `build` CLI (literal resource check, screen merge) |
 | `demo/game` | Sample project |
 
 ## Documentation
 
 - [`docs/moon-yuki-subset.md`](./docs/moon-yuki-subset.md) — grammar subset
+- [`docs/screen-language.md`](./docs/screen-language.md) — Screen DSL + system UI
 - [`docs/host-commands.md`](./docs/host-commands.md) — host command table + intents
 - [`docs/project-layout.md`](./docs/project-layout.md) — repo & `moonsight.json`
 - [`docs/draw-list-pack.md`](./docs/draw-list-pack.md) — frame pack format
@@ -105,9 +110,16 @@ tweens, `@layer.set`, wall-clock `trans.fade` (`fade_remaining`), real
 remaining; v2 still loads), build-time literal resource checks, hard-fail
 texture loads, updated demo/docs.
 
-### Out of scope (both phases)
+### Phase 3 (Screen UI + system menu)
+
+**In:** Screen DSL subset + runtime stack/focus, standard four screens (title,
+game_menu, save_load, settings), multi-slot saves + prefs, cold-start title,
+WebGPU-drawn widgets (no DOM menu), `@ui.show`/`@ui.hide`, named negatives
+(`x=-200`), audio load hard-fail, BGM volume/fade, build cleanup, demo + docs.
+
+### Out of scope (through Phase 3)
 
 Visual editor, i18n, achievements, Live2D / 3D, particle/postprocess stack,
 full timeline / animation queues, blocking presentation DSL, `trans.dissolve`,
-system menu / backlog / multi-slot UI, second native GPU backend, official
-Yukimi bytecode compatibility.
+**backlog**, dialogue/choice screen-ization, confirm dialogs, slot screenshots,
+DOM menus, second native GPU backend, official Yukimi bytecode compatibility.

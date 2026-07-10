@@ -74,13 +74,15 @@ pub fn Engine::from_ir(
 }
 
 ///|
-/// Cold start: `Title` mode and push `title` if a def is registered.
+/// Cold start: enter `Title` and push `title` only when a def is registered.
+/// Without a `title` screen, leave mode as `Playing` (scene-first fallback).
 pub fn Engine::boot_title(self : Engine) -> Unit {
   self.screens.stack = []
-  self.screens.mode = Title
   if self.screens.defs.contains("title") {
+    self.screens.mode = Title
     self.screens.show("title")
   }
+  // else: keep Playing (from_ir default) — no title UI available
 }
 
 ///|

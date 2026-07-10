@@ -1,15 +1,16 @@
-# MoonSight Phase 2 demo (host loads game.msb or this file as demo.yuki).
+# MoonSight demo (host cold-starts title, then Start → entrypoint).
 # Builtins cover std host commands — no file-level - extern required.
 # scenes/intro.yuki adds multi-file scene "side_room" (merged into game.msb).
-# Phase 2: kind=, duration tweens, layer.set, real @flow.wait with trans.fade.
+# Phase 2+: kind=, duration tweens, layer.set, real @flow.wait with trans.fade.
+# Phase 3: title / game_menu / save_load / settings via Screen DSL; named negatives ok.
 
 - scene "entrypoint"
 @flow.jump "intro"
 
 - scene "intro"
 @layer.show "bg" "bg_room" kind=background
-# Off-screen start via positionals (named x=-N is not lexed yet); then tween in.
-@layer.show "y" "char_y" 10 -200 0 0 kind=character
+# Off-screen start via named negatives (x=-200); then tween in.
+@layer.show "y" "char_y" kind=character z=10 x=-200 y=0 opacity=0
 @layer.set "y" x=200 opacity=1.0 duration=0.5
 @audio.bgm "bgm_soft"
 @trans.fade 1.0 0.0 0.5
@@ -28,6 +29,7 @@ y:Shall we talk, or leave for the garden?
 y:Nice to meet you. I'm Y.
 @var.set "met_y" true
 y:MoonSight compiles MoonYuki into a tiny VN runtime.
+y:Press Esc for the system menu (save, load, settings).
 @flow.jump "ending"
 
 - scene "leave"

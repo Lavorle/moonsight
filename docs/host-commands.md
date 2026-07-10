@@ -1,4 +1,4 @@
-# Standard host commands (Phase 1 + Phase 2)
+# Standard host commands (Phase 1–3)
 
 Host commands are invoked from MoonYuki as `@name …` (or as IR `Host` ops after
 dialogue lower). Runtime dispatch lives in `std_commands` via
@@ -16,9 +16,14 @@ Handlers receive `(Stage, Array[Value])` and return `HostResult`:
 
 Logical canvas default: **1920×1080**, origin top-left, +y down.
 
-Named arguments (`kind=background`, `duration=0.5`) are preserved through lower
-as marker pairs `Str("#:<name>")` + value. Bare keywords (e.g. `kind=background`)
-and quoted strings (`kind="background"`) both work for string-valued names.
+Named arguments (`kind=background`, `duration=0.5`, `x=-200`) are preserved
+through lower as marker pairs `Str("#:<name>")` + value. Bare keywords
+(`kind=background`) and quoted strings both work for string-valued names.
+**Named negatives** (`x=-200`, `y=-1.5`) are supported by the lexer.
+
+Screen UI is authored with the **Screen DSL** (`- screen`), not only host
+commands — see [`screen-language.md`](./screen-language.md). Narrative scripts
+open/close modals with `@ui.show` / `@ui.hide`.
 
 ---
 
@@ -64,14 +69,15 @@ Ease is **linear**. New tweens replace same-layer same-property tweens
 
 Draw order (bottom → top): `background` → `character` → `effect` → `ui`, then
 within each kind by `z` ascending (stable on ties). Fullscreen overlay veil
-from `trans.fade` is separate from the layer list.
+from `trans.fade` is separate from the layer list. Modal screens draw above
+layers (with optional dim); see draw order in the design / render path.
 
 ### `layer.show id resource [z] [x] [y] [opacity]` + named
 
 ```yuki
 @layer.show "bg" "bg_room" kind=background
-@layer.show "y" "char_y" kind=character z=10 x=0 opacity=0
-@layer.show "y" "char_y" 10 -200 0 0 kind=character   # negative x via positionals
+@layer.show "y" "char_y" kind=character z=10 x=-200 y=0 opacity=0
+@layer.show "y" "char_y" 10 -200 0 0 kind=character   # negatives via positionals also ok
 @layer.show "fx" "spark" kind=effect duration=0.4
 ```
 
@@ -85,7 +91,7 @@ from `trans.fade` is separate from the layer list.
 | **New layer + duration>0** | `kind` / `resource` / `z` / `x` / `y` applied immediately; **opacity starts at 0** and linear-tweens to the target (default `1.0`) |
 | **New layer + duration=0** | All properties snap to targets |
 | **Existing layer** | `kind` / `resource` / `z` immediate; only specified `x` / `y` / `opacity` tween or snap |
-| **Notes** | Single-arg `@layer.show "id"` uses empty resource, default kind `character`. **Backgrounds must set `kind=background`** (Phase 2 default is character). |
+| **Notes** | Single-arg `@layer.show "id"` uses empty resource, default kind `character`. **Backgrounds must set `kind=background`** (default is character). Re-show without `kind` keeps character default. |
 | **Errors** | missing id/resource → `layer.show: expected id Str and resource Str`; bad kind → `layer.show: invalid kind` |
 | **Result** | `Ok` |
 
@@ -94,6 +100,7 @@ from `trans.fade` is separate from the layer list.
 ```yuki
 @layer.set "y" x=200 opacity=1.0 duration=0.5
 @layer.set "y" y=0 duration=0.2
+@layer.set "y" x=-100 duration=0.3
 ```
 
 | | |
@@ -162,6 +169,7 @@ Unknown scene names fail at VM jump time (empty ops / halt depending on loader).
 | **Timed (`time > 0`)** | Sets `stage.wait_remaining = time`, returns `Yield`; engine ticks wall-clock `dt` until remaining ≤ 0, then resumes from Yield |
 | **Bare / zero** | `wait_remaining = 0`; resumes on **Advance** (same as Phase 1 yield) |
 | **Input while timed** | **Advance**, **SkipTyping**, and **Select** are **ignored** (wait cannot be skipped) |
+| **Modal screen open** | Menu input wins; wait countdown continues in background; Advance still ignored for narrative until menu closes |
 | **Errors** | non-numeric when present → `flow.wait: expected numeric time` |
 | **Result** | `Yield` |
 
@@ -196,7 +204,7 @@ forms:
 | **Host stub** | If invoked as Host (tests), string args become choices and handler `Yield`s |
 
 UI rendering of choices is Stage + draw-list; input mapping is in the host
-(see Intent section below).
+(see Intent section below). Choice UI is **not** Screen-DSL (Phase 3 non-goal).
 
 ---
 
@@ -218,12 +226,22 @@ UI rendering of choices is Stage + draw-list; input mapping is in the host
 Logical mixer is `@audio` (`global_mixer`); Stage mirrors `bgm` / `se` ids for
 snapshots. JS host drains audio events and drives `HTMLAudioElement`.
 
-### `audio.bgm [resource]`
+### `audio.bgm [resource]` + named `volume` / `fade`
+
+```yuki
+@audio.bgm "bgm_soft"
+@audio.bgm "bgm_soft" volume=0.8
+@audio.bgm "bgm_soft" volume=0.8 fade=1.0
+@audio.bgm none               # stop; optional fade= for fade-out
+@audio.bgm "bgm_soft" fade=0.5
+```
 
 | | |
 |--|--|
-| **Args** | `Str` resource id, or `None_` / empty to **stop** |
-| **Effect** | Set `stage.bgm`; `play_bgm` / `stop_bgm` on mixer (default volume 1.0, looped) |
+| **Args** | `Str` resource id, or `None_` / empty / `none` to **stop** |
+| **Named** | `volume` (default `1.0` logical gain), `fade` (default `0` seconds, linear wall-clock) |
+| **Effect** | Set `stage.bgm`; play/stop on mixer. Same track + fade only adjusts volume; new track can fade in from silence. Stop with `fade>0` fades out then stops. |
+| **Output** | Host multiplies logical × prefs `master_volume` × `bgm_volume` |
 | **Errors** | `audio.bgm: expected resource Str or None_` |
 | **Result** | `Ok` |
 
@@ -232,12 +250,19 @@ snapshots. JS host drains audio events and drives `HTMLAudioElement`.
 | | |
 |--|--|
 | **Args** | `Str` resource id |
-| **Effect** | Set `stage.se`; one-shot `play_se` |
+| **Effect** | Set `stage.se`; one-shot `play_se` (× master × se prefs). **No SE fade.** |
 | **Errors** | `audio.se: expected resource Str` |
 | **Result** | `Ok` |
 
 Resource ids match `manifest.json` `audio` map keys (basename without extension
 from `assets/`).
+
+### Audio hard-fail (Phase 3)
+
+| Stage | Behavior |
+|-------|----------|
+| `moonsightc build` | Literal audio ids in scripts must exist in project assets; missing → **build failure** |
+| Runtime fetch | Failed load → readable host error (`audio load failed: {id}`); **not** silent / warn-only |
 
 ---
 
@@ -260,11 +285,51 @@ from `assets/`).
 |--|--|
 | **Args** | numbers (int/float) as above |
 | **Effect** | Sets `stage.overlay_opacity`, `fade_to`, **`fade_remaining`** (seconds left for the whole transition — not a stale rate field) |
-| **Notes** | Fire-and-forget; runs in parallel with layer tweens. **Does not** Yield. Phase 2 does **not** provide `trans.dissolve`. |
+| **Notes** | Fire-and-forget; runs in parallel with layer tweens. **Does not** Yield. No `trans.dissolve`. |
 | **Errors** | type/arity → `trans.fade: expected from/to/duration numbers` (or shorter variants) |
 | **Result** | `Ok` |
 
 Overlay is packed as frame **veil_opacity** for the GPU host.
+
+---
+
+## ui (Phase 3)
+
+Modal screens are defined with `- screen` (see
+[`screen-language.md`](./screen-language.md)). These host commands only
+**queue** stack ops on `Stage`; the Engine drains them onto `ScreenState`.
+
+### `ui.show name [mode=save|load]`
+
+```yuki
+@ui.show "game_menu"
+@ui.show "save_load" mode=load
+@ui.show "save_load" mode=save
+```
+
+| | |
+|--|--|
+| **Args** | `name: Str`; optional named `mode` (`save` \| `load`) for dual-purpose screens |
+| **Effect** | Queue push modal; Engine shows screen and yields so narrative IP freezes while open |
+| **Errors** | missing/non-str name → `ui.show: expected name Str` |
+| **Result** | `Yield` (typical) |
+
+### `ui.hide [name]`
+
+```yuki
+@ui.hide
+@ui.hide "settings"
+```
+
+| | |
+|--|--|
+| **Args** | optional `Str` name |
+| **Effect** | Queue pop top screen, or remove matching name when given |
+| **Errors** | bad arg type → `ui.hide: expected optional name Str` |
+| **Result** | `Ok` |
+
+`OpenMenu` Intent (Esc) while Playing with empty stack ≡ show `game_menu`.
+While a modal is open, Esc pops one layer (`return`).
 
 ---
 
@@ -278,9 +343,9 @@ Overlay is packed as frame **veil_opacity** for the GPU host.
 | **Effect** | Sets `stage.save_hint = true` (safe save point marker) |
 | **Result** | `Ok` |
 
-`Engine::save` consumes the flag (clears it). Browser host stores JSON under
-`localStorage` key `moonsight/save/{slot}` via `save_json` / `load_json` wasm
-exports. Desktop shell uses the same webview storage.
+`Engine::save` consumes the flag (clears it). Browser host stores narrative JSON
+under `localStorage` key `moonsight/save/{slot}` (multi-slot). Desktop shell uses
+the same webview storage.
 
 ### Save format (v3)
 
@@ -292,10 +357,22 @@ Writers always emit **format_version 3**. Loaders accept **v2 and v3**.
 | `overlay_opacity`, `fade_to`, **`fade_remaining`** | Overlay fade mid-state (wall-clock seconds left) |
 | `wait_remaining` | Timed `@flow.wait` countdown left |
 | `wait`, `choices`, `choose_result_var`, `auto` | VM / UI wait state (from v2) |
+| audio block | BGM id + logical volume / fade mid-state where applicable |
 
 - Mid-tween / mid-fade / mid-wait save → load continues with remaining times.
 - v2 loads: layers without tweens; `kind` defaults as stored (missing → character semantics where applicable); no tween restore.
 - Unknown higher versions are rejected with a clear error.
+- **Screen stack is not saved.** **Prefs are not part of slot saves.**
+
+### Multi-slot + prefs (Phase 3)
+
+| Item | Detail |
+|------|--------|
+| Slot keys | `moonsight/save/{slot}` (`slot` int, default N=6) |
+| Prefs key | `moonsight/prefs` (JSON object) |
+| Prefs fields | `text_speed`, `auto_mode`, `master_volume`, `bgm_volume`, `se_volume` |
+| Quick keys | Ctrl/Cmd+S / Ctrl/Cmd+L → **slot 0** |
+| `save_slots` | `moonsight.json` optional field (default 6, clamp 1..20); also in `manifest.json` / `screens.json` |
 
 ---
 
@@ -321,6 +398,8 @@ text.begin
 text.end
 text.type
 trans.fade
+ui.hide
+ui.show
 var.set
 ```
 
@@ -334,35 +413,40 @@ Defined in `render.intent_from_code` / `docs/draw-list-pack.md`, wired by
 | Code | Intent | Default binding |
 |-----:|--------|-----------------|
 | 0 | `None` | (no input) |
-| 1 | `Advance` | **Click** / pointer on canvas; **Enter**; **Space**; **Z** |
+| 1 | `Advance` | **Click** / pointer on canvas; **Enter**; **Space**; **Z** (on screens = activate focused button) |
 | 2 | `SkipTyping` | **Control** (keydown) |
-| 3 | `OpenMenu` | *(no default key in boot.js)* |
-| 4 | `ToggleAuto` | **A** |
+| 3 | `OpenMenu` | **Esc** — Playing + empty stack → `game_menu`; modal open → pop one layer |
+| 4 | `ToggleAuto` | **A** (also writes prefs.`auto_mode`) |
+| 5 | `MenuUp` | **↑** / **W** — previous focusable on screen |
+| 6 | `MenuDown` | **↓** / **S** — next focusable (plain S; Ctrl+S is quick-save) |
 | 10+n | `Select(n)` | **1**–**9** → Select(0)…Select(8) |
 
-Save/load (not intents): **Ctrl/Cmd+S** save, **Ctrl/Cmd+L** load slot 0.
+Save/load (not intents): **Ctrl/Cmd+S** save, **Ctrl/Cmd+L** load **slot 0**.
 
 Engine policy:
 
-| State | Advance | Select | SkipTyping |
-|-------|---------|--------|------------|
-| Dialogue typewriter | Completes text first; further Advance past yield | — | Completes typing |
-| Timed `@flow.wait` (`wait_remaining > 0`) | **Ignored** | **Ignored** | **Ignored** |
-| Bare `@flow.wait` / `flow.yield` | Resume | — | — |
-| `Choose` | — | Commits option index | — |
-| Layer tween / overlay fade only (VM Running) | Not gated | Not gated | Not gated |
+| State | Advance | Select | SkipTyping | Menu intents |
+|-------|---------|--------|------------|--------------|
+| Dialogue typewriter | Completes text first; further Advance past yield | — | Completes typing | OpenMenu opens menu |
+| Timed `@flow.wait` (`wait_remaining > 0`) | **Ignored** | **Ignored** | **Ignored** | OpenMenu allowed |
+| Bare `@flow.wait` / `flow.yield` | Resume | — | — | OpenMenu allowed |
+| `Choose` | — | Commits option index | — | OpenMenu allowed |
+| Modal screen open | Activate focused button | optional direct activate | — | MenuUp/Down move focus; Esc = return |
+| `Title` | Activate button | — | — | focus navigation |
+| Layer tween / overlay fade only (VM Running) | Not gated | Not gated | Not gated | OpenMenu allowed |
 
 Auto mode synthesizes Advance when enabled (`ToggleAuto`), subject to the same
-timed-wait gate.
+timed-wait gate and modal freeze.
 
 ---
 
-## Resource diagnostics (Phase 2)
+## Resource diagnostics
 
 | Stage | Behavior |
 |-------|----------|
-| `moonsightc build` | Literal resource strings in scripts must exist in the project manifest / assets; missing → **build failure** |
+| `moonsightc build` | Literal image/audio resource strings in scripts must exist in the project manifest / assets; missing → **build failure** (failed builds do not leave a broken `out_dir`) |
 | Runtime texture fetch | Hard-fail with a readable host error (no silent empty sprites) |
+| Runtime audio fetch | Hard-fail with `audio load failed: {id}` |
 
 Dynamic / non-literal resource ids are not fully checked at build time.
 
@@ -370,6 +454,6 @@ Dynamic / non-literal resource ids are not fully checked at build time.
 
 ## Draw-list pack
 
-MoonBit packs Stage snapshot floats for JS WebGPU. See
+MoonBit packs Stage + screen widgets for JS WebGPU. See
 [`draw-list-pack.md`](./draw-list-pack.md) for header layout, sprite/glyph
-strides, resource ids, and wasm exports (`export_frame`, `frame_at`, …).
+strides, intent codes (incl. MenuUp/Down), and wasm exports.

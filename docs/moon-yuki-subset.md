@@ -1,16 +1,17 @@
-# MoonYuki subset (Phase 1 + Phase 2)
+# MoonYuki subset (Phase 1–3)
 
 MoonYuki is a line-oriented visual-novel DSL compiled by the `script` package
-into IR / bytecode (`MSB1`). This document describes **the subset that is
-implemented and exercised by tests and the demo**.
+into IR / bytecode (`MSB1`) plus **Screen** definitions. This document describes
+**the subset that is implemented and exercised by tests and the demo**.
 
 Out of scope (do not invent): visual editor, i18n, achievements, Live2D / 3D,
 full timeline / animation queues, blocking presentation DSL, official
-YukimiScript bytecode compatibility, `trans.dissolve`.
+YukimiScript bytecode compatibility, `trans.dissolve`, backlog, dialogue/choice
+screen-ization, confirm dialogs, slot screenshots, DOM menus.
 
-## Phase 2 notes
+## Phase notes
 
-Phase 2 hardens presentation on the Phase 1 theater model:
+### Phase 2 — presentation
 
 | Feature | Notes |
 |---------|--------|
@@ -25,6 +26,17 @@ Phase 2 hardens presentation on the Phase 1 theater model:
 Bare keywords work for string-valued named args after resolve/lower
 (`kind=background` or `kind="background"`). Prefer bare for kinds/enums in demos.
 
+### Phase 3 — Screen UI + D+B
+
+| Feature | Notes |
+|---------|--------|
+| Screen DSL | Top-level `- screen "name"` with indent-2 widgets (`vbox`/`hbox`/`fixed`/`text`/`button`) |
+| Actions | Closed enum: `return`, `start_game`, `quit_to_title`, `show_screen`, `hide_screen`, `save_slot`, `load_slot`, `set_pref`, `adjust_pref`, `noop` |
+| `@ui.show` / `@ui.hide` | Narrative bridge to modal stack |
+| Named negatives | `x=-200`, `y=-1.5` lexed correctly |
+| Audio | `@audio.bgm` `volume=` / `fade=`; hard-fail missing audio at build/load |
+| Prefs / slots | Multi-slot saves + prefs keys; see [`screen-language.md`](./screen-language.md) |
+
 ## File shape
 
 A compilation unit (one `.yuki` file) may contain, in any order at top level:
@@ -35,6 +47,7 @@ A compilation unit (one `.yuki` file) may contain, in any order at top level:
 | Extern | `- extern name [params…]` |
 | Macro | `- macro name [params…]` then body lines ending at next top-level decl |
 | Scene | `- scene "name"` or `- scene "name" inherit "parent"` |
+| Screen | `- screen "name"` then indent-2 widget body (not a narrative scene) |
 
 Scene bodies contain:
 
@@ -42,26 +55,34 @@ Scene bodies contain:
 - Host / macro commands: `@cmd args…`
 - Blank lines (ignored)
 
+Screen bodies contain widgets only (`vbox` / `hbox` / `fixed` / `text` /
+`button`) — see [`screen-language.md`](./screen-language.md). Screens do not
+enter the narrative scene table.
+
 Top-level `@` commands outside a scene/macro body are a **parse error**.
 
 ### Multi-file projects
 
 `moonsightc build` collects every `*.yuki` under the project directory, compiles
 each independently, and **merges scenes** into one IR module / `game.msb`.
+Screens merge separately into **`screens.json`** (project overrides
+`std_screens/` by name).
 
 - Scene names must be unique across the merged set (duplicate = error).
+- Screen names must be unique within the project set; std names are overridden.
 - Macros and file-local `extern`s do **not** cross files.
 - Entry scene preference: a scene named `"entrypoint"` if present, else the
-  first scene of the **entry file** graph; the demo uses `entrypoint` → jumps.
+  first scene of the **entry file** graph; the demo uses `entrypoint` → jumps
+  after title **Start** (`start_game`).
 
 The browser host still loads **entry source** as `demo.yuki`;
-`game.msb` is emitted for the publish path and tests.
+`game.msb` + `screens.json` are emitted for the publish path and tests.
 
 ## Grammar sketch
 
 ```
 unit        ::= item*
-item        ::= extern | macro | scene | comment | blank
+item        ::= extern | macro | scene | screen | comment | blank
 
 extern      ::= "- extern" name param*
 param       ::= name | name "=" literal
@@ -72,6 +93,9 @@ body_line   ::= command | dialogue | blank   (until next top-level "- …")
 scene       ::= "- scene" string ("inherit" string)? scene_line*
 scene_line  ::= command | dialogue | blank | comment
 
+screen      ::= "- screen" string screen_line*
+screen_line ::= widget | blank | comment   (indent-2 hierarchy)
+
 command     ::= "@" dotted_name arg*
 dialogue    ::= speaker ":" text_parts
 text_parts  ::= (literal | inline)*
@@ -79,7 +103,7 @@ inline      ::= "[" dotted_name arg* "]"
 
 arg         ::= positional | named | flag
 positional  ::= literal | ident
-named       ::= name "=" (literal | ident)
+named       ::= name "=" (literal | ident)   # literals may be negative: x=-200
 flag        ::= "--" name
 
 literal     ::= int | float | bool | string
@@ -234,18 +258,29 @@ During a timed wait, Advance/Select/SkipTyping are ignored.
 
 ```yuki
 @layer.show "bg" "bg_room" kind=background
-@layer.show "y" "char_y" kind=character z=10 x=0 opacity=0
-@layer.show "y" "char_y" 10 -200 0 0 kind=character
+@layer.show "y" "char_y" kind=character z=10 x=-200 y=0 opacity=0
+@layer.show "y" "char_y" 10 -200 0 0 kind=character   # positionals still fine
 @layer.set "y" x=200 opacity=1.0 duration=0.5
 @layer.move "y" 400 0 duration=0.3
 @layer.hide "y" duration=0.3
 ```
 
-Named numeric values do not accept a leading `-` in the current lexer
-(`x=-200` fails); use positionals for negative coordinates (e.g. `10 -200 0 0`).
+Named negatives work: `x=-200`, `y=-1.5`, `opacity=0`.
 
 See [`host-commands.md`](./host-commands.md) for full arg tables, defaults, and
 tween rules.
+
+## Screens (author summary)
+
+```yuki
+- screen "title"
+  vbox x=760 y=360:
+    text "MoonSight"
+    button "Start" action=start_game
+```
+
+Full widget/action table: [`screen-language.md`](./screen-language.md).
+Narrative open/close: `@ui.show` / `@ui.hide`.
 
 ## Comments and whitespace
 
@@ -265,6 +300,7 @@ Blank lines are ignored. Keep one statement per line (line-oriented lexer).
       → Resolve (externs, scenes, commands)
       → Lower → IR (Host / Yield / Choose / …; named args as #: markers)
       → Bytecode encode (MSB1, magic "MSB1")
+      ↳ screens → ScreenDef → screens.json (merged with std_screens)
 ```
 
 CLI:
@@ -275,10 +311,12 @@ moon run cmd/moonsightc --target native -- build project_dir -o dist/out
 ```
 
 `build` fails if literal image/audio resource ids used in scripts are missing
-from project assets/manifest.
+from project assets/manifest. Failed builds do not promote a half-written
+`out_dir`.
 
 Diagnostics surface as compile/check errors (unknown command, duplicate scene,
-parse failures). Runtime host errors soft-halt the VM (`HostResult::Error`).
+parse failures, invalid screen actions). Runtime host errors soft-halt the VM
+(`HostResult::Error`).
 
 ## Minimal complete example
 
@@ -288,9 +326,9 @@ parse failures). Runtime host errors soft-halt the VM (`HostResult::Error`).
 
 - scene "intro"
 @layer.show "bg" "bg_room" kind=background
-@layer.show "y" "char_y" 10 -200 0 0 kind=character
+@layer.show "y" "char_y" kind=character z=10 x=-200 y=0 opacity=0
 @layer.set "y" x=200 opacity=1.0 duration=0.5
-@audio.bgm "bgm_soft"
+@audio.bgm "bgm_soft" volume=0.9 fade=0.5
 @trans.fade 1.0 0.0 0.5
 @flow.wait 0.5
 y:Welcome.
@@ -306,8 +344,12 @@ y:Thanks for playing.
 @flow.yield
 ```
 
+Cold start uses the std `title` screen (Start → `start_game` → entry). Press
+**Esc** in play for `game_menu`.
+
 See also:
 
+- [`screen-language.md`](./screen-language.md) — Screen DSL, actions, prefs, slots
 - [`host-commands.md`](./host-commands.md) — standard host table, intents, save v3
 - [`project-layout.md`](./project-layout.md) — repo + `moonsight.json`
 - [`draw-list-pack.md`](./draw-list-pack.md) — frame pack + intent codes

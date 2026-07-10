@@ -378,6 +378,25 @@ test "boot_title then start_game enters playing" {
 }
 
 ///|
+test "boot_title without title def stays Playing" {
+  let src =
+    #|- scene "s"
+    #|@var.set "ran" true
+    #|
+  let ir = @script.compile_to_ir(src, file="no_title.yuki")
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng.boot_title()
+  assert_true(eng.screens.mode is Playing)
+  assert_eq(eng.screens.stack.length(), 0)
+  eng.tick(None_)
+  assert_true(eng.stage.get_var("ran") == Bool(true))
+}
+
+///|
 test "ui.show host command opens menu and freezes ip" {
   let src =
     #|- scene "s"
