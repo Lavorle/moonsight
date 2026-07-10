@@ -31,7 +31,7 @@ const AUDIO_SET_BGM_VOLUME = 3;
 const SAVE_KEY = (slot) => `moonsight/save/${slot}`;
 const PREFS_KEY = "moonsight/prefs";
 
-/** Intent codes (docs/draw-list-pack.md + MenuUp/Down) */
+/** Intent codes (docs/draw-list-pack.md + MenuUp/Down/Left/Right, backlog) */
 const INTENT_NONE = 0;
 const INTENT_ADVANCE = 1;
 const INTENT_SKIP = 2;
@@ -39,12 +39,17 @@ const INTENT_OPEN_MENU = 3;
 const INTENT_TOGGLE_AUTO = 4;
 const INTENT_MENU_UP = 5;
 const INTENT_MENU_DOWN = 6;
+const INTENT_MENU_LEFT = 7;
+const INTENT_MENU_RIGHT = 8;
+const INTENT_OPEN_BACKLOG = 9;
 
 /** @type {WebAssembly.Exports | null} */
 let exports_ = null;
 
 /** pending intent for next frame */
 let pendingIntent = 0;
+/** Ctrl held → skip_held flag each frame (not one-shot SkipTyping). */
+let ctrlHeld = false;
 let lastTs = 0;
 let saveSlot = 0;
 
@@ -212,21 +217,19 @@ function clampVolume(v) {
 }
 
 /**
- * Output BGM gain = logical × master × bgm prefs.
+ * Output BGM gain = logical only (mixer already applied master × bgm prefs).
  * @param {number} logical
  */
 function effectiveBgmVolume(logical) {
-  return clampVolume(
-    Number(logical) * prefs.master_volume * prefs.bgm_volume,
-  );
+  return clampVolume(logical);
 }
 
 /**
- * Output SE gain = logical × master × se prefs.
+ * Output SE gain = logical only (mixer already applied master × se prefs).
  * @param {number} logical
  */
 function effectiveSeVolume(logical) {
-  return clampVolume(Number(logical) * prefs.master_volume * prefs.se_volume);
+  return clampVolume(logical);
 }
 
 /**
@@ -575,7 +578,7 @@ function frame(ts) {
   const intent = pendingIntent;
   pendingIntent = 0;
   try {
-    exports_.export_frame(intent, dt);
+    exports_.export_frame(intent, dt, ctrlHeld ? 1 : 0);
     flushPendingGlyphs(exports_);
     flushAudio(exports_);
     // After UI actions: prefs + multi-slot may have changed in-engine.
@@ -650,6 +653,11 @@ function bindInput(canvas) {
   window.addEventListener("keydown", unlock, { once: true });
 
   window.addEventListener("keydown", (ev) => {
+    if (ev.key === "Control") {
+      ctrlHeld = true;
+      ev.preventDefault();
+      return;
+    }
     switch (ev.key) {
       case "Enter":
       case " ":
@@ -682,8 +690,21 @@ function bindInput(canvas) {
           ev.preventDefault();
         }
         break;
-      case "Control":
-        pendingIntent = INTENT_SKIP;
+      case "ArrowLeft":
+        pendingIntent = INTENT_MENU_LEFT;
+        ev.preventDefault();
+        break;
+      case "ArrowRight":
+        pendingIntent = INTENT_MENU_RIGHT;
+        ev.preventDefault();
+        break;
+      case "h":
+      case "H":
+        // OpenBacklog (Playing); ignore when used as part of a chord.
+        if (!ev.ctrlKey) {
+          pendingIntent = INTENT_OPEN_BACKLOG;
+          ev.preventDefault();
+        }
         break;
       case "a":
       case "A":
@@ -709,6 +730,12 @@ function bindInput(canvas) {
         break;
       default:
         break;
+    }
+  });
+
+  window.addEventListener("keyup", (ev) => {
+    if (ev.key === "Control") {
+      ctrlHeld = false;
     }
   });
 

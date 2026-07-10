@@ -95,20 +95,24 @@ UI placeholder ids used by the host: `ui.menu_dim`, `ui.button`,
 
 ## Intent codes
 
-Passed as `Int` into `export_frame(intent_code, dt_ms)`:
+Passed as `Int` into `export_frame(intent_code, dt_ms, skip_held)`:
 
 | code | intent |
 |-----:|--------|
 | 0 | None |
 | 1 | Advance |
-| 2 | SkipTyping |
+| 2 | SkipTyping (one-shot; host prefers Ctrl **hold** via `skip_held`) |
 | 3 | OpenMenu (**Esc** → open `game_menu` / pop modal) |
 | 4 | ToggleAuto |
 | 5 | **MenuUp** (↑ / W) |
 | 6 | **MenuDown** (↓ / S) |
+| 7 | **MenuLeft** (← — slider step down) |
+| 8 | **MenuRight** (→ — slider step up) |
+| 9 | **OpenBacklog** (**H** — Playing, empty stack) |
 | 10+n | Select(n) |
 
 `dt_ms` is frame delta in **milliseconds** (converted to seconds inside the host).
+`skip_held` is non-zero while **Control** is held (burst skip; does not skip timed waits).
 
 ## Host wasm exports (`host_web`)
 
@@ -118,7 +122,7 @@ Passed as `Int` into `export_frame(intent_code, dt_ms)`:
 | `load_source(src)` | Compile MoonYuki source and replace engine |
 | `load_msb(raw)` | Load `MSB1` bytecode and replace engine |
 | `boot_title()` | Cold start Title + show `title` modal (`std_ui`) |
-| `export_frame(intent, dt_ms)` | Tick + pack; returns pack length |
+| `export_frame(intent, dt_ms, skip_held)` | Tick + pack; returns pack length (`skip_held` ≠ 0 while Ctrl held) |
 | `frame_len()` | Last pack length |
 | `frame_at(i)` | Pack float at index |
 | `resource_count()` / `resource_name(id)` | Resource table |
@@ -133,7 +137,7 @@ UI trees are linked into the host wasm (`std_ui` + optional project
 ## JS render loop (sketch)
 
 ```js
-const n = exports.export_frame(intent, dtMs);
+const n = exports.export_frame(intent, dtMs, skipHeld ? 1 : 0);
 const pack = new Float32Array(n);
 for (let i = 0; i < n; i++) pack[i] = exports.frame_at(i);
 const sc = pack[1] | 0;

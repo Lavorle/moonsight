@@ -227,7 +227,8 @@ pub fn set_slot_json(slot : Int, json : String) -> Int {
 ///
 /// `intent_code` — see `docs/draw-list-pack.md`.
 /// `dt_ms` — frame delta in milliseconds.
-pub fn export_frame(intent_code : Int, dt_ms : Float) -> Int {
+/// `skip_held` — non-zero while Ctrl is held (host maps hold → skip burst).
+pub fn export_frame(intent_code : Int, dt_ms : Float, skip_held : Int) -> Int {
   let s = session.val
   match s.engine {
     None => {
@@ -241,7 +242,7 @@ pub fn export_frame(intent_code : Int, dt_ms : Float) -> Int {
     Some(eng) => {
       let dt = dt_ms.to_double() / 1000.0
       let intent = @render.intent_from_code(intent_code)
-      eng.tick(intent, dt~)
+      eng.tick(intent, dt~, skip_held=skip_held != 0)
       let view = eng.view()
       // Phase 4 Task 4: paint only UiDrawOp from UiRuntime (no hard-coded dialogue).
       eng.sync_ui_bind()

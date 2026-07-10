@@ -418,12 +418,19 @@ Defined in `render.intent_from_code` / `docs/draw-list-pack.md`, wired by
 |-----:|--------|-----------------|
 | 0 | `None` | (no input) |
 | 1 | `Advance` | **Click** / pointer on canvas; **Enter**; **Space**; **Z** (on modals/HUD = activate focused button) |
-| 2 | `SkipTyping` | **Control** (keydown) |
+| 2 | `SkipTyping` | reserved one-shot; host uses Ctrl **hold** → `skip_held` instead |
 | 3 | `OpenMenu` | **Esc** — Playing + empty stack → `game_menu`; modal open → pop one layer |
 | 4 | `ToggleAuto` | **A** (also writes prefs.`auto_mode`) |
 | 5 | `MenuUp` | **↑** / **W** — previous focusable on modal/HUD |
 | 6 | `MenuDown` | **↓** / **S** — next focusable (plain S; Ctrl+S is quick-save) |
+| 7 | `MenuLeft` | **←** — focused slider step down |
+| 8 | `MenuRight` | **→** — focused slider step up |
+| 9 | `OpenBacklog` | **H** — Playing + empty stack → backlog modal |
 | 10+n | `Select(n)` | **1**–**9** → Select(0)…Select(8) |
+
+**Ctrl hold** (not an intent code): each frame passes `skip_held=1` into
+`export_frame` for burst advance while held (does not skip timed waits or
+auto-select choices).
 
 Save/load (not intents): **Ctrl/Cmd+S** save, **Ctrl/Cmd+L** load **slot 0**.
 
