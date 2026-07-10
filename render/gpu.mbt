@@ -14,8 +14,9 @@ pub let pack_version : Float = 1.0
 pub let sprite_stride : Int = 7
 
 ///|
-/// Floats per glyph record: atlas_x,atlas_y,atlas_w,atlas_h,x,y,r,g,b,a
-pub let glyph_stride : Int = 10
+/// Floats per glyph record:
+/// `atlas_x,atlas_y,atlas_w,atlas_h, x,y, screen_w,screen_h, r,g,b,a`
+pub let glyph_stride : Int = 12
 
 ///|
 /// Combined pack header length:

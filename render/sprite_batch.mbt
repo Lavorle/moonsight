@@ -43,7 +43,8 @@ pub fn pack_sprites(
 ///|
 /// Write glyph quads into `out` starting at `offset`.
 ///
-/// Each glyph: `atlas_x, atlas_y, atlas_w, atlas_h, x, y, r, g, b, a`.
+/// Each glyph:
+/// `atlas_x, atlas_y, atlas_w, atlas_h, x, y, screen_w, screen_h, r, g, b, a`.
 pub fn write_glyphs(
   out : FixedArray[Float],
   offset : Int,
@@ -57,10 +58,12 @@ pub fn write_glyphs(
     out[i + 3] = Float::from_int(g.atlas_h)
     out[i + 4] = g.x
     out[i + 5] = g.y
-    out[i + 6] = g.color.r
-    out[i + 7] = g.color.g
-    out[i + 8] = g.color.b
-    out[i + 9] = g.color.a
+    out[i + 6] = g.w
+    out[i + 7] = g.h
+    out[i + 8] = g.color.r
+    out[i + 9] = g.color.g
+    out[i + 10] = g.color.b
+    out[i + 11] = g.color.a
     i = i + glyph_stride
   }
   i

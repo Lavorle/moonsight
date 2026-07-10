@@ -42,20 +42,26 @@ then glyphs:  glyph_count  × 10 floats
 Coordinates are logical canvas pixels (origin top-left, +y down), default
 1920×1080.
 
-### Glyph record (stride 10)
+### Glyph record (stride 12)
 
 | offset | field |
 |-------:|-------|
 | 0 | atlas_x (px) |
 | 1 | atlas_y (px) |
-| 2 | atlas_w (px) |
-| 3 | atlas_h (px) |
+| 2 | atlas_w (px, UV shelf cell) |
+| 3 | atlas_h (px, UV shelf cell) |
 | 4 | x (canvas) |
 | 5 | y (canvas) |
-| 6 | r |
-| 7 | g |
-| 8 | b |
-| 9 | a |
+| 6 | screen_w (canvas dest width, layout advance) |
+| 7 | screen_h (canvas dest height, font size) |
+| 8 | r |
+| 9 | g |
+| 10 | b |
+| 11 | a |
+
+**Important:** `screen_w`/`screen_h` are the on-canvas quad size. They are
+**not** the same as `atlas_w`/`atlas_h` (rasterization shelf cell). Using the
+cell as the screen size made Latin text look massively letter-spaced.
 
 Atlas texture id is fixed on the JS side (`atlas` / texture id reserved for
 glyphs). MoonBit only emits UV rects; JS rasterizes pending glyphs into the

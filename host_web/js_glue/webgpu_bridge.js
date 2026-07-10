@@ -4,7 +4,10 @@
  */
 
 const SPRITE_STRIDE = 7;
-const GLYPH_STRIDE = 10;
+/** atlas_x,y,w,h, x,y, screen_w,screen_h, r,g,b,a */
+const GLYPH_STRIDE = 12;
+/** Instance floats: rect4 + opacity + pad3 + uv4 + tint4 = 16 (64-byte aligned) */
+const INSTANCE_FLOATS = 16;
 
 const QUAD_WGSL = /* wgsl */ `
 struct Uniforms {
@@ -62,8 +65,12 @@ fn vs_main(
 
 @fragment
 fn fs_main(in : VSOut) -> @location(0) vec4f {
+  // Textures are straight (non-premultiplied) RGBA. Convert to premultiplied
+  // for blend mode (one, one-minus-src-alpha) used with the swapchain.
   let c = textureSample(tex, samp, in.uv);
-  return c * in.tint;
+  let rgb = c.rgb * in.tint.rgb;
+  let a = c.a * in.tint.a;
+  return vec4f(rgb * a, a);
 }
 `;
 
@@ -275,12 +282,14 @@ export async function init(canvas) {
   context.configure({
     device,
     format,
+    // Match premultiplied fragment output (see fs_main / glyph stamp).
     alphaMode: "premultiplied",
   });
 
+  // Nearest keeps atlas glyphs crisp; linear bleeds across shelf cells.
   sampler = device.createSampler({
-    magFilter: "linear",
-    minFilter: "linear",
+    magFilter: "nearest",
+    minFilter: "nearest",
   });
 
   uniformBuf = device.createBuffer({
@@ -300,14 +309,15 @@ export async function init(canvas) {
       entryPoint: "vs_main",
       buffers: [
         {
-          arrayStride: 13 * 4, // rect4 + opacity + pad3? we pack tightly:
-          // rect(4) + opacity(1) + uv(4) + tint(4) = 13 floats
+          // 16-byte aligned attributes (float32x4 @ 0/16/32/48)
+          // layout: rect4 | uv4 | tint4 | opacity+pad3
+          arrayStride: INSTANCE_FLOATS * 4,
           stepMode: "instance",
           attributes: [
-            { shaderLocation: 0, offset: 0, format: "float32x4" },
-            { shaderLocation: 1, offset: 16, format: "float32" },
-            { shaderLocation: 2, offset: 20, format: "float32x4" },
-            { shaderLocation: 3, offset: 36, format: "float32x4" },
+            { shaderLocation: 0, offset: 0, format: "float32x4" }, // rect
+            { shaderLocation: 1, offset: 48, format: "float32" }, // opacity
+            { shaderLocation: 2, offset: 16, format: "float32x4" }, // uv
+            { shaderLocation: 3, offset: 32, format: "float32x4" }, // tint
           ],
         },
       ],
@@ -320,7 +330,7 @@ export async function init(canvas) {
           format,
           blend: {
             color: {
-              srcFactor: "src-alpha",
+              srcFactor: "one",
               dstFactor: "one-minus-src-alpha",
               operation: "add",
             },
@@ -546,26 +556,31 @@ export function drawSprites(spriteBuffer, resolveRes) {
   }
 
   for (const [view, indices] of groups) {
-    const inst = new Float32Array(indices.length * 13);
+    const inst = new Float32Array(indices.length * INSTANCE_FLOATS);
     for (let n = 0; n < indices.length; n++) {
       const i = indices[n];
       const o = i * SPRITE_STRIDE;
-      const base = n * 13;
+      const base = n * INSTANCE_FLOATS;
+      // rect
       inst[base + 0] = data[o + 0];
       inst[base + 1] = data[o + 1];
       inst[base + 2] = data[o + 2];
       inst[base + 3] = data[o + 3];
-      inst[base + 4] = data[o + 4];
-      // full UV
+      // uv full texture
+      inst[base + 4] = 0;
       inst[base + 5] = 0;
-      inst[base + 6] = 0;
+      inst[base + 6] = 1;
       inst[base + 7] = 1;
+      // straight-alpha tint (shader premultiplies)
       inst[base + 8] = 1;
-      // white tint
       inst[base + 9] = 1;
       inst[base + 10] = 1;
       inst[base + 11] = 1;
-      inst[base + 12] = 1;
+      // opacity multiplies tint.a in the vertex shader
+      inst[base + 12] = data[o + 4];
+      inst[base + 13] = 0;
+      inst[base + 14] = 0;
+      inst[base + 15] = 0;
     }
     const buf = device.createBuffer({
       size: inst.byteLength,
@@ -581,7 +596,8 @@ export function drawSprites(spriteBuffer, resolveRes) {
 }
 
 /**
- * Glyph buffer: [atlas_x,atlas_y,atlas_w,atlas_h,x,y,r,g,b,a] * N
+ * Glyph buffer:
+ * [atlas_x,atlas_y,atlas_w,atlas_h, x,y, screen_w,screen_h, r,g,b,a] * N
  * @param {Float32Array|ArrayLike<number>} glyphBuffer
  * @param {string|number} atlasTextureId
  */
@@ -600,40 +616,59 @@ export function drawGlyphs(glyphBuffer, atlasTextureId = "atlas") {
   const ah = atlas ? atlas.height : 1;
   const view = atlas ? atlas.view : whiteView;
 
-  const inst = new Float32Array(count * 13);
+  const inst = new Float32Array(count * INSTANCE_FLOATS);
   let live = 0;
   for (let i = 0; i < count; i++) {
     const o = i * GLYPH_STRIDE;
     const ax = data[o + 0];
     const ay = data[o + 1];
-    const gw = data[o + 2];
-    const gh = data[o + 3];
-    if (gw <= 0 || gh <= 0) continue;
-    const base = live * 13;
+    const auw = data[o + 2];
+    const auh = data[o + 3];
+    if (auw <= 0 || auh <= 0) continue;
+    let sw = data[o + 6];
+    let sh = data[o + 7];
+    // Backward-compatible fallback if host serves old 10-float packs.
+    if (!(sw > 0) || !(sh > 0)) {
+      sw = auw;
+      sh = auh;
+    }
+    const r = data[o + 8];
+    const g = data[o + 9];
+    const b = data[o + 10];
+    const a = data[o + 11];
+    const base = live * INSTANCE_FLOATS;
+    // rect: screen position + size (NOT atlas cell size)
     inst[base + 0] = data[o + 4];
     inst[base + 1] = data[o + 5];
-    inst[base + 2] = gw;
-    inst[base + 3] = gh;
-    inst[base + 4] = 1; // opacity
-    inst[base + 5] = ax / aw;
-    inst[base + 6] = ay / ah;
-    inst[base + 7] = (ax + gw) / aw;
-    inst[base + 8] = (ay + gh) / ah;
-    inst[base + 9] = data[o + 6];
-    inst[base + 10] = data[o + 7];
-    inst[base + 11] = data[o + 8];
-    inst[base + 12] = data[o + 9];
+    inst[base + 2] = sw;
+    inst[base + 3] = sh;
+    // uv from atlas shelf cell
+    inst[base + 4] = ax / aw;
+    inst[base + 5] = ay / ah;
+    inst[base + 6] = (ax + auw) / aw;
+    inst[base + 7] = (ay + auh) / ah;
+    // straight-alpha tint (shader premultiplies with coverage)
+    inst[base + 8] = r;
+    inst[base + 9] = g;
+    inst[base + 10] = b;
+    inst[base + 11] = a;
+    inst[base + 12] = 1;
+    inst[base + 13] = 0;
+    inst[base + 14] = 0;
+    inst[base + 15] = 0;
     live++;
   }
   if (live <= 0) return;
 
-  const bytes = live * 13 * 4;
+  const bytes = live * INSTANCE_FLOATS * 4;
   const buf = device.createBuffer({
     size: bytes,
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     mappedAtCreation: true,
   });
-  new Float32Array(buf.getMappedRange()).set(inst.subarray(0, live * 13));
+  new Float32Array(buf.getMappedRange()).set(
+    inst.subarray(0, live * INSTANCE_FLOATS),
+  );
   buf.unmap();
   pass.setBindGroup(0, bindGroupFor(view));
   pass.setVertexBuffer(0, buf);
@@ -700,28 +735,32 @@ export function rasterizeGlyphToAtlas(
 ) {
   ensureGpu();
   let entry = textures.get("atlas");
-  if (!entry || entry.width < atlasSize) {
-    // allocate blank atlas
+  if (!entry || entry.width < atlasSize || !entry.cpu) {
+    // allocate blank atlas (transparent black)
     const pixels = new Uint8Array(atlasSize * atlasSize * 4);
     uploadRgbaTexture("atlas", atlasSize, atlasSize, pixels);
     entry = textures.get("atlas");
+    entry.cpu = pixels;
   }
+  if (atlasW <= 0 || atlasH <= 0) return;
+
   const canvas = document.createElement("canvas");
   canvas.width = atlasW;
   canvas.height = atlasH;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   ctx.clearRect(0, 0, atlasW, atlasH);
+  // White ink; alpha from coverage. Scale font so glyphs fit the cell with
+  // a small margin (avoids clipping descenders / wide CJK).
+  // Fit glyph inside the shelf cell (square ≈ font size) with a small margin.
+  const fontPx = Math.max(1, Math.floor(Math.min(size, atlasW, atlasH) * 0.78));
+  ctx.font = `${fontPx}px "Segoe UI","Noto Sans CJK SC","Noto Sans","DejaVu Sans",sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
   ctx.fillStyle = "#ffffff";
-  ctx.font = `${size}px sans-serif`;
-  ctx.textBaseline = "top";
-  ctx.fillText(ch, 0, 0);
+  ctx.fillText(ch, atlasW * 0.5, atlasH * 0.5);
   const img = ctx.getImageData(0, 0, atlasW, atlasH);
 
-  // Read full atlas, stamp glyph, re-upload (simple Phase 1 path)
-  // Keep a CPU mirror on the texture entry.
-  if (!entry.cpu) {
-    entry.cpu = new Uint8Array(entry.width * entry.height * 4);
-  }
+  // Stamp straight-alpha white coverage into the CPU mirror.
   const cpu = entry.cpu;
   for (let y = 0; y < atlasH; y++) {
     for (let x = 0; x < atlasW; x++) {
@@ -733,6 +772,8 @@ export function rasterizeGlyphToAtlas(
       cpu[di + 3] = img.data[si + 3];
     }
   }
+  // Upload only the stamped sub-rect (bytesPerRow must be 256-aligned for
+  // some backends when using the full texture path; full upload is fine at 1024).
   device.queue.writeTexture(
     { texture: entry.texture },
     cpu,

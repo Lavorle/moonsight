@@ -154,10 +154,9 @@ pub fn build_draw_list_with_atlas(
 ///|
 /// Layout `text` and push non-whitespace glyph quads into `glyphs`.
 ///
-/// Atlas cell size is integer `font_size`×`font_size`; pen advance comes from
-/// `measure` and may differ (fixed-width tests use `default_char_advance`).
-/// Task 12 should rasterize into the allocated cell and may refine UV size
-/// via `GlyphAtlas::mark_ready`.
+/// Atlas cells are shelf-packed at roughly `font_size`×`font_size` for host
+/// rasterization. Screen quads use layout `measure` advance × `font_size` so
+/// text pitch matches the pen (not the oversized atlas cell).
 fn emit_text_glyphs(
   glyphs : Array[GlyphDraw],
   atlas : GlyphAtlas,
@@ -185,6 +184,8 @@ fn emit_text_glyphs(
         continue
       }
       let entry = atlas.get_or_queue(ch, size)
+      // Screen size follows layout advance, not the atlas shelf cell.
+      let sw : Float = if adv < 1.0 { 1.0 } else { adv }
       glyphs.push({
         atlas_x: entry.atlas_x,
         atlas_y: entry.atlas_y,
@@ -192,6 +193,8 @@ fn emit_text_glyphs(
         atlas_h: entry.atlas_h,
         x: pen_x,
         y: pen_y,
+        w: sw,
+        h: font_size,
         color,
       })
       pen_x = pen_x + adv

@@ -17,7 +17,8 @@ import * as Gpu from "./webgpu_bridge.js";
 
 const PACK_HEADER = 4;
 const SPRITE_STRIDE = 7;
-const GLYPH_STRIDE = 10;
+/** atlas_x,y,w,h, x,y, screen_w,screen_h, r,g,b,a */
+const GLYPH_STRIDE = 12;
 
 /** Audio event kinds from host_web exports */
 const AUDIO_PLAY_BGM = 0;

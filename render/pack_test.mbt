@@ -41,6 +41,8 @@ test "pack sprites and glyphs strides" {
       atlas_h: 16,
       x: 40.0,
       y: 50.0,
+      w: 12.0,
+      h: 16.0,
       color: { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
     },
   ]
@@ -49,6 +51,8 @@ test "pack sprites and glyphs strides" {
   assert_eq(gpack[0].to_int(), 1)
   assert_eq(gpack[1].to_int(), 1)
   assert_eq(gpack[5].to_double(), 40.0)
+  assert_eq(gpack[7].to_double(), 12.0)
+  assert_eq(gpack[8].to_double(), 16.0)
 }
 
 ///|
@@ -74,6 +78,8 @@ test "pack_draw_list combined header and trailer veil" {
         atlas_h: 32,
         x: 100.0,
         y: 200.0,
+        w: 19.0,
+        h: 32.0,
         color: Color::white(),
       },
     ],
@@ -88,9 +94,10 @@ test "pack_draw_list combined header and trailer veil" {
   assert_eq(pack.length(), expected_len)
   // First sprite x at header end
   assert_eq(pack[pack_header_len].to_double(), 0.0)
-  // First glyph x after sprites
+  // First glyph x after sprites (atlas 4 floats, then x)
   let gx = pack_header_len + sprite_stride + 4
   assert_eq(pack[gx].to_double(), 100.0)
+  assert_eq(pack[gx + 2].to_double(), 19.0)
 }
 
 ///|

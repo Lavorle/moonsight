@@ -23,6 +23,11 @@ pub(all) struct SpriteDraw {
 
 ///|
 /// One glyph quad; UV rect is in the shared atlas texture (pixels).
+///
+/// `w`/`h` are **screen** size in logical canvas pixels (pen advance × line
+/// height). They are intentionally separate from `atlas_w`/`atlas_h` (shelf
+/// cell size used for rasterization). Using the full atlas cell as the screen
+/// quad made Latin text look wildly letter-spaced.
 pub(all) struct GlyphDraw {
   atlas_x : Int
   atlas_y : Int
@@ -30,6 +35,10 @@ pub(all) struct GlyphDraw {
   atlas_h : Int
   x : Float
   y : Float
+  /// Destination width on the canvas (usually the layout advance).
+  w : Float
+  /// Destination height on the canvas (usually the font size).
+  h : Float
   color : Color
 } derive(Debug)
 
@@ -109,7 +118,9 @@ pub fn UiLayout::default_fhd() -> UiLayout {
     font_size,
     name_font_size: 28.0,
     choice_font_size: 30.0,
-    default_char_advance: font_size * 0.55,
+    // Monospace pitch = font size so screen quads match square atlas cells.
+    // Host may later supply proportional measureText advances.
+    default_char_advance: font_size,
     text_color: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
     name_color: { r: 1.0, g: 0.92, b: 0.7, a: 1.0 },
     choice_color: { r: 0.85, g: 0.95, b: 1.0, a: 1.0 },
