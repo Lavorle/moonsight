@@ -26,4 +26,4 @@ npm start
 - fumadocs-ui / fumadocs-mdx / fumadocs-core
 - MDX content with `parser: 'dir'` i18n
 
-Placeholder pages only in Task 11 — full docs content is Task 12.
+Core pages (Task 12): Getting Started, MoonYuki subset, Play input — zh + en under `content/`.

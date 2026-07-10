@@ -14,7 +14,9 @@ export default async function HomePage({ params }: PageProps<'/[lang]'>) {
         <DynamicLink href="/[lang]/docs" className="font-medium underline">
           /docs
         </DynamicLink>
-        {isZh ? ' 查看文档（占位内容，完整正文见 Task 12）。' : ' to read the docs (placeholders; full content in Task 12).'}
+        {isZh
+          ? ' 查看快速开始、MoonYuki 与游玩输入文档。'
+          : ' for Getting Started, MoonYuki, and play-input docs.'}
       </p>
     </div>
   );

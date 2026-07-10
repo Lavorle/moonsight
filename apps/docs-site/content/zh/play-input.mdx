@@ -1,0 +1,125 @@
+---
+title: 游玩输入
+description: 意图码、长按跳过、等待门控、确认与历史记录语义
+---
+
+# 游玩输入语义（Q1 / 0.5）
+
+> **权威说明：** 引擎行为在迁移完成前仍须与仓库文档一致；Q2 核心页面在所列主题上为权威说明。
+>
+> 自 `docs/play-input.md` 迁入并翻译。Host 命令表与绘制列表接线仍在仓库
+> `docs/`。
+
+Host 设备每帧映射为**意图码**；引擎在
+`Engine::tick(intent, dt~, skip_held~)` 中应用。完整 Host 命令表见仓库
+`docs/host-commands.md`；打包/导出接线见 `docs/draw-list-pack.md`；UI 树见
+`docs/ui-moonbit.md`。
+
+## 意图表与代码
+
+定义于 `render.intent_from_code` / `intent_to_code`，由
+`host_web/js_glue/boot.js` → `export_frame(intent_code, dt_ms, skip_held)` 接线。
+
+| 代码 | 意图 | 含义 |
+|-----:|------|------|
+| 0 | `None_` | 本帧无一次性输入 |
+| 1 | `Advance` | 完成打字机、恢复裸 Yield，或激活聚焦按钮 |
+| 2 | `SkipTyping` | 一次性完成打字/推进（兼容）；Host 优先用长按跳过 |
+| 3 | `OpenMenu` | 游玩中且栈空 → `game_menu`；模态已开 → 弹出一层 |
+| 4 | `ToggleAuto` | 切换自动推进（+ prefs `auto_mode`） |
+| 5 | `MenuUp` | 上一个可聚焦项（菜单 / 选项） |
+| 6 | `MenuDown` | 下一个可聚焦项 |
+| 7 | `MenuLeft` | 聚焦滑块减一档（或左向焦点） |
+| 8 | `MenuRight` | 聚焦滑块加一档 |
+| 9 | `OpenBacklog` | 游玩中且栈空 → 显示 `"backlog"` 模态 |
+| 10+n | `Select(n)` | 提交选项索引 `n`（键 **1**–**9** → n = 0..8） |
+
+**不是意图码：** `skip_held` 是独立的 `export_frame` 参数（0/1），在按住
+**Control** 期间每帧设置。
+
+## 默认按键（浏览器 Host）
+
+| 输入 | 效果 |
+|------|------|
+| 点击 / Enter / Space / Z | `Advance`（菜单上 = 激活聚焦按钮） |
+| Esc | `OpenMenu`（打开 `game_menu` 或弹出模态） |
+| ↑ / W | `MenuUp` |
+| ↓ / S | `MenuDown`（纯 **S**；**Ctrl/Cmd+S** = 快速存档槽 0） |
+| ← / → | `MenuLeft` / `MenuRight`（设置滑块） |
+| A | `ToggleAuto` |
+| H | `OpenBacklog`（Playing；带 Ctrl 组合时忽略） |
+| 1–9 | `Select(0)`…`Select(8)` |
+| **按住 Ctrl** | 每帧 `skip_held=1`（连发跳过） |
+| Ctrl/Cmd+S / Ctrl/Cmd+L | 快速存/读 **槽 0**（非意图） |
+
+冷启动为 **Title**（`title` 模态）。任一模态打开时叙事 Advance 冻结；仅栈顶
+接收 UI 意图。
+
+## `skip_held` 与 `SkipTyping`
+
+| | `SkipTyping`（代码 2） | `skip_held`（tick 标志） |
+|--|----------------------|-------------------------|
+| 形态 | 一次性意图 | 按住 Ctrl 期间每帧布尔 |
+| 打字机未完成 | 完成文本 | 完成文本（每次进入连发一次） |
+| Yield 且文本已完成 | 类似 Advance 恢复 | 连发推进，每帧最多 **`skip_burst_max` = 8** 次 Yield→run |
+| 定时 `@flow.wait` | **忽略**（门控） | **忽略**（门控） |
+| 等待 `Choose` | 不自动选择 | **不**自动选择选项 |
+| 模态 / Title 活动 | 仅 UI 路径 | 对叙事忽略该标志 |
+| 遮罩淡入淡出进行中 | 不强制吸附完成 | 同 Advance（Q1 无额外 fade 门控） |
+
+Host 将**按住 Ctrl** 映射为 `skip_held`，而非一次性 `SkipTyping`。自动模式在
+空闲时合成 `Advance`；两者同时适用时，长按跳过更快。
+
+## `wait_remaining` 门控
+
+定时 `@flow.wait T`（`T > 0`）设置 `stage.wait_remaining = T` 并 yield。
+当 `wait_remaining > 0` 时：
+
+- **`Advance`**、**`SkipTyping`** 与 **`Select`** 被降为 `None_`。
+- **`skip_held`** 不连发推进（wait > 0 时连发循环也会停止）。
+- **`OpenMenu` / 菜单导航** 仍可用；模态打开时倒计时在后台继续。
+- 裸 `@flow.wait` / `@flow.yield` 使 `wait_remaining = 0`，靠 Advance
+  （或跳过连发）恢复。
+
+图层补间、`trans.fade` 与 `trans.dissolve` **本身**不门控 Advance — 需要呈现
+阻塞时，脚本须与 `@flow.wait` 配对。作者模式见 [MoonYuki 子集](./moon-yuki)。
+
+### 呈现时钟 vs 等待 / 跳过
+
+Dissolve 与 fade 时钟在定时 `@flow.wait` **期间继续推进**（菜单打开时亦然 —
+同一呈现 tick）。长按跳过与 Advance 仍被 `wait_remaining > 0` 挡住，且**不会**
+在中途 fade/dissolve 时吸附完成；等待结束后，剩余呈现时间继续按墙钟走到完成。
+
+## 确认行为
+
+危险 UI 动作走模态 `"confirm"` 与 `ConfirmKind`：
+
+| 种类 | 触发 | Yes | No（默认焦点） |
+|------|------|-----|----------------|
+| `OverwriteSave(slot)` | 存入已占用槽 | 写入槽 | 取消 |
+| `QuitToTitle` | 游戏菜单 → 标题（`request_quit_to_title`） | `quit_to_title` | 取消 |
+
+- 文案为 `std_ui` 中固定的 `Literal("Are you sure?")`（不绑定 kind；
+  `ConfirmKind` 只选择 Yes 动作）。
+- **默认焦点为 No**，避免仅按 Enter 就确认破坏性操作。
+- `confirm_yes` / `confirm_no` Capabilities 关闭确认流程。
+
+## 历史记录（Backlog）行为
+
+| 项 | 规则 |
+|----|------|
+| 来源 | 打字机完成后的完整对白行（`speaker` + 全文） |
+| 容量 | 环形缓冲 **100**；丢弃最旧 |
+| 持久化 | **仅会话** — 不入存档 v3；在 `start_game`、`quit_to_title`、读档时清空 |
+| 打开 | **H** / `OpenBacklog`，或游戏菜单 **History** → `"backlog"` |
+| 关闭 | Esc / Close → `return_modal` |
+| UI | 只读列表（经 `BacklogLine` 最近 **12** 行）；无自由滚动（Q3） |
+| 不记录 | 选项标签、系统模态文案 |
+
+## 相关
+
+- 引擎：`runtime/engine.mbt`（`tick`、`tick_skip_burst`、backlog 追加）
+- Host：`host_web/main.mbt` 的 `export_frame`、`js_glue/boot.js`
+- UI：`std_ui` 模态 `"backlog"`、`"confirm"`，设置 `Slider`
+- [快速开始](./getting-started) — 构建与游玩
+- [MoonYuki 子集](./moon-yuki) — `@flow.wait` 写法

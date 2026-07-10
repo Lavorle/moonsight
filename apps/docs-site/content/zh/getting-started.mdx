@@ -1,0 +1,147 @@
+---
+title: 快速开始
+description: 安装、WebGPU 配置、构建 demo 并运行 MoonSight
+---
+
+# 快速开始
+
+> **权威说明：** 引擎行为在迁移完成前仍须与仓库文档一致；Q2 核心页面在所列主题上为权威说明。
+>
+> 内容提炼自仓库根目录 `README.md` / `README.mbt.md`。若行为不一致，在迁移完成前以仓库 README 与包源码为准。
+
+MoonSight 是基于 MoonBit + WebGPU 的视觉小说引擎（Phase 1–4 + Q1/0.5 可玩核心 +
+Q2 引擎呈现）。MoonYuki 脚本编译为 IR/字节码，在 VM + Stage/Director 上运行，
+通过打包的绘制列表由 JS WebGPU Host 渲染。系统菜单与对白 HUD 使用保留式
+MoonBit UI 树（`std_ui` + 可选项目 `ui_package`）。桌面端在最小 Tauri 壳中复用
+同一套 Web 构建。
+
+## 前置条件
+
+- [MoonBit](https://www.moonbitlang.com/) 工具链（`moon`）
+- 用于原生 CLI 构建的 C 编译器（Linux 上 `export CC=gcc`）
+- 支持 **WebGPU** 的浏览器（见 [浏览器 / WebGPU](#浏览器--webgpulinux-上尤其重要)）
+- Python 3（或任意静态文件服务器）用于托管 dist 目录
+
+## 快速上手
+
+在**仓库根目录**执行：
+
+```bash
+export CC=gcc
+
+# 类型检查 + 单元测试
+moon check
+moon test
+
+# 编译示例游戏 + Web 产物（demo 设置了 ui_package → 会重建 host wasm）
+moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
+
+# 浏览器游玩（WebGPU；请用 localhost，不要用 file://）
+cd dist/demo && python3 -m http.server 8080
+# 打开 http://localhost:8080/
+```
+
+## Web Host（Q2+）
+
+`moonsightc build` 会将 Web 壳复制到输出目录：
+
+1. 若存在 **`apps/host-web/dist`**（Svelte/Vite；需含 `index.html`）
+2. 否则回退到 **`host_web/js_glue`**（原生 JS — dist 缺失时的默认可玩路径）
+
+使用 Svelte Host 时的推荐顺序：
+
+```bash
+export CC=gcc
+cd apps/host-web && npm i && npm run build && cd ../..
+moon build --target wasm-gc --release host_web
+moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
+```
+
+未构建 Svelte dist 时，仍使用原生 `js_glue` 壳。若无 `ui_package`，也可手动
+把 wasm 刷到壳源码中：
+
+```bash
+moon build --target wasm-gc --release host_web
+cp _build/wasm-gc/release/build/host_web/host_web.wasm host_web/js_glue/
+# 可选：同步到 Svelte public/ 供开发
+# cp _build/wasm-gc/release/build/host_web/host_web.wasm apps/host-web/public/
+```
+
+## 浏览器 / WebGPU（Linux 上尤其重要）
+
+MoonSight **要求 WebGPU**，没有 WebGL 回退。
+
+| 浏览器 | 说明 |
+|--------|------|
+| **Chrome / Edge / Chromium** | 首选路径。**Linux** 上可能需开启下方标志。 |
+| **Brave** | 基于 Chromium；Linux 上常需与 Chrome 相同的标志。 |
+| **Firefox** | Windows/macOS 上 WebGPU 较完整；**Linux 仍偏实验性**，常需 `about:config` 或 Nightly。 |
+
+### Brave / Chrome（Linux）— 若出现 `WebGPU not available`
+
+1. 打开 `brave://flags` 或 `chrome://flags`
+2. 启用 **Unsafe WebGPU Support**（`#enable-unsafe-webgpu`）
+3. 启用 **Vulkan**（`#enable-vulkan`）— Linux 上通常需要
+4. 可选：**Ignore GPU blocklist**（`#ignore-gpu-blocklist`）
+5. 重启后检查 `brave://gpu` / `chrome://gpu`（WebGPU 不应为 “Disabled”）
+
+命令行：
+
+```bash
+brave-browser --enable-unsafe-webgpu --enable-features=Vulkan --use-angle=vulkan http://localhost:8080/
+# 或: google-chrome --enable-unsafe-webgpu --enable-features=Vulkan ...
+```
+
+### Firefox
+
+1. `about:config` → 将 `dom.webgpu.enabled` 设为 `true`
+2. 也可尝试 `gfx.webgpu.force-enabled` 和/或 `gfx.webgpu.ignore-blocklist` = `true`
+3. 重启；若 `navigator.gpu` 仍缺失，请使用 **Firefox Nightly** 或 Chromium 系浏览器
+
+务必通过 **`http://localhost`**（或 https）访问。打开 `file://` 会阻止 WebGPU。
+
+## 操作摘要
+
+冷启动落在 **标题** 模态（Start → 入口场景）。
+
+| 输入 | 效果 |
+|------|------|
+| 点击 / Enter / Space / Z | 推进（或激活聚焦菜单按钮） |
+| Esc | 系统菜单 |
+| ↑↓ / W/S | 焦点 |
+| ←→ | 设置滑块 |
+| H | 历史记录 |
+| 按住 Ctrl | 跳过（连发） |
+| 1–9 | 选择选项 |
+| A | 自动 |
+| Ctrl+S / Ctrl+L | 快速存/读档槽 0（`localStorage`） |
+
+定时 `@flow.wait` 在倒计时结束前忽略 Advance/跳过。菜单打开时暂停叙事
+Advance。完整语义见 [游玩输入](./play-input)。
+
+## 桌面壳
+
+先构建 `dist/demo`，再参阅仓库中的 `host_desktop/README.md`。
+
+## 包一览
+
+| 路径 | 职责 |
+|------|------|
+| `script` | MoonYuki → IR / `MSB1`（拒绝项目 `- screen`） |
+| `runtime` | VM、Director、Stage、UiApp/UiRuntime、prefs、存档（v4）、补间 + scale |
+| `render` | 绘制列表打包、文本排版、kind+z 排序、scale→精灵尺寸、`UiDrawOp` 绘制 |
+| `audio` | 逻辑 BGM/SE 混音器（音量 / 淡入淡出） |
+| `std_commands` | 标准 `@` Host 命令（图层、dissolve、ui.show/hide、音频） |
+| `std_ui` | 默认 HUD + title / game_menu / save_load / settings / confirm / backlog |
+| `host_web` | 浏览器 wasm + `js_glue` 回退壳（WebGPU、prefs、多槽） |
+| `apps/host-web` | Svelte+TS Host 壳（`dist/` 存在时 `moonsightc` 优先使用） |
+| `host_desktop` | Tauri 2 壳 |
+| `cmd/moonsightc` | `check` / `build` CLI（字面资源检查、可选 ui_package 链接） |
+| `demo/game` | 示例项目（+ 可选 `ui/` 覆盖） |
+| `apps/docs-site` | 本文档站点 |
+
+## 下一步
+
+- 学习脚本语言：[MoonYuki 子集](./moon-yuki)
+- 正确集成输入：[游玩输入](./play-input)
+- 尚未迁入本站的主题仍在仓库 `docs/`（UI MoonBit、Host 命令、工程布局、绘制列表打包）

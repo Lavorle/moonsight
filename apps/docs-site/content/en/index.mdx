@@ -1,19 +1,34 @@
 ---
 title: Welcome
-description: MoonSight docs placeholder (Task 11 scaffold)
+description: MoonSight bilingual documentation — getting started, MoonYuki, and play input
 ---
 
 # MoonSight Docs
 
-This is a placeholder English index page. Full content lands in Task 12.
+MoonSight is a MoonBit + WebGPU visual novel engine. These pages document the
+**Q2 core topics** for authors and host integrators.
 
-## Coming soon
+> **Source of truth:** Engine behavior must match repo docs until migration
+> completes; Q2 core pages are authoritative for listed topics.
 
-- Engine and Host overview
-- Yuki scripting reference
-- Build and release guide
+## Core topics
 
 <Cards>
-  <Card title="Chinese docs" href="/zh/docs" />
-  <Card title="Fumadocs" href="https://fumadocs.dev" />
+  <Card title="Getting Started" href="/en/docs/getting-started" description="Install, WebGPU, build demo, play" />
+  <Card title="MoonYuki subset" href="/en/docs/moon-yuki" description="Script language subset (Phases 1–4)" />
+  <Card title="Play input" href="/en/docs/play-input" description="Intents, skip hold, wait gate, backlog" />
 </Cards>
+
+## Other languages
+
+- [中文文档](/zh/docs)
+
+## Repo references (not yet migrated)
+
+| Topic | Repo path |
+|-------|-----------|
+| MoonBit UI authoring | `docs/ui-moonbit.md` |
+| Host command table | `docs/host-commands.md` |
+| Project layout | `docs/project-layout.md` |
+| Draw-list pack | `docs/draw-list-pack.md` |
+| Quickstart (README) | `README.md` / `README.mbt.md` |

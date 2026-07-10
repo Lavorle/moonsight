@@ -115,6 +115,13 @@ pause narrative Advance. Full semantics: [`docs/play-input.md`](./docs/play-inpu
 
 ## Documentation
 
+**Site (Q2):** bilingual Fumadocs app at [`apps/docs-site`](./apps/docs-site) —
+Getting Started, MoonYuki subset, and play input (zh + en). From that directory:
+`npm install && npm run dev` → `http://localhost:3000` (default `/zh`).
+
+Repo markdown (engine source of truth until migration completes; Q2 core pages
+on the site are authoritative for listed topics):
+
 - [`docs/moon-yuki-subset.md`](./docs/moon-yuki-subset.md) — grammar subset
 - [`docs/ui-moonbit.md`](./docs/ui-moonbit.md) — MoonBit UI authoring (HUD + modals)
 - [`docs/host-commands.md`](./docs/host-commands.md) — host command table + intents

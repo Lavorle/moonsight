@@ -1,0 +1,361 @@
+---
+title: MoonYuki 子集
+description: Phase 1–4 已实现的行式视觉小说 DSL 子集
+---
+
+# MoonYuki 子集（Phase 1–4）
+
+> **权威说明：** 引擎行为在迁移完成前仍须与仓库文档一致；Q2 核心页面在所列主题上为权威说明。
+>
+> 自 `docs/moon-yuki-subset.md` 迁入并翻译。未迁入主题仍指向仓库 `docs/`。
+
+MoonYuki 是由 `script` 包编译为 IR / 字节码（`MSB1`）的**行式**视觉小说 DSL。
+**UI 不在 MoonYuki 中编写**（Phase 4：MoonBit `std_ui` / `ui_package` — 见仓库
+`docs/ui-moonbit.md`）。本文描述**已实现并由测试与 demo 覆盖的子集**。
+
+不在范围内（请勿臆造）：可视化编辑器、i18n、成就、Live2D / 3D、完整时间轴 /
+动画队列、阻塞式呈现 DSL、官方 YukimiScript 字节码兼容、将 `trans.dissolve`
+当作仅 MoonYuki 文档项（引擎 dissolve 属 Q2 host-commands 范畴）、历史记录
+作者语法、确认对话框、槽位截图、DOM 菜单、项目 `- screen` / Screen DSL。
+
+## 分阶段说明
+
+### Phase 2 — 呈现
+
+| 特性 | 说明 |
+|------|------|
+| 命名 Host 参数 | `kind=background`、`duration=0.5`、`opacity=1.0` 经 lower 保留（`#:name` 标记） |
+| `layer` 种类 | `background` / `character` / `effect` / `ui`；默认 **`character`** |
+| 属性补间 | `x` / `y` / `opacity` + `duration`；线性；发射后不管 |
+| `layer.set` | 改属性不重新绑定资源；id 不存在则报错 |
+| `flow.wait` | 真实墙钟计时；定时等待期间忽略 Advance |
+| `trans.fade` | 墙钟 `fade_remaining`；配合 `@flow.wait` 暂停脚本 |
+| 存档 | 格式 **v3**（补间、fade_remaining、wait_remaining）；v2 仍可加载 |
+
+字符串值命名参数在 resolve/lower 后支持裸关键字（`kind=background` 或
+`kind="background"`）。demo 中种类/枚举优先用裸形式。
+
+### Phase 3 — 系统 UI + D+B（yuki 中为历史路径）
+
+| 特性 | 说明 |
+|------|------|
+| 多槽 + prefs | 存档槽与 prefs 键；UI 外壳曾为 Screen DSL（Phase 4 移除） |
+| `@ui.show` / `@ui.hide` | 叙事桥接模态栈（**Phase 4 保留**） |
+| 命名负数 | `x=-200`、`y=-1.5` 可正确词法分析 |
+| 音频 | `@audio.bgm` 的 `volume=` / `fade=`；构建/加载时缺失音频硬失败 |
+
+### Phase 4 — MoonBit UI（非 MoonYuki）
+
+| 特性 | 说明 |
+|------|------|
+| UI 编写 | `std_ui` + 可选项目 `ui_package`（MoonBit）；见仓库 `docs/ui-moonbit.md` |
+| `- screen` | 解析时**拒绝**并给出迁移提示 → `docs/ui-moonbit.md` |
+| `@ui.show` / `@ui.hide` | 仍映射到 `UiRuntime` 的模态 show/hide |
+| `screens.json` | 不再是 dist 主产物 |
+
+## 文件形态
+
+一个编译单元（一个 `.yuki` 文件）顶层可按任意顺序包含：
+
+| 构造 | 形式 |
+|------|------|
+| 注释 | `# …`（整行；内容后的 `#` 不是行中注释） |
+| Extern | `- extern name [params…]` |
+| 宏 | `- macro name [params…]` 后接主体行，直到下一条顶层声明 |
+| 场景 | `- scene "name"` 或 `- scene "name" inherit "parent"` |
+| ~~Screen~~ | **已移除** — `- screen` 为编译错误 |
+
+场景体内包含：
+
+- 对白行：`speaker:text…`（speaker 为标识符；文本可含内联命令）
+- Host / 宏命令：`@cmd args…`
+- 空行（忽略）
+
+场景/宏体之外的顶层 `@` 命令是**解析错误**。
+
+### 多文件项目
+
+`moonsightc build` 收集项目目录下每个 `*.yuki`，各自独立编译，再**合并场景**
+为一个 IR 模块 / `game.msb`。
+
+- 合并后场景名必须唯一（重复 = 错误）。
+- 宏与文件局部 `extern` **不跨文件**。
+- 入口场景偏好：若存在名为 `"entrypoint"` 的场景则用之，否则取**入口文件**
+  图中的第一个场景；demo 使用 `entrypoint` → 在标题 **Start** 后跳转
+  （UI Capabilities 的 `start_game`）。
+
+可选项目 UI 通过 `moonsight.json` 的 `ui_package` 链接进 host wasm
+（不经 `.yuki`）。浏览器 Host 仍加载**入口源**为 `demo.yuki`；`game.msb` 是
+叙事发布产物。
+
+## 语法草图
+
+```
+unit        ::= item*
+item        ::= extern | macro | scene | comment | blank
+
+extern      ::= "- extern" name param*
+param       ::= name | name "=" literal
+
+macro       ::= "- macro" name param* body_line*
+body_line   ::= command | dialogue | blank   (until next top-level "- …")
+
+scene       ::= "- scene" string ("inherit" string)? scene_line*
+scene_line  ::= command | dialogue | blank | comment
+
+# "- screen" 为硬错误（Phase 4）；UI 在 MoonBit 包中
+
+command     ::= "@" dotted_name arg*
+dialogue    ::= speaker ":" text_parts
+text_parts  ::= (literal | inline)*
+inline      ::= "[" dotted_name arg* "]"
+
+arg         ::= positional | named | flag
+positional  ::= literal | ident
+named       ::= name "=" (literal | ident)   # 字面量可为负: x=-200
+flag        ::= "--" name
+
+literal     ::= int | float | bool | string
+string      ::= '"' … '"'
+bool        ::= true | false
+dotted_name ::= ident ("." ident)*
+```
+
+### 参数形式
+
+```text
+@flow.wait 1.0                              # 位置数字
+@var.set "flag" true                        # 位置字符串 + 布尔
+@layer.show "y" "char_y" 10                 # id、资源、可选 z（遗留）
+@layer.show "bg" "bg_room" kind=background  # 命名 kind（Phase 2）
+@layer.set "y" x=200 opacity=1.0 duration=0.5
+@foo bar=1 --force                          # 命名 + 标志
+@flow.choice "Talk" "Leave" --result act
+@flow.choice result="c" "Yes" "No"
+```
+
+命名参数 lower 为 IR 对：`Str("#:<name>")` 再接值。标志保留为无 `#:` 前缀的
+单字符串 token。脚本不得把 `#:…` 当作普通字符串字面量（保留标记前缀）。
+
+值类型：
+
+| 种类 | 示例 |
+|------|------|
+| Int | `0`、`10`、`-1` |
+| Float | `1.0`、`0.5` |
+| Bool | `true`、`false` |
+| String | `"intro"`、`"bg_room"` |
+| Ident | `act`、`time`、`background`（宏参数、选项结果、裸关键字） |
+
+## 对白
+
+```text
+- scene "intro"
+y:Hello.
+yuki:Welcome to MoonSight.
+```
+
+Lower 将对白展开为 Host 序列：
+
+1. `text.begin [speaker]`
+2. 每个文本块的 `text.type`（内联命令交错为 Host 操作）
+3. `text.end`
+4. `Yield`（等待 Advance）
+
+### 内联命令
+
+```text
+y:Hello [wait --time 1]
+```
+
+解析为 `Literal("Hello ")` + `InlineCommand(wait, …)`。命令名必须解析为已知
+`extern`（文件或内建）。demo 不依赖丰富的内联标记。
+
+## Extern 与宏
+
+```text
+- extern wait time=1
+- macro pause time=1
+@wait time
+
+- scene "s"
+@pause 2
+```
+
+- **extern** 声明供 resolve 使用的 Host 命令签名（运行时处理在
+  `std_commands` / `Director`）。
+- **macro** 在 resolve 前展开为主体语句。
+- 标准 Host 名作为内建**预注册**（`script.builtin_externs`）；脚本无需为
+  `@layer.show`、`@layer.set`、`@flow.jump` 等写 `- extern`。
+
+## 场景与继承
+
+```text
+- scene "parent"
+@text.begin
+
+- scene "child" inherit "parent"
+@text.end
+```
+
+- `inherit "parent"` 记录父场景名；父场景须在本单元内存在（缺失则 resolve 错误）。
+- Resolve 校验链接；**运行时对舞台状态的继承合并很弱** — 将 parent 主要视为
+  结构/写作提示，除非后续阶段扩展。
+
+推荐入口：
+
+```text
+- scene "entrypoint"
+@flow.jump "intro"
+```
+
+## 流程控制（脚本层）
+
+| 特性 | 状态 |
+|------|------|
+| `@flow.jump "scene"` | 已实现（host → `JumpScene`） |
+| `@flow.yield` | 已实现 |
+| `@flow.wait [time]` | 已实现 — `time > 0` 时为真实墙钟；裸写等待 Advance |
+| `@flow.choice …` | 已实现 → IR `Choose` |
+| 条件跳转 / JumpIf | `@flow.jump_if` / `@flow.jump_if_not` → IR `JumpIf`/`JumpIfNot` |
+| `@menu` 语法糖 | 未实现；请用 `@flow.choice` |
+
+### 选项
+
+```text
+@flow.choice "Talk" "Leave" --result act
+@var.set "demo_choice" act
+@flow.jump_if act 0 "talk"
+@flow.jump "leave"
+```
+
+- 位置字符串/标识符为选项标签（选择时 0 基索引）。
+- 结果变量：`--result name`、`result=name` 或 `result="name"`。默认 `"_"`。
+- 选择后 VM 将该变量存为 **Int** 选项索引并恢复。
+- 用 `@flow.jump_if <var> <value> "scene"`（相等）或
+  `@flow.jump_if <cond> "scene"`（真值）分支。`_not` 反转条件。
+
+### 等待与呈现同步
+
+```text
+@trans.fade 1.0 0.0 0.5
+@flow.wait 0.5
+@layer.set "y" x=200 opacity=1.0 duration=0.5
+@flow.wait 0.5
+```
+
+图层补间与遮罩淡入淡出**不**阻塞 VM。若对白须等效果结束再开始，请用匹配
+时长的 `@flow.wait`。定时等待期间忽略 Advance/Select/SkipTyping。
+
+等待门控与跳过交互另见 [游玩输入](./play-input)。
+
+## 变量
+
+```text
+@var.set "met_y" true
+@var.set "demo_choice" act
+```
+
+- 仅有 `@var.set name value`（无 `@var.get` 命令）。
+- 值为运行时 `Value`（int/float/bool/str/none）；名为字符串。
+
+## 图层（作者摘要）
+
+```text
+@layer.show "bg" "bg_room" kind=background
+@layer.show "y" "char_y" kind=character z=10 x=-200 y=0 opacity=0
+@layer.show "y" "char_y" 10 -200 0 0 kind=character   # 位置参数仍可用
+@layer.set "y" x=200 opacity=1.0 duration=0.5
+@layer.move "y" 400 0 duration=0.3
+@layer.hide "y" duration=0.3
+```
+
+命名负数可用：`x=-200`、`y=-1.5`、`opacity=0`。
+
+完整参数表、默认值与补间规则见仓库 `docs/host-commands.md`。
+
+## UI 桥接（作者摘要）
+
+**不要**在 `.yuki` 中写 `- screen`（编译错误）。标题 / 菜单 / HUD 在 MoonBit
+（`std_ui` + 可选 `ui_package`）— 见仓库 `docs/ui-moonbit.md`。
+
+叙事中打开/关闭模态：
+
+```text
+@ui.show "game_menu"
+@ui.show "save_load" mode=load
+@ui.hide
+```
+
+## 注释与空白
+
+```text
+# 整行注释
+- scene "s"
+y:Line
+```
+
+空行被忽略。每行一条语句（行式词法器）。
+
+## 编译管线
+
+```
+.yuki → Lexer → Parser → AST
+      → Macro expand
+      → Resolve（externs、场景、命令）
+      → Lower → IR（Host / Yield / Choose / …；命名参数为 #: 标记）
+      → 字节码编码（MSB1，魔数 "MSB1"）
+```
+
+UI 树**不**由此管线产生；在 Host 初始化时由 `std_ui` / 链接的 `ui_package`
+注册。
+
+CLI：
+
+```bash
+moon run cmd/moonsightc --target native -- check path/to/file_or_dir
+moon run cmd/moonsightc --target native -- build project_dir -o dist/out
+```
+
+若脚本中使用的字面图像/音频资源 id 在项目资产/清单中缺失，`build` 失败。
+失败构建不会晋升半写的 `out_dir`。可选 `ui_package` 会重建 host wasm，并在
+之后恢复 project_ui 桩。
+
+诊断以编译/检查错误形式出现（未知命令、重复场景、解析失败、拒绝的
+`- screen`）。运行时 Host 错误软停 VM（`HostResult::Error`）。
+
+## 最小完整示例
+
+```text
+- scene "entrypoint"
+@flow.jump "intro"
+
+- scene "intro"
+@layer.show "bg" "bg_room" kind=background
+@layer.show "y" "char_y" kind=character z=10 x=-200 y=0 opacity=0
+@layer.set "y" x=200 opacity=1.0 duration=0.5
+@audio.bgm "bgm_soft" volume=0.9 fade=0.5
+@trans.fade 1.0 0.0 0.5
+@flow.wait 0.5
+y:Welcome.
+@sys.save_hint
+@flow.choice "Talk" "Leave" --result act
+@var.set "choice" act
+@flow.jump "end"
+
+- scene "end"
+@layer.hide "y" duration=0.2
+@flow.wait 0.2
+y:Thanks for playing.
+@flow.yield
+```
+
+冷启动使用标准 `title` 模态（Start → `start_game` → 入口）。游玩中按 **Esc**
+打开 `game_menu`。
+
+## 另见
+
+- [游玩输入](./play-input) — 意图码、长按跳过、等待门控
+- [快速开始](./getting-started) — 构建与运行
+- 仓库：`docs/ui-moonbit.md`、`docs/host-commands.md`、`docs/project-layout.md`、
+  `docs/draw-list-pack.md`
