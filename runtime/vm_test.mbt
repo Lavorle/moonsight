@@ -1,0 +1,64 @@
+///|
+test "vm runs dialogue then yields; advance continues" {
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|y:There
+    #|
+  let ir = @script.compile_to_ir(src, file="t.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  // First tick without intent shows first line and hangs on Yield.
+  eng.tick(None_)
+  guard eng.stage.text is Some(t) else { fail("text") }
+  assert_eq(t.full_text, "Hi")
+  // First Advance completes typing if incomplete; second advances to next yield.
+  eng.tick(Advance)
+  eng.tick(Advance)
+  guard eng.stage.text is Some(t2) else { fail("second") }
+  assert_eq(t2.full_text, "There")
+}
+
+///|
+test "vm from_ir starts at entry scene and halts after return" {
+  let src =
+    #|- scene "s"
+    #|@var.set "x" 1
+    #|
+  let ir = @script.compile_to_ir(src, file="halt.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.tick(None_)
+  assert_eq(eng.stage.scene, "s")
+  assert_true(eng.stage.get_var("x") == Int(1))
+  assert_true(eng.vm.wait == Halted)
+}
+
+///|
+test "advance completes incomplete text before resuming" {
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|y:Next
+    #|
+  let ir = @script.compile_to_ir(src, file="type.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.tick(None_)
+  // Force incomplete typewriter state as if gradual reveal were mid-way.
+  match eng.stage.text {
+    Some(t) =>
+      eng.stage.text = Some({
+        speaker: t.speaker,
+        full_text: t.full_text,
+        visible_chars: 0,
+        complete: false,
+      })
+    None => fail("expected text")
+  }
+  eng.tick(Advance)
+  guard eng.stage.text is Some(t1) else { fail("after complete") }
+  assert_true(t1.complete)
+  assert_eq(t1.full_text, "Hi")
+  assert_true(eng.vm.wait == Yield)
+  eng.tick(Advance)
+  guard eng.stage.text is Some(t2) else { fail("next line") }
+  assert_eq(t2.full_text, "Next")
+}

@@ -3,9 +3,14 @@ package "moonsight/moonsight/runtime"
 
 import {
   "moonbitlang/core/debug",
+  "moonsight/moonsight/script",
 }
 
 // Values
+pub fn dispatch_builtin(String, Stage, Array[Value]) -> HostResult
+
+pub fn dispatch_builtin_kind(BuiltinHost, Stage, Array[Value]) -> HostResult
+
 pub let logical_height : Int
 
 pub let logical_width : Int
@@ -15,10 +20,51 @@ pub fn runtime_package_name() -> String
 // Errors
 
 // Types and methods
+pub(all) enum BuiltinHost {
+  TextBegin
+  TextType
+  TextEnd
+  LayerShow
+  LayerHide
+  LayerMove
+  VarSet
+} derive(Eq, @debug.Debug)
+
 pub(all) struct ChoiceState {
   options : Array[String]
   selected : Int?
 } derive(@debug.Debug)
+
+pub(all) struct Director {
+  handlers : Map[String, HostHandler]
+} derive(@debug.Debug)
+pub fn Director::call(Self, String, Stage, Array[Value]) -> HostResult
+pub fn Director::new() -> Self
+pub fn Director::register(Self, String, HostHandler) -> Unit
+pub fn Director::with_builtins() -> Self
+
+pub(all) struct Engine {
+  mut vm : Vm
+  director : Director
+  mut stage : Stage
+} derive(@debug.Debug)
+pub fn Engine::from_ir(@script.IrModule, entry~ : String) -> Self
+pub fn Engine::tick(Self, Intent) -> Unit
+
+pub(all) struct HostCall {
+  name : String
+  args : Array[Value]
+} derive(Eq, @debug.Debug)
+
+pub(all) enum HostHandler {
+  Builtin(BuiltinHost)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum HostResult {
+  Ok
+  Yield
+  Error(String)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum Intent {
   None_
@@ -84,6 +130,27 @@ pub(all) enum Value {
   None_
 } derive(Eq, @debug.Debug)
 pub fn Value::truthy(Self) -> Bool
+
+pub(all) struct Vm {
+  ir : @script.IrModule
+  mut ops : Array[@script.IrOp]
+  mut ip : Int
+  mut scene : String
+  mut stack : Array[Value]
+  mut halted : Bool
+  mut wait : WaitKind
+  mut choose_result_var : String?
+} derive(@debug.Debug)
+pub fn Vm::from_module(@script.IrModule, entry~ : String) -> Self
+pub fn Vm::jump_scene(Self, String, Stage) -> Unit
+pub fn Vm::run_until_wait(Self, Director, Stage, budget? : Int) -> Unit
+
+pub(all) enum WaitKind {
+  Running
+  Yield
+  Choose
+  Halted
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 

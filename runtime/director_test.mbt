@@ -1,0 +1,43 @@
+///|
+test "director text.begin type end mutates stage" {
+  let stage = @runtime.Stage::new()
+  let dir = @runtime.Director::with_builtins()
+  assert_true(dir.call("text.begin", stage, [Str("y")]) == Ok)
+  assert_true(dir.call("text.type", stage, [Str("Hi")]) == Ok)
+  assert_true(dir.call("text.end", stage, []) == Ok)
+  guard stage.text is Some(t) else { fail("text") }
+  assert_eq(t.full_text, "Hi")
+  guard t.speaker is Some("y") else { fail("speaker") }
+  assert_true(t.complete)
+  assert_eq(t.visible_chars, t.full_text.length())
+}
+
+///|
+test "director layer.show and layer.hide" {
+  let stage = @runtime.Stage::new()
+  let dir = @runtime.Director::with_builtins()
+  assert_true(dir.call("layer.show", stage, [Str("bg"), Str("bg_room")]) == Ok)
+  assert_eq(stage.layers.length(), 1)
+  assert_eq(stage.layers[0].id, "bg")
+  assert_eq(stage.layers[0].resource, "bg_room")
+  assert_true(dir.call("layer.hide", stage, [Str("bg")]) == Ok)
+  assert_eq(stage.layers.length(), 0)
+}
+
+///|
+test "director var.set stores values" {
+  let stage = @runtime.Stage::new()
+  let dir = @runtime.Director::with_builtins()
+  assert_true(dir.call("var.set", stage, [Str("flag"), Bool(true)]) == Ok)
+  assert_true(stage.get_var("flag") == Bool(true))
+}
+
+///|
+test "director unknown host returns Error" {
+  let stage = @runtime.Stage::new()
+  let dir = @runtime.Director::with_builtins()
+  guard dir.call("no.such", stage, []) is Error(msg) else {
+    fail("expected Error")
+  }
+  assert_true(msg.contains("no.such"))
+}
