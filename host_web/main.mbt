@@ -314,7 +314,7 @@ pub fn load_json(json : String) -> Int {
     None => 1
     Some(eng) =>
       try {
-        // Engine::load restores save state and clears screen stack → Playing.
+        // Engine::load restores save state and clears the modal stack → Playing.
         eng.load(json)
         0
       } catch {

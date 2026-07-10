@@ -1,4 +1,4 @@
-# Draw-list pack format (Phase 1–3)
+# Draw-list pack format (Phase 1–4)
 
 MoonBit owns the CPU draw list (`DrawList`) and packs it into a dense
 `FixedArray[Float]` for the browser host. **JS owns WebGPU** via
@@ -8,7 +8,8 @@ MoonBit owns the CPU draw list (`DrawList`) and packs it into a dense
 
 | Concern | Owner |
 |--------|--------|
-| Stage / Engine / intents / screens | MoonBit (`runtime`) |
+| Stage / Engine / intents / UiRuntime | MoonBit (`runtime`) |
+| HUD + modals (`std_ui` / project UI) | MoonBit (linked into `host_web` wasm) |
 | `DrawList`, glyph atlas UV bookkeeping | MoonBit (`render`) |
 | Texture upload, pipelines, submit | JS (`MoonSightGpu`) |
 | Save JSON storage keys | JS (`localStorage` `moonsight/save/{slot}`) |
@@ -45,8 +46,8 @@ Stride constants: `sprite_stride = 7`, `glyph_stride = 12` (`render/gpu.mbt`).
 Coordinates are logical canvas pixels (origin top-left, +y down), default
 1920×1080.
 
-Screen widgets (buttons, dim veil placeholders) use the same sprite records
-with resources such as `ui.button`, `ui.button_focus`, `ui.menu_dim`.
+HUD and modal widgets (buttons, dim veil placeholders) use the same sprite
+records with resources such as `ui.button`, `ui.button_focus`, `ui.menu_dim`.
 
 ### Glyph record (stride 12)
 
@@ -113,18 +114,21 @@ Passed as `Int` into `export_frame(intent_code, dt_ms)`:
 
 | export | meaning |
 |--------|---------|
-| `init_demo()` | Boot demo IR + `standard_registry` director |
+| `init_demo()` | Boot demo IR + `standard_registry` director + `std_ui` / project UI |
 | `load_source(src)` | Compile MoonYuki source and replace engine |
-| `load_screens_json(json)` | Install `screens.json` (`ScreenDef` array + `save_slots`) |
-| `boot_title()` | Cold start Title + push `title` when defined |
+| `load_msb(raw)` | Load `MSB1` bytecode and replace engine |
+| `boot_title()` | Cold start Title + show `title` modal (`std_ui`) |
 | `export_frame(intent, dt_ms)` | Tick + pack; returns pack length |
 | `frame_len()` | Last pack length |
 | `frame_at(i)` | Pack float at index |
 | `resource_count()` / `resource_name(id)` | Resource table |
 | `save_json(slot)` / `load_json(json)` | Engine save blob (storage is JS) |
 | `prefs_json()` / `set_prefs_json(json)` | Prefs bridge |
-| `save_slot_count()` / `get_slot_json` / `set_slot_json` | Multi-slot hydrate |
+| `save_slot_count()` / `set_save_slots` / `get_slot_json` / `set_slot_json` | Multi-slot hydrate |
 | `pending_glyph_*` / `mark_glyph_ready` | Atlas rasterization bridge |
+
+UI trees are linked into the host wasm (`std_ui` + optional project
+`ui_package`). There is **no** `screens.json` / `load_screens_json` path.
 
 ## JS render loop (sketch)
 
@@ -146,12 +150,12 @@ MoonSightGpu.drawVeil(veil);
 MoonSightGpu.endFrame();
 ```
 
-## Render order (Phase 3)
+## Render order (Phase 4)
 
 Bottom → top (conceptual):
 
 1. Narrative layers (kind + z) — retained as backdrop under menus  
-2. Optional menu dim (`ui.menu_dim`)  
-3. Active screen widgets + focus highlight  
-4. Narrative dialogue / choices (Playing, no modal; hidden on Title)  
+2. Optional menu dim (`ui.menu_dim`) from modal stack paint  
+3. HUD + active modal widgets (`UiDrawOp` from `UiRuntime`) + focus highlight  
+4. Dialogue / choices paint via HUD tree (not a separate hard-coded path)  
 5. `trans.fade` fullscreen veil (`veil_opacity`)  

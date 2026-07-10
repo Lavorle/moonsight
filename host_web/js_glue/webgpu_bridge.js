@@ -379,7 +379,7 @@ export async function init(canvas) {
   makePlaceholderSolid("ui.dialogue_box", [20, 24, 40, 200]);
   makePlaceholderSolid("ui.nameplate", [40, 48, 80, 220]);
   makePlaceholderSolid("ui.choice_row", [30, 60, 90, 180]);
-  // Screen DSL / system menu
+  // System UI (HUD / modal) placeholders
   makePlaceholderSolid("ui.menu_dim", [0, 0, 0, 140]);
   makePlaceholderSolid("ui.button", [36, 48, 78, 210]);
   makePlaceholderSolid("ui.button_focus", [70, 110, 180, 235]);
