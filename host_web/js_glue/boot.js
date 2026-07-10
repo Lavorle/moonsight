@@ -455,7 +455,8 @@ async function applyManifest(manifest) {
         await Gpu.uploadPngUrl(id, path);
         console.info("texture", id, "←", path);
       } catch (e) {
-        console.warn("texture failed", id, path, e);
+        console.error("texture failed", id, path, e);
+        throw new Error(`MoonSight: failed to load texture '${id}' from '${path}': ${e}`);
       }
     }
   }
