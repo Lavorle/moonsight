@@ -21,23 +21,33 @@ pub(all) enum AudioEvent {
   PlayBgm(resource~ : String, looped~ : Bool, volume~ : Double)
   StopBgm
   PlaySe(resource~ : String, volume~ : Double)
+  SetBgmVolume(volume~ : Double)
 } derive(Eq, @debug.Debug)
 
 pub(all) struct Mixer {
   mut bgm : String?
   mut bgm_loop : Bool
   mut bgm_volume : Double
+  mut bgm_fade_to : Double?
+  mut bgm_fade_remaining : Double
+  mut bgm_fade_stop : Bool
   mut se : String?
   mut se_volume : Double
   mut se_seq : Int
+  mut pref_master : Double
+  mut pref_bgm : Double
+  mut pref_se : Double
   mut backend : &AudioBackend
 }
-pub fn Mixer::apply_logic(Self, String?, String?) -> Unit
+pub fn Mixer::apply_logic(Self, String?, String?, volume? : Double) -> Unit
+pub fn Mixer::fade_bgm_to(Self, Double, Double, stop? : Bool) -> Unit
 pub fn Mixer::new() -> Self
 pub fn Mixer::play_bgm(Self, String, looped? : Bool, volume? : Double) -> Unit
 pub fn Mixer::play_se(Self, String, volume? : Double) -> Unit
 pub fn Mixer::set_backend(Self, &AudioBackend) -> Unit
+pub fn Mixer::set_pref_gains(Self, master~ : Double, bgm~ : Double, se~ : Double) -> Unit
 pub fn Mixer::stop_bgm(Self) -> Unit
+pub fn Mixer::tick(Self, Double) -> Unit
 pub fn Mixer::with_backend(&AudioBackend) -> Self
 
 pub(all) struct NullBackend {
@@ -63,5 +73,6 @@ pub(open) trait AudioBackend {
   fn play_bgm(Self, String, Bool, Double) -> Unit
   fn stop_bgm(Self) -> Unit
   fn play_se(Self, String, Double) -> Unit
+  fn set_bgm_volume(Self, Double) -> Unit
 }
 

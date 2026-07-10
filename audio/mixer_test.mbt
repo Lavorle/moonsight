@@ -145,3 +145,33 @@ test "bgm fade completion does not double SetBgmVolume" {
   guard q.get(0) is Some(SetBgmVolume(volume~)) else { fail("SetBgmVolume") }
   assert_true(volume >= 0.99)
 }
+
+///|
+test "output volume multiplies master and channel prefs" {
+  let q = QueueBackend::new()
+  let m = Mixer::with_backend((q : &AudioBackend))
+  m.set_pref_gains(master=0.5, bgm=0.5, se=1.0)
+  m.play_bgm("bgm_soft", volume=1.0)
+  guard q.get(0) is Some(PlayBgm(volume~, ..)) else { fail("PlayBgm") }
+  // 1.0 * 0.5 * 0.5 = 0.25
+  assert_true(volume > 0.24 && volume < 0.26)
+  m.play_se("click", volume=1.0)
+  guard q.get(1) is Some(PlaySe(volume=se_vol, ..)) else { fail("PlaySe") }
+  // 1.0 * 0.5 * 1.0 = 0.5
+  assert_true(se_vol > 0.49 && se_vol < 0.51)
+}
+
+///|
+test "apply_prefs re-emits SetBgmVolume when bgm playing" {
+  let q = QueueBackend::new()
+  let m = Mixer::with_backend((q : &AudioBackend))
+  m.play_bgm("bgm_soft", volume=1.0)
+  let _ = q.take()
+  m.set_pref_gains(master=0.5, bgm=1.0, se=1.0)
+  // Expect a volume event reflecting 0.5
+  assert_true(q.len() >= 1)
+  guard q.get(q.len() - 1) is Some(SetBgmVolume(volume~)) else {
+    fail("SetBgmVolume")
+  }
+  assert_true(volume > 0.49 && volume < 0.51)
+}

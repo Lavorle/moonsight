@@ -5,8 +5,8 @@
 /// (volume, loop, SE sequence, linear BGM fade) and notifies an `AudioBackend`
 /// on changes.
 ///
-/// Output volume = logical × prefs.master × prefs.channel (prefs multiply by
-/// 1.0 until the prefs system lands). BGM and SE use separate channel gains.
+/// Output volume = logical × prefs.master × prefs.channel, clamped to 0..1.
+/// BGM and SE use separate channel gains.
 
 ///|
 pub(all) struct Mixer {
@@ -23,21 +23,36 @@ pub(all) struct Mixer {
   mut se_volume : Double
   /// Increments on every `play_se` so hosts can re-trigger the same id.
   mut se_seq : Int
+  /// Preference master gain (default 1.0).
+  mut pref_master : Double
+  /// Preference BGM channel gain (default 1.0).
+  mut pref_bgm : Double
+  /// Preference SE channel gain (default 1.0).
+  mut pref_se : Double
   mut backend : &AudioBackend
 }
 
 ///|
-/// Logical BGM volume × preference gains (master/bgm default to 1.0).
-fn output_bgm_volume(logical : Double) -> Double {
-  // Prefs (master × bgm) land later; keep identity multipliers until then.
-  logical * 1.0 * 1.0
+fn clamp01(v : Double) -> Double {
+  if v < 0.0 {
+    0.0
+  } else if v > 1.0 {
+    1.0
+  } else {
+    v
+  }
 }
 
 ///|
-/// Logical SE volume × preference gains (master/se default to 1.0).
-fn output_se_volume(logical : Double) -> Double {
-  // Prefs (master × se) land later; keep identity multipliers until then.
-  logical * 1.0 * 1.0
+/// Logical BGM volume × preference gains (master × bgm), clamped to 0..1.
+fn Mixer::output_bgm_volume(self : Mixer, logical : Double) -> Double {
+  clamp01(logical * self.pref_master * self.pref_bgm)
+}
+
+///|
+/// Logical SE volume × preference gains (master × se), clamped to 0..1.
+fn Mixer::output_se_volume(self : Mixer, logical : Double) -> Double {
+  clamp01(logical * self.pref_master * self.pref_se)
 }
 
 ///|
@@ -54,6 +69,9 @@ pub fn Mixer::new() -> Mixer {
     se: None,
     se_volume: 1.0,
     se_seq: 0,
+    pref_master: 1.0,
+    pref_bgm: 1.0,
+    pref_se: 1.0,
     backend: b,
   }
 }
@@ -71,6 +89,9 @@ pub fn Mixer::with_backend(backend : &AudioBackend) -> Mixer {
     se: None,
     se_volume: 1.0,
     se_seq: 0,
+    pref_master: 1.0,
+    pref_bgm: 1.0,
+    pref_se: 1.0,
     backend,
   }
 }
@@ -104,7 +125,7 @@ pub fn Mixer::play_bgm(
   self.bgm = Some(resource)
   self.bgm_loop = looped
   self.bgm_volume = volume
-  self.backend.play_bgm(resource, looped, output_bgm_volume(volume))
+  self.backend.play_bgm(resource, looped, self.output_bgm_volume(volume))
 }
 
 ///|
@@ -134,7 +155,7 @@ pub fn Mixer::fade_bgm_to(
   if duration <= 0.0 {
     self.bgm_volume = target
     self.clear_fade()
-    self.backend.set_bgm_volume(output_bgm_volume(target))
+    self.backend.set_bgm_volume(self.output_bgm_volume(target))
     if stop {
       self.stop_bgm()
     }
@@ -164,7 +185,7 @@ pub fn Mixer::tick(self : Mixer, dt : Double) -> Unit {
     self.bgm_volume = target
     let do_stop = self.bgm_fade_stop
     self.clear_fade()
-    self.backend.set_bgm_volume(output_bgm_volume(target))
+    self.backend.set_bgm_volume(self.output_bgm_volume(target))
     if do_stop {
       self.stop_bgm()
     }
@@ -174,7 +195,7 @@ pub fn Mixer::tick(self : Mixer, dt : Double) -> Unit {
   let frac = step_t / rem
   self.bgm_volume = cur + (target - cur) * frac
   self.bgm_fade_remaining = rem - step_t
-  self.backend.set_bgm_volume(output_bgm_volume(self.bgm_volume))
+  self.backend.set_bgm_volume(self.output_bgm_volume(self.bgm_volume))
   if self.bgm_fade_remaining <= 0.0 {
     // Last step already emitted the target volume; only stop if requested.
     self.bgm_volume = target
@@ -196,7 +217,7 @@ pub fn Mixer::play_se(
   self.se = Some(resource)
   self.se_volume = volume
   self.se_seq = self.se_seq + 1
-  self.backend.play_se(resource, output_se_volume(volume))
+  self.backend.play_se(resource, self.output_se_volume(volume))
 }
 
 ///|
@@ -220,13 +241,32 @@ pub fn Mixer::apply_logic(
           if cur != id {
             self.play_bgm(id, looped=true, volume=volume)
           } else {
-            self.backend.set_bgm_volume(output_bgm_volume(volume))
+            self.backend.set_bgm_volume(self.output_bgm_volume(volume))
           }
         None => self.play_bgm(id, looped=true, volume=volume)
       }
     None => self.stop_bgm()
   }
   self.se = se
+}
+
+///|
+/// Update preference master/channel gains (clamped 0..1).
+///
+/// When BGM is playing, re-emits the current logical volume through the new gains.
+pub fn Mixer::set_pref_gains(
+  self : Mixer,
+  master~ : Double,
+  bgm~ : Double,
+  se~ : Double,
+) -> Unit {
+  self.pref_master = clamp01(master)
+  self.pref_bgm = clamp01(bgm)
+  self.pref_se = clamp01(se)
+  // If BGM playing, push updated output volume to backend.
+  if self.bgm is Some(_) {
+    self.backend.set_bgm_volume(self.output_bgm_volume(self.bgm_volume))
+  }
 }
 
 // ---------------------------------------------------------------------------
