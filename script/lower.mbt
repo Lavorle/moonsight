@@ -204,19 +204,17 @@ fn lower_dialogue(
 fn lower_args(args : Array[Arg]) -> Array[IrValue] {
   let out : Array[IrValue] = []
   for a in args {
-    out.push(lower_arg(a))
+    match a {
+      Positional(e) => out.push(lower_expr(e))
+      Named(name~, e) => {
+        out.push(Str("#:\{name}"))
+        out.push(lower_expr(e))
+      }
+      // Flag presence as named string so hosts can inspect which flag was set.
+      Flag(name) => out.push(Str(name))
+    }
   }
   out
-}
-
-///|
-fn lower_arg(arg : Arg) -> IrValue {
-  match arg {
-    Positional(e) => lower_expr(e)
-    Named(e, ..) => lower_expr(e)
-    // Flag presence as named string so hosts can inspect which flag was set.
-    Flag(name) => Str(name)
-  }
 }
 
 ///|

@@ -109,3 +109,23 @@ test "lower dialogue with inline command" {
   guard ops[4] is Host(name="text.end", ..) else { fail("end") }
   guard ops[5] is Yield else { fail("yield") }
 }
+
+///|
+test "lower preserves named host args as marker pairs" {
+  let src =
+    #|- scene "s"
+    #|@layer.show "bg" "bg_room" kind=background duration=0.4
+    #|
+  let ir = @script.compile_to_ir(src, file="named.yuki")
+  let ops = ir.scenes["s"].ops
+  guard ops[0] is Host(name="layer.show", args~) else { fail("layer.show") }
+  // id, resource, #:kind, background, #:duration, 0.4
+  assert_true(args.length() >= 6)
+  guard args[0] is Str("bg") else { fail("id") }
+  guard args[1] is Str("bg_room") else { fail("res") }
+  guard args[2] is Str("#:kind") else { fail("kind marker") }
+  // bare `background` is Ident → Var (not Str); hosts may accept either later
+  guard args[3] is Var("background") else { fail("kind val") }
+  guard args[4] is Str("#:duration") else { fail("dur marker") }
+  guard args[5] is Float(0.4) else { fail("dur val") }
+}
