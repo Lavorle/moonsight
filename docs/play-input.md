@@ -73,8 +73,17 @@ While `wait_remaining > 0`:
 - Bare `@flow.wait` / `@flow.yield` leave `wait_remaining = 0` and resume on
   Advance (or skip burst).
 
-Layer tweens and `trans.fade` do **not** gate Advance by themselves — scripts
-must pair them with `@flow.wait` when presentation must block.
+Layer tweens, `trans.fade`, and `trans.dissolve` do **not** gate Advance by
+themselves — scripts must pair them with `@flow.wait` when presentation must
+block.
+
+### Presentation clocks vs wait / skip
+
+Dissolve and fade clocks **advance during** timed `@flow.wait` (and while menus
+are open — same presentation tick). Hold-skip and Advance remain blocked by
+`wait_remaining > 0` and **do not snap** mid-fade or mid-dissolve; after the
+wait ends, any remaining presentation time continues on the wall clock until
+complete.
 
 ## Confirm behavior
 

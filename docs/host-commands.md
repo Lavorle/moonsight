@@ -1,4 +1,4 @@
-# Standard host commands (Phase 1–4 + Q1)
+# Standard host commands (Phase 1–4 + Q1 / Q2 presentation)
 
 Host commands are invoked from MoonYuki as `@name …` (or as IR `Host` ops after
 dialogue lower). Runtime dispatch lives in `std_commands` via
@@ -72,9 +72,14 @@ Ease is **linear**. New tweens replace same-layer same-property tweens
 
 Draw order (bottom → top): `background` → `character` → `effect` → `ui`, then
 within each kind by `z` ascending (stable on ties). Fullscreen overlay veil
-from `trans.fade` is separate from the layer list. HUD and modal widgets paint
-via `UiDrawOp` above layers (with optional menu dim); see
+from `trans.fade` / `trans.dissolve` is separate from the layer list. HUD and
+modal widgets paint via `UiDrawOp` above layers (with optional menu dim); see
 [`ui-moonbit.md`](./ui-moonbit.md).
+
+### layer `scale=`
+
+`@layer.show` / `@layer.set` accept `scale=` (default 1.0). Linear tween via
+`duration=`. Scale is about the layer's top-left `(x,y)`. Save format v4.
 
 ### `layer.show id resource [z] [x] [y] [opacity]` + named
 
@@ -83,19 +88,20 @@ via `UiDrawOp` above layers (with optional menu dim); see
 @layer.show "y" "char_y" kind=character z=10 x=-200 y=0 opacity=0
 @layer.show "y" "char_y" 10 -200 0 0 kind=character   # negatives via positionals also ok
 @layer.show "fx" "spark" kind=effect duration=0.4
+@layer.show "y" "char_y" kind=character scale=0.85
 ```
 
 | | |
 |--|--|
 | **Args** | `id: Str`, `resource: Str`, optional positional `z`, `x`, `y`, `opacity` |
-| **Named** | `kind`, `z`, `x`, `y`, `opacity`, `duration` (named overrides positional when both present) |
-| **Defaults** | `kind=character`, `z=0`, `x=0`, `y=0`, `opacity=1.0`, `duration=0` |
+| **Named** | `kind`, `z`, `x`, `y`, `opacity`, `scale`, `duration` (named overrides positional when both present) |
+| **Defaults** | `kind=character`, `z=0`, `x=0`, `y=0`, `opacity=1.0`, `scale=1.0`, `duration=0` |
 | **kind values** | `background` \| `character` \| `effect` \| `ui` (case-insensitive; also accepts `overlay`) |
 | **Effect** | Show/replace layer by id |
-| **New layer + duration>0** | `kind` / `resource` / `z` / `x` / `y` applied immediately; **opacity starts at 0** and linear-tweens to the target (default `1.0`) |
+| **New layer + duration>0** | `kind` / `resource` / `z` / `x` / `y` applied immediately; **opacity starts at 0** and linear-tweens to the target (default `1.0`); **scale** snaps unless specified with `duration>0` then tweens from current (new layer current = `1.0`) |
 | **New layer + duration=0** | All properties snap to targets |
-| **Existing layer** | `kind` / `resource` / `z` immediate; only specified `x` / `y` / `opacity` tween or snap |
-| **Notes** | Single-arg `@layer.show "id"` uses empty resource, default kind `character`. **Backgrounds must set `kind=background`** (default is character). Re-show without `kind` keeps character default. |
+| **Existing layer** | `kind` / `resource` / `z` immediate; only specified `x` / `y` / `opacity` / `scale` tween or snap |
+| **Notes** | Single-arg `@layer.show "id"` uses empty resource, default kind `character`. **Backgrounds must set `kind=background`** (default is character). Re-show without `kind` keeps character default. Scale origin is the layer top-left `(x,y)` (no rotate/anchor). |
 | **Errors** | missing id/resource → `layer.show: expected id Str and resource Str`; bad kind → `layer.show: invalid kind` |
 | **Result** | `Ok` |
 
@@ -105,11 +111,13 @@ via `UiDrawOp` above layers (with optional menu dim); see
 @layer.set "y" x=200 opacity=1.0 duration=0.5
 @layer.set "y" y=0 duration=0.2
 @layer.set "y" x=-100 duration=0.3
+@layer.set "y" scale=0.85 duration=0.3
+@layer.set "y" scale=1.0 duration=0.3
 ```
 
 | | |
 |--|--|
-| **Args** | `id: Str` (positional); named `x`, `y`, `opacity`, optional `duration` |
+| **Args** | `id: Str` (positional); named `x`, `y`, `opacity`, `scale`, optional `duration` |
 | **Defaults** | `duration=0` (immediate) |
 | **Effect** | Update properties without changing `resource` or `kind`; each specified prop tweens or snaps |
 | **Errors** | missing id arg → `layer.set: expected id Str`; unknown id → `layer.set: missing layer id '…'` (**soft-halt**, not silent no-op) |
@@ -273,6 +281,11 @@ from `assets/`).
 
 ## trans
 
+Fullscreen veil uses `stage.overlay_opacity` (packed as frame **veil_opacity**).
+Both fade and dissolve are **fire-and-forget** (do **not** Yield); pair with
+`@flow.wait` when the script must pause for presentation. Skip does not snap
+the veil — same family of presentation clocks as layer tweens.
+
 ### `trans.fade from to duration` (shorter forms allowed)
 
 ```yuki
@@ -289,12 +302,31 @@ from `assets/`).
 | | |
 |--|--|
 | **Args** | numbers (int/float) as above |
-| **Effect** | Sets `stage.overlay_opacity`, `fade_to`, **`fade_remaining`** (seconds left for the whole transition — not a stale rate field) |
-| **Notes** | Fire-and-forget; runs in parallel with layer tweens. **Does not** Yield. No `trans.dissolve`. |
+| **Effect** | Sets `stage.overlay_opacity`, `fade_to`, **`fade_remaining`** (seconds left for the whole transition — not a stale rate field). Clears any in-flight dissolve. |
+| **Notes** | Fire-and-forget; runs in parallel with layer tweens. **Does not** Yield. |
 | **Errors** | type/arity → `trans.fade: expected from/to/duration numbers` (or shorter variants) |
 | **Result** | `Ok` |
 
-Overlay is packed as frame **veil_opacity** for the GPU host.
+### `trans.dissolve duration`
+
+Full-screen black veil eases 0→1→0 over `duration` seconds (two equal halves).
+Does **not** block the VM; pair with `@flow.wait`. Skip does not snap the veil
+(same family as `trans.fade`).
+
+```yuki
+@trans.dissolve 0.8
+@flow.wait 0.8          # full Out+In wall time
+```
+
+| | |
+|--|--|
+| **Args** | `duration` number (int/float), seconds for the **whole** Out+In cycle |
+| **`duration > 0`** | Start at opacity 0; linear ease 0→1 over first half, 1→0 over second half (`fade_remaining = duration` total) |
+| **`duration ≤ 0`** | Clear veil immediately (opacity 0, dissolve idle) |
+| **Effect** | Dual-phase presentation clock on the same overlay as fade; does **not** Yield |
+| **Notes** | During `@flow.wait`, the dissolve clock still advances. Hold-skip / Advance do not snap mid-dissolve. Mid-dissolve state is **not** fully saved (phase is runtime-only; load mid-veil may freeze until next transition). |
+| **Errors** | missing/non-numeric → `trans.dissolve: expected duration` / `… duration number` |
+| **Result** | `Ok` |
 
 ---
 
@@ -354,22 +386,24 @@ While a modal is open, Esc pops one layer (`return_modal`).
 under `localStorage` key `moonsight/save/{slot}` (multi-slot). Desktop shell uses
 the same webview storage.
 
-### Save format (v3)
+### Save format (v4)
 
-Writers always emit **format_version 3**. Loaders accept **v2 and v3**.
+Writers always emit **format_version 4**. Loaders accept **v2, v3, and v4**.
 
-| Field (v3) | Role |
+| Field (v4) | Role |
 |------------|------|
-| `layers[]` | Current geometry + `tweens` (`prop`, `to`, `remaining`) + `pending_hide` |
+| `layers[]` | Current geometry + **`scale`** (default `1.0`) + `tweens` (`prop` incl. `Scale`, `to`, `remaining`) + `pending_hide` |
 | `overlay_opacity`, `fade_to`, **`fade_remaining`** | Overlay fade mid-state (wall-clock seconds left) |
 | `wait_remaining` | Timed `@flow.wait` countdown left |
 | `wait`, `choices`, `choose_result_var`, `auto` | VM / UI wait state (from v2) |
 | audio block | BGM id + logical volume / fade mid-state where applicable |
 
 - Mid-tween / mid-fade / mid-wait save → load continues with remaining times.
-- v2 loads: layers without tweens; `kind` defaults as stored (missing → character semantics where applicable); no tween restore.
+- v3 loads: layers missing `scale` default to `1.0`; otherwise same as v3 shape.
+- v2 loads: layers without tweens; `kind` defaults as stored (missing → character semantics where applicable); no tween restore; `scale=1.0`.
 - Unknown higher versions are rejected with a clear error.
 - **UI modal stack / HUD focus are not saved.** **Prefs are not part of slot saves.**
+- **Dissolve phase** is runtime-only (not in save); mid-dissolve load may not resume dual-phase.
 
 ### Multi-slot + prefs (Phase 3+)
 
@@ -404,6 +438,7 @@ sys.save_hint
 text.begin
 text.end
 text.type
+trans.dissolve
 trans.fade
 ui.hide
 ui.show
@@ -448,7 +483,7 @@ Engine policy:
 | `Choose` | — | Commits option index | — | OpenMenu allowed |
 | Modal open | Activate focused button | optional direct activate | — | MenuUp/Down move focus; Esc = return |
 | `Title` | Activate button | — | — | focus navigation |
-| Layer tween / overlay fade only (VM Running) | Not gated | Not gated | Not gated | OpenMenu allowed |
+| Layer tween / overlay fade / dissolve only (VM Running) | Not gated | Not gated | Not gated | OpenMenu allowed |
 
 Auto mode synthesizes Advance when enabled (`ToggleAuto`), subject to the same
 timed-wait gate and modal freeze.

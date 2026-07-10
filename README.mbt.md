@@ -1,8 +1,9 @@
 # MoonSight
 
-MoonBit + WebGPU visual novel engine (Phases 1–4 + Q1/0.5 playable core:
-runtime kernel, layer presentation, system UI, MoonBit UI kernel, backlog,
-hold-to-skip, confirm, prefs→mixer).
+MoonBit + WebGPU visual novel engine (Phases 1–4 + Q1/0.5 playable core + Q2
+Engine presentation: runtime kernel, layer presentation, system UI, MoonBit UI
+kernel, backlog, hold-to-skip, confirm, prefs→mixer, `trans.dissolve`, layer
+`scale=`).
 
 MoonYuki scripts compile to IR/bytecode, run on a VM + Stage/Director, and
 render through a packed draw list consumed by a JS WebGPU host. System menus and
@@ -79,10 +80,10 @@ pause narrative Advance. Full semantics: [`docs/play-input.md`](./docs/play-inpu
 | Path | Role |
 |------|------|
 | `script` | MoonYuki → IR / `MSB1` (rejects project `- screen`) |
-| `runtime` | VM, Director, Stage, UiApp/UiRuntime, prefs, save (v3), tweens |
-| `render` | Draw list pack, text layout, kind+z sort, `UiDrawOp` paint |
+| `runtime` | VM, Director, Stage, UiApp/UiRuntime, prefs, save (v4), tweens + scale |
+| `render` | Draw list pack, text layout, kind+z sort, scale→sprite size, `UiDrawOp` paint |
 | `audio` | Logical BGM/SE mixer (volume / fade) |
-| `std_commands` | Standard `@` host commands (layers, ui.show/hide, audio) |
+| `std_commands` | Standard `@` host commands (layers, dissolve, ui.show/hide, audio) |
 | `std_ui` | Default HUD + title / game_menu / save_load / settings / confirm / backlog |
 | `host_web` | Browser wasm + `js_glue` (WebGPU, prefs, multi-slot) |
 | `host_desktop` | Tauri 2 shell |
@@ -137,11 +138,28 @@ mixer** gains (master/bgm/se); settings **Slider** (←/→); slot labels show
 `saved_at` when present; input/wait semantics in
 [`docs/play-input.md`](./docs/play-input.md).
 
-### Out of scope (through Phase 4 + Q1 non-goals)
+### Q2 (Engine presentation + multi-track)
+
+**Engine (in):** `@trans.dissolve duration` dual-phase full-screen veil
+(0→1→0 over wall-clock duration; non-blocking, pair with `@flow.wait`); layer
+`scale=` on `@layer.show` / `@layer.set` with linear `duration=` tween (origin
+top-left `(x,y)`; no rotate/anchor); save format **v4** (`scale` on layers;
+v3 loads default `scale=1.0`); longer demo beats using dissolve/scale; docs for
+dissolve/scale and presentation vs wait/skip in
+[`docs/host-commands.md`](./docs/host-commands.md) /
+[`docs/play-input.md`](./docs/play-input.md).
+
+**Host / Docs (WIP mid-track):** Svelte+TS host shell (`apps/host-web`) and
+Fumadocs site (`apps/docs-site`) are Q2 multi-track deliverables — not required
+for Engine dissolve/scale. Vanilla `host_web/js_glue` remains the default play
+path until Host track lands.
+
+### Out of scope (through Q2 Engine non-goals)
 
 Visual editor, i18n, achievements, Live2D / 3D, particle/postprocess stack,
-full timeline / animation queues, blocking presentation DSL, `trans.dissolve`,
-slot screenshots, backlog free-scroll / ScrollView, saving backlog into slots,
-rollback, DOM menus, second native GPU backend, second wasm / dynamic UI load,
-themes / transform animation stack, open host-string UI actions, official Yukimi
-bytecode compatibility, long-term Screen DSL lower compatibility.
+full timeline / animation queues, blocking presentation DSL, rotate/anchor,
+voice track, slot screenshots, backlog free-scroll / ScrollView, saving backlog
+into slots, rollback, DOM menus, second native GPU backend, second wasm /
+dynamic UI load, themes / transform animation stack, open host-string UI
+actions, official Yukimi bytecode compatibility, long-term Screen DSL lower
+compatibility.
