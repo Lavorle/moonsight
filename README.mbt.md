@@ -1,9 +1,8 @@
 # MoonSight
 
-MoonBit + WebGPU visual novel engine (Phases 1–4 + Q1/0.5 playable core + Q2
-multi-track: runtime kernel, layer presentation, system UI, MoonBit UI kernel,
-backlog, hold-to-skip, confirm, prefs→mixer, `trans.dissolve`, layer `scale=`,
-Svelte host shell, bilingual Fumadocs site).
+MoonBit + WebGPU visual novel engine (Phases 1–4 + Q1/0.5 + Q2 multi-track +
+Q3/0.8 system UI + **Q4 / 1.0 candidate** publish path: `moonsightc new`,
+Svelte-only build, SaveStore Web/desktop, sample chapter, publish scripts).
 
 MoonYuki scripts compile to IR/bytecode, run on a VM + Stage/Director, and
 render through a packed draw list consumed by a JS WebGPU host. System menus and
