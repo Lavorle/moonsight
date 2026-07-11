@@ -1,7 +1,7 @@
 # MoonSight — 指针 Hit-Test、主题系统与 Demo UI（Warm Nocturne）
 
 **日期：** 2026-07-11  
-**状态：** Draft for user review (brainstorm approved sections)  
+**状态：** Approved / Implemented  
 **仓库：** `moonsight`  
 **路径选择：** C — 引擎 hit-test 主路径 + 最小完整主题系统  
 **视觉：** Warm Nocturne **A1 Amber Soft**  
