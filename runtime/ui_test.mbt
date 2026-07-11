@@ -795,3 +795,86 @@ test "ScrollView content_h exceeds viewport when many children" {
   ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   assert_true(rt.scroll_max() > 0.0)
 }
+
+///|
+/// Build a ScrollView with `n` text lines and the given viewport geometry.
+fn make_scroll_runtime(
+  n : Int,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  modal_name~ : String = "sv",
+) -> UiRuntime {
+  let app = UiApp::new()
+  let lines : Array[UiNode] = []
+  for i in 0..<n {
+    lines.push(
+      UiNode::Text(
+        src=TextBindSrc::Literal("L\{i}"),
+        x=0.0,
+        y=0.0,
+        font_size=22.0,
+        visible=VisiblePred::Always,
+      ),
+    )
+  }
+  app.register_modal(
+    modal_name,
+    UiNode::ScrollView(
+      x~,
+      y~,
+      w~,
+      h~,
+      children=[UiNode::VBox(x=None, y=None, children=lines)],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal(modal_name)
+  rt.sync_bind(UiBindCtx::empty())
+  rt
+}
+
+///|
+test "scroll_by clamps to range" {
+  // 5 lines × ui_line_h (~64), viewport h=64 → content_h > viewport
+  let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 64.0)
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
+  assert_true(rt.scroll_max() > 0.0)
+  rt.scroll_by(-1000.0)
+  assert_eq(rt.scroll_y, 0.0)
+  rt.scroll_by(10000.0)
+  assert_true(rt.scroll_y >= rt.scroll_max() - 0.01)
+}
+
+///|
+test "wheel dy positive decreases scroll_y" {
+  // Viewport at (100,100) 400×200 so (150,120) is over the scroll area
+  let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 200.0)
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
+  rt.scroll_y = rt.scroll_max()
+  let before = rt.scroll_y
+  assert_true(before > 0.0)
+  assert_true(rt.handle_wheel(150.0, 120.0, 40.0)) // over viewport; dy>0 → scroll_y decreases
+  assert_true(rt.scroll_y < before)
+}
+
+///|
+test "wheel outside viewport is ignored" {
+  let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 200.0)
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
+  rt.scroll_y = rt.scroll_max()
+  let before = rt.scroll_y
+  assert_false(rt.handle_wheel(10.0, 10.0, 40.0))
+  assert_eq(rt.scroll_y, before)
+}
+
+///|
+test "show_modal backlog pins scroll to newest" {
+  // pin_scroll_end before measure sets pin_on_next_layout; paint applies max
+  let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 64.0, modal_name="backlog")
+  rt.pin_scroll_end()
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
+  assert_true(rt.scroll_max() > 0.0)
+  assert_true(rt.scroll_y >= rt.scroll_max() - 0.01)
+}

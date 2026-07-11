@@ -111,6 +111,8 @@ pub(all) struct UiRuntime {
   mut scroll_vp_w : Float
   mut scroll_vp_h : Float
   mut scroll_bar_w : Float
+  /// When true, next ScrollView measure sets `scroll_y` to `scroll_max()` (pin to newest).
+  mut pin_on_next_layout : Bool
 }
 
 ///|
@@ -139,6 +141,7 @@ pub fn UiRuntime::from_app(app : UiApp, save_slots~ : Int) -> UiRuntime {
     scroll_vp_w: 0.0,
     scroll_vp_h: 0.0,
     scroll_bar_w: ui_scroll_bar_w,
+    pin_on_next_layout: false,
   }
 }
 
@@ -162,6 +165,55 @@ fn UiRuntime::clamp_scroll(self : UiRuntime) -> Unit {
   if self.scroll_y > max {
     self.scroll_y = max
   }
+}
+
+///|
+/// Adjust vertical scroll by `delta` logical px, clamped to `[0, scroll_max()]`.
+pub fn UiRuntime::scroll_by(self : UiRuntime, delta : Double) -> Unit {
+  self.scroll_y = self.scroll_y + delta
+  self.clamp_scroll()
+}
+
+///|
+/// Pin scroll to the newest content (bottom). If content is not yet measured,
+/// defers via `pin_on_next_layout` until the next ScrollView layout walk.
+pub fn UiRuntime::pin_scroll_end(self : UiRuntime) -> Unit {
+  if self.scroll_content_h <= 0.0 || self.scroll_vp_h.to_double() <= 0.0 {
+    self.pin_on_next_layout = true
+  } else {
+    self.scroll_y = self.scroll_max()
+  }
+}
+
+///|
+/// True when `(x, y)` lies inside the last measured ScrollView viewport.
+fn point_in_scroll_viewport(rt : UiRuntime, x : Double, y : Double) -> Bool {
+  let vx = rt.scroll_vp_x.to_double()
+  let vy = rt.scroll_vp_y.to_double()
+  let vw = rt.scroll_vp_w.to_double()
+  let vh = rt.scroll_vp_h.to_double()
+  x >= vx && y >= vy && x < vx + vw && y < vy + vh
+}
+
+///|
+/// Wheel over viewport. `dy > 0` decreases `scroll_y` (reveal earlier lines).
+/// Returns true if the event was consumed.
+pub fn UiRuntime::handle_wheel(
+  self : UiRuntime,
+  x : Double,
+  y : Double,
+  dy : Double,
+) -> Bool {
+  if self.stack.is_empty() {
+    return false
+  }
+  if !point_in_scroll_viewport(self, x, y) {
+    return false
+  }
+  let k = 1.0 // logical px per dy unit; host can scale
+  self.scroll_y = self.scroll_y - k * dy
+  self.clamp_scroll()
+  true
 }
 
 ///|
@@ -189,6 +241,11 @@ pub fn UiRuntime::show_modal(
   self.stack.push({ name, mode, focus: 0 })
   // New modal layer: stale hover indices from the previous layer are invalid.
   self.hover = -1
+  // Opening backlog pins scroll to newest (bottom) on next layout.
+  if name == "backlog" {
+    self.pin_on_next_layout = true
+    self.scroll_y = 0.0
+  }
 }
 
 ///|
@@ -1010,6 +1067,10 @@ fn walk_ui_node(
       }
       // VBox-like empty fallback is already handled by children; store measured h.
       rt.scroll_content_h = content_h.to_double()
+      if rt.pin_on_next_layout {
+        rt.scroll_y = rt.scroll_max()
+        rt.pin_on_next_layout = false
+      }
       rt.clamp_scroll()
       // Paint/hit pass: children shifted by -scroll_y; CPU-clip to viewport.
       let prev_clip = st.clip_active
