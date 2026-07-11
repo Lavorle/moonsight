@@ -46,6 +46,37 @@ set every frame while **Control** is held.
 Cold start is **Title** (`title` modal). Narrative Advance is frozen while any
 modal is open; only the stack top receives UI intents.
 
+## Pointer
+
+Engine-owned hit-test (not host layout constants). Host maps canvas events to
+logical 1920×1080 coords and calls `export_pointer(x, y, phase)`:
+
+| `phase` | Event | Engine effect |
+|--------:|-------|---------------|
+| 0 | `pointermove` | Hover update; returns `hover_kind` |
+| 1 | `pointerdown` | Hit-test activate, or miss→Advance when Playing |
+| 3 | `pointerleave` | Clear hover |
+
+Return value `hover_kind`: **0** none, **1** button, **2** choice, **3** slider.
+Host maps that to CSS cursor (`pointer` / `ew-resize` / `default`).
+
+| Input | Effect |
+|-------|--------|
+| Click empty (Playing) | Advance (engine; typewriter complete-first, same as keyboard) |
+| Click button / choice / slider | Hit-test activate (choice commits that row; slider sets pref from x ratio) |
+| Move | Hover + cursor |
+| Leave canvas | Clear hover |
+
+**Same-frame rule:** call `export_pointer` then `export_frame(0, dt, skip_held)`
+in the same frame. Pointer down already consumed the interaction — host must
+set pending intent to `None` (code **0**) so the frame tick does **not** double
+`Advance`. Pointer does **not** advance `wait_remaining` / tweens; presentation
+clocks still run via `export_frame`. While `wait_remaining > 0`, pointer down
+does not Advance or Select. On Title / modal stack, only the stack top is
+hit-tested; empty-canvas click does not Advance narrative.
+
+Keyboard intents remain on `export_frame` (Esc, ↑↓, 1–9, Ctrl hold, …).
+
 ## `skip_held` vs `SkipTyping`
 
 | | `SkipTyping` (code 2) | `skip_held` (tick flag) |
@@ -113,6 +144,8 @@ Dangerous UI actions go through modal `"confirm"` and `ConfirmKind`:
 
 ## Related
 
-- Engine: `runtime/engine.mbt` (`tick`, `tick_skip_burst`, backlog append)
-- Host: `host_web/main.mbt` `export_frame`, `js_glue/boot.js`
-- UI: `std_ui` modals `"backlog"`, `"confirm"`, settings `Slider`
+- Engine: `runtime/engine.mbt` (`tick`, `tick_skip_burst`, `pointer_event`, backlog)
+- Host: `host_web/main.mbt` `export_pointer` / `export_frame`; `js_glue/boot.js`;
+  Svelte `apps/host-web/src/lib/gameSession.ts`
+- UI: `std_ui` modals `"backlog"`, `"confirm"`, settings `Slider`; themes in
+  [`ui-moonbit.md`](./ui-moonbit.md)

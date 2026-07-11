@@ -171,9 +171,77 @@ No open host-string actions and no general expression language on the tree.
 
 Logical canvas default: **1920×1080**, origin top-left, +y down.
 
-**Out of scope (Phase 4 + Q1 non-goals):** scroll views, themes, transform
-animation stack, DOM / HTML menus, slot screenshots, saving backlog into slots.
-Play-input / backlog / confirm: [`play-input.md`](./play-input.md).
+**Out of scope (Phase 4 + Q1 non-goals):** scroll views, runtime theme switcher /
+multi-theme store, transform animation stack, DOM / HTML menus, slot screenshots,
+saving backlog into slots. Default **Amber Soft** theme pack is in (see Themes).
+Play-input / pointer / backlog / confirm: [`play-input.md`](./play-input.md).
+
+## Themes
+
+UI paint emits **stable logical role** resource ids. The host resolves each id
+to a solid color and optional PNG; authors do not hard-code file paths in
+`UiNode` trees.
+
+### Logical roles
+
+| Role | Use |
+|------|-----|
+| `ui.dialogue_box` | Dialogue panel chrome |
+| `ui.nameplate` | Speaker nameplate |
+| `ui.choice_row` | Choice row idle |
+| `ui.choice_row_focus` | Choice row focused |
+| `ui.choice_row_hover` | Choice row hovered (not focused) |
+| `ui.button` | Button idle |
+| `ui.button_focus` | Button focused |
+| `ui.button_hover` | Button hovered (not focused) |
+| `ui.menu_dim` | Modal full-screen dim |
+| `ui.slider_track` | Settings slider track |
+| `ui.slider_fill` | Settings slider fill |
+
+### Focused / hovered paint
+
+For Button and Choice rows (same priority):
+
+1. **Focused** → `*_focus` resource (+ higher opacity)
+2. Else **hovered** → `*_hover` resource
+3. Else idle
+
+`UiDrawOp` carries `focused` and `hovered` flags. Focus wins over hover (hover
+is suppressed on the focused index). Sliders tint track/fill opacity by focus /
+hover; fill width follows the pref value. Host cursor uses `export_pointer`
+`hover_kind` (1 button, 2 choice → `pointer`; 3 slider → `ew-resize`).
+
+### Amber Soft pack
+
+Default theme path (Svelte host public + build dist):
+
+```text
+themes/amber_soft/
+  theme.json
+  dialogue_box.png
+  nameplate.png
+  choice_row.png
+  choice_row_focus.png
+  choice_row_hover.png
+  button.png
+  button_focus.png
+  button_hover.png
+  menu_dim.png
+  slider_track.png
+  slider_fill.png
+```
+
+Authoritative sources:
+
+- Pack: `apps/host-web/public/themes/amber_soft/`
+- Loader: `apps/host-web/src/lib/theme.ts` (`loadTheme`)
+- Generator: `apps/host-web/scripts/gen-amber-soft-theme.mjs`
+
+`theme.json` lists `fallback_solids` (RGBA) and optional `roles[role].file`
+PNGs. Host registers solids first, then tries each file; failed images keep the
+solid. Vanilla `js_glue` keeps Amber Soft solids only (no full PNG pack). Demo
+`moonsight.json` may set `"theme": "amber_soft"` as a project hint; the host
+loads `/themes/amber_soft` by default.
 
 ## TextBind / VisibleIf
 
@@ -350,11 +418,16 @@ not define widget trees.
 | Input | Effect |
 |-------|--------|
 | Esc | `OpenMenu` — Playing empty stack → `game_menu`; modal open → pop |
-| Enter / Space / Z / click | `Advance` — activate focused button on modals/HUD |
+| Enter / Space / Z | `Advance` — activate focused button on modals/HUD |
+| Click (canvas) | `export_pointer` hit-test; empty Playing → Advance (not a frame intent) |
+| Move / leave | Hover paint + cursor; leave clears hover |
 | ↑ / W · ↓ / S | Menu focus up / down |
 | 1–9 | `Select(n)` choices while Playing |
 | A | Toggle auto (prefs.`auto_mode`) |
 | Ctrl/Cmd+S / L | Quick save / load **slot 0** |
+
+Pointer details and same-frame `export_frame(0, …)` rule:
+[`play-input.md`](./play-input.md#pointer).
 
 ## Author checklist
 

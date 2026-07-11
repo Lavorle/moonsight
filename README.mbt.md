@@ -87,12 +87,19 @@ brave-browser --enable-unsafe-webgpu --enable-features=Vulkan --use-angle=vulkan
 
 Always serve via **`http://localhost`** (or https). Opening `file://` blocks WebGPU.
 
-**Input:** cold start on **title** (Start → entry scene). Click / Enter / Space /
-Z advance (or activate focused menu button); **Esc** system menu; **↑↓** / W/S
+**Input:** cold start on **title** (Start → entry scene). Pointer is engine
+hit-test via `export_pointer` (button / choice / slider; empty Playing click →
+Advance; move = hover + cursor; leave clears hover). Same frame: pointer then
+`export_frame(0, dt, skip)` — no double Advance. Keyboard: Enter / Space / Z
+advance (or activate focused menu button); **Esc** system menu; **↑↓** / W/S
 focus; **←→** settings sliders; **H** backlog; **Ctrl hold** skip; 1–9 select
 choices; A auto; Ctrl+S / Ctrl+L quick save & load slot 0 (`localStorage`).
 Timed `@flow.wait` ignores Advance/skip until the countdown finishes. Menus
 pause narrative Advance. Full semantics: [`docs/play-input.md`](./docs/play-input.md).
+
+**Theme:** default **Amber Soft** pack at `themes/amber_soft` (logical `ui.*`
+roles; host solids + optional PNGs). Author notes:
+[`docs/ui-moonbit.md`](./docs/ui-moonbit.md#themes).
 
 **Desktop shell:** build `dist/demo` first, then see
 [`host_desktop/README.md`](./host_desktop/README.md).
@@ -213,7 +220,7 @@ Visual editor, full product i18n beyond docs-site locales, achievements,
 Live2D / 3D, particle/postprocess stack, full timeline / animation queues,
 blocking presentation DSL, rotate/anchor, voice track, slot screenshots,
 backlog free-scroll / ScrollView, saving backlog into slots, rollback, DOM
-game menus, second native GPU backend, second wasm / dynamic UI load, themes /
-transform animation stack, open host-string UI actions, official Yukimi
-bytecode compatibility, long-term Screen DSL lower compatibility, deleting
-vanilla `js_glue`.
+game menus, second native GPU backend, second wasm / dynamic UI load, runtime
+theme switcher / multi-theme store, transform animation stack, open host-string
+UI actions, official Yukimi bytecode compatibility, long-term Screen DSL lower
+compatibility, deleting vanilla `js_glue`.
