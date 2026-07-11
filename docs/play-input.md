@@ -117,6 +117,11 @@ are open — same presentation tick). Hold-skip and Advance remain blocked by
 wait ends, any remaining presentation time continues on the wall clock until
 complete.
 
+**Mid-dissolve save/load:** dual-phase dissolve is not part of the save format;
+after load the dissolve clock is hard-cleared (`dissolve_phase=0`). Authors
+should not rely on resuming an in-flight dissolve — see
+[`host-commands.md`](./host-commands.md) (trans / save format).
+
 ## Confirm behavior
 
 Dangerous UI actions go through modal `"confirm"` and `ConfirmKind`:

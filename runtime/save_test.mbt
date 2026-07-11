@@ -101,6 +101,46 @@ test "save roundtrip restores Yield with incomplete typewriter text" {
 }
 
 ///|
+/// Mid-dissolve save/load: dual-phase is not in the save format. Load always
+/// hard-clears `dissolve_phase` / `dissolve_total`; any in-flight veil numbers
+/// that were written as ordinary `fade_*` / `overlay_opacity` restore as a
+/// simple fade (not dual-phase Out+In). Authors must not rely on resuming
+/// an in-flight dissolve across save/load.
+test "save during dissolve does not restore dual-phase" {
+  let eng = load_min_demo_engine()
+  // Start dual-phase dissolve and advance into Out half.
+  ignore(
+    @std_commands.standard_registry().call(
+      "trans.dissolve",
+      eng.stage,
+      [Float(1.0)],
+    ),
+  )
+  eng.tick(None_, dt=0.25)
+  assert_eq(eng.stage.dissolve_phase, 1)
+  assert_true(eng.stage.dissolve_total > 0.0)
+  assert_true(eng.stage.fade_remaining > 0.0)
+  let saved_fade_to = eng.stage.fade_to
+  let saved_fade_rem = eng.stage.fade_remaining
+  let saved_overlay = eng.stage.overlay_opacity
+  let blob = eng.save()
+  // Target engine has residual dissolve state that must not survive load.
+  let eng2 = load_min_demo_engine()
+  eng2.stage.dissolve_phase = 2
+  eng2.stage.dissolve_total = 9.0
+  eng2.stage.overlay_opacity = 0.9
+  eng2.stage.fade_remaining = 3.0
+  eng2.load(blob)
+  // Dual-phase hard-cleared on load (not part of save format).
+  assert_eq(eng2.stage.dissolve_phase, 0)
+  assert_eq(eng2.stage.dissolve_total, 0.0)
+  // Fade fields from the blob restore as simple single-phase fade mid-state.
+  assert_eq(eng2.stage.fade_to, saved_fade_to)
+  assert_eq(eng2.stage.fade_remaining, saved_fade_rem)
+  assert_eq(eng2.stage.overlay_opacity, saved_overlay)
+}
+
+///|
 test "save roundtrip restores tweens and wait_remaining" {
   let eng = load_min_demo_engine()
   eng.stage.show_layer(

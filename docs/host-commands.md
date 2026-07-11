@@ -324,7 +324,7 @@ Does **not** block the VM; pair with `@flow.wait`. Skip does not snap the veil
 | **`duration > 0`** | Start at opacity 0; linear ease 0→1 over first half, 1→0 over second half (`fade_remaining = duration` total) |
 | **`duration ≤ 0`** | Clear veil immediately (opacity 0, dissolve idle) |
 | **Effect** | Dual-phase presentation clock on the same overlay as fade; does **not** Yield |
-| **Notes** | During `@flow.wait`, the dissolve clock still advances. Hold-skip / Advance do not snap mid-dissolve. Mid-dissolve state is **not** fully saved (phase is runtime-only; load mid-veil may freeze until next transition). |
+| **Notes** | During `@flow.wait`, the dissolve clock still advances. Hold-skip / Advance do not snap mid-dissolve. **Mid-dissolve save/load:** dual-phase dissolve is **not** part of the save format; after load the dissolve clock is hard-cleared (`dissolve_phase=0`, `dissolve_total=0`). Any `fade_*` / `overlay_opacity` written mid-veil restore as a simple single-phase fade only. Authors should not rely on resuming an in-flight dissolve. |
 | **Errors** | missing/non-numeric → `trans.dissolve: expected duration` / `… duration number` |
 | **Result** | `Ok` |
 
@@ -403,7 +403,7 @@ Writers always emit **format_version 4**. Loaders accept **v2, v3, and v4**.
 - v2 loads: layers without tweens; `kind` defaults as stored (missing → character semantics where applicable); no tween restore; `scale=1.0`.
 - Unknown higher versions are rejected with a clear error.
 - **UI modal stack / HUD focus are not saved.** **Prefs are not part of slot saves.**
-- **Dissolve phase** is runtime-only (not in save); mid-dissolve load may not resume dual-phase.
+- **Mid-dissolve save/load:** dual-phase dissolve is not part of the save format; after load the dissolve clock is hard-cleared (`dissolve_phase=0`, `dissolve_total=0`). Authors should not rely on resuming an in-flight dissolve (remaining `fade_*` may continue as a simple fade only).
 
 ### Multi-slot + prefs (Phase 3+)
 

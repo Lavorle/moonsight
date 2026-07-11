@@ -375,6 +375,11 @@ fn apply_save_game(eng : Engine, game : SaveGame) -> Unit {
   eng.stage.fade_to = game.fade_to
   eng.stage.fade_remaining = game.fade_remaining
   eng.stage.wait_remaining = game.wait_remaining
+  // Dual-phase dissolve is runtime-only (not in save format). Always hard-clear
+  // so a mid-dissolve playthrough cannot leak phase into the loaded session;
+  // fade_* fields from the blob still apply as a simple single-phase fade.
+  eng.stage.dissolve_phase = 0
+  eng.stage.dissolve_total = 0.0
   // During fade-out, stage.bgm is None while mixer still holds the track id.
   // Keep that split after load so a later save does not re-persist phantom BGM.
   let fade_out = match game.audio.bgm_fade_stop {
