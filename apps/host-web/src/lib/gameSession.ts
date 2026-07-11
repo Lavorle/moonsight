@@ -47,31 +47,13 @@ const SAVE_KEY = (slot: number) => `moonsight/save/${slot}`;
 export const LOGICAL_W = 1920;
 export const LOGICAL_H = 1080;
 
-/**
- * FHD choice strip geometry — must match `UiLayout::default_fhd` in render/types.mbt.
- * Used only for pointer hit-tests (engine owns focus / commit).
- */
-const CHOICE_LAYOUT = (() => {
-  const canvas_w = 1920;
-  const canvas_h = 1080;
-  const dialogue_h = canvas_h * 0.3;
-  const dialogue_y = canvas_h - dialogue_h;
-  const margin = 48;
-  const pad = 32;
-  return {
-    x: margin + pad,
-    y: dialogue_y - 200,
-    w: canvas_w - margin * 2 - pad * 2,
-    lineH: 48,
-    maxRows: 9,
-  };
-})();
-
 /** Flexible host_web wasm export surface used by the boot loop. */
 export type HostExports = WebAssembly.Exports & {
   frame_len: () => number;
   frame_at: (i: number) => number;
   export_frame: (intent: number, dt: number, skipHeld: number) => void;
+  /** phase: 0=move, 1=down, 3=leave; returns hover_kind for cursor. */
+  export_pointer?: (x: number, y: number, phase: number) => number;
   resource_name?: (id: number) => string;
   pending_glyph_count?: () => number;
   pending_glyph_cp?: (i: number) => number;
@@ -225,20 +207,6 @@ function pointerToLogical(
     x: ((ev.clientX - rect.left) / rw) * LOGICAL_W,
     y: ((ev.clientY - rect.top) / rh) * LOGICAL_H,
   };
-}
-
-/**
- * If pointer is over a choice row, return index 0..maxRows-1; else -1.
- */
-function choiceRowAt(lx: number, ly: number): number {
-  const L = CHOICE_LAYOUT;
-  if (lx < L.x || lx > L.x + L.w || ly < L.y) return -1;
-  const i = Math.floor((ly - L.y) / L.lineH);
-  if (i < 0 || i >= L.maxRows) return -1;
-  // Only the painted bar height counts (lineH - 8 in snapshot).
-  const rowTop = L.y + i * L.lineH;
-  if (ly > rowTop + L.lineH - 8) return -1;
-  return i;
 }
 
 /**
@@ -572,26 +540,51 @@ export class GameSession {
       }
     };
 
+    // Engine owns hit-test (Button / Choice / Slider / miss→Advance).
+    // phase: 0=move, 1=down, 3=leave.
+    const onPointerMove = (ev: PointerEvent) => {
+      if (!this.exports_?.export_pointer) return;
+      const { x, y } = pointerToLogical(canvas, ev);
+      const kind = this.exports_.export_pointer(x, y, 0) | 0;
+      this.applyCursor(canvas, kind);
+    };
+
     const onPointerDown = (ev: PointerEvent) => {
       const { x, y } = pointerToLogical(canvas, ev);
-      const row = choiceRowAt(x, y);
-      if (row >= 0) {
-        // Select(row) — engine ignores when not in Choose; commits when it is.
-        this.pendingIntent = INTENT_SELECT_BASE + row;
+      if (this.exports_?.export_pointer) {
+        const kind = this.exports_.export_pointer(x, y, 1) | 0;
+        this.applyCursor(canvas, kind);
+        // Pointer already consumed the interaction; avoid same-frame double Advance.
+        this.pendingIntent = INTENT_NONE;
       } else {
+        // Fallback for older wasm without export_pointer.
         this.pendingIntent = INTENT_ADVANCE;
       }
     };
 
+    const onPointerLeave = () => {
+      this.exports_?.export_pointer?.(0, 0, 3);
+      canvas.style.cursor = "default";
+    };
+
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+    canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointerleave", onPointerLeave);
 
     this.unbindInput = () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointerleave", onPointerLeave);
     };
+  }
+
+  private applyCursor(canvas: HTMLCanvasElement, kind: number): void {
+    canvas.style.cursor =
+      kind === 1 || kind === 2 ? "pointer" : kind === 3 ? "ew-resize" : "default";
   }
 
   /** rAF body from boot.js */
