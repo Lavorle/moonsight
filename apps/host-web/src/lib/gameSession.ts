@@ -298,7 +298,26 @@ export class GameSession {
   }
 
   /**
+   * Runtime leaves `saved_at` empty (no wall-clock FFI). Stamp ISO time so
+   * slot labels show a timestamp after menu save as well as quick-save.
+   */
+  private stampSavedAt(json: string): string {
+    try {
+      const obj = JSON.parse(json) as Record<string, unknown>;
+      if (!obj.saved_at) {
+        obj.saved_at = new Date().toISOString();
+        return JSON.stringify(obj);
+      }
+    } catch {
+      /* keep raw json */
+    }
+    return json;
+  }
+
+  /**
    * Mirror engine slot_blobs back to localStorage (menu save path).
+   * Stamps missing `saved_at` and writes the stamped blob back into the engine
+   * so slot labels update immediately.
    */
   private syncSlotsToStorage(): void {
     const exports_ = this.exports_;
@@ -311,7 +330,11 @@ export class GameSession {
       try {
         const json = exports_.get_slot_json(i);
         if (json && json.length) {
-          localStorage.setItem(SAVE_KEY(i), json);
+          const stamped = this.stampSavedAt(json);
+          if (stamped !== json && typeof exports_.set_slot_json === "function") {
+            exports_.set_slot_json(i, stamped);
+          }
+          localStorage.setItem(SAVE_KEY(i), stamped);
         }
       } catch {
         /* ignore */
@@ -424,16 +447,7 @@ export class GameSession {
     if (!this.exports_ || typeof this.exports_.save_json !== "function") return;
     let json = this.exports_.save_json(this.saveSlot);
     if (json && json.length) {
-      // Runtime leaves saved_at empty (no wall-clock FFI); stamp ISO time here.
-      try {
-        const obj = JSON.parse(json) as Record<string, unknown>;
-        if (!obj.saved_at) {
-          obj.saved_at = new Date().toISOString();
-          json = JSON.stringify(obj);
-        }
-      } catch {
-        /* keep raw json */
-      }
+      json = this.stampSavedAt(json);
       localStorage.setItem(SAVE_KEY(this.saveSlot), json);
       if (typeof this.exports_.set_slot_json === "function") {
         this.exports_.set_slot_json(this.saveSlot, json);

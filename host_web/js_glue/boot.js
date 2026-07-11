@@ -340,7 +340,28 @@ function hydrateSlotsFromStorage() {
 }
 
 /**
+ * Runtime leaves `saved_at` empty (no wall-clock FFI). Stamp ISO time so
+ * slot labels show a timestamp after menu save as well as quick-save.
+ * @param {string} json
+ * @returns {string}
+ */
+function stampSavedAt(json) {
+  try {
+    const obj = JSON.parse(json);
+    if (!obj.saved_at) {
+      obj.saved_at = new Date().toISOString();
+      return JSON.stringify(obj);
+    }
+  } catch (_) {
+    /* keep raw json */
+  }
+  return json;
+}
+
+/**
  * Mirror engine slot_blobs back to localStorage (menu save path).
+ * Stamps missing `saved_at` and writes the stamped blob back into the engine
+ * so slot labels update immediately.
  */
 function syncSlotsToStorage() {
   if (!exports_ || typeof exports_.get_slot_json !== "function") return;
@@ -352,7 +373,11 @@ function syncSlotsToStorage() {
     try {
       const json = exports_.get_slot_json(i);
       if (json && json.length) {
-        localStorage.setItem(SAVE_KEY(i), json);
+        const stamped = stampSavedAt(json);
+        if (stamped !== json && typeof exports_.set_slot_json === "function") {
+          exports_.set_slot_json(i, stamped);
+        }
+        localStorage.setItem(SAVE_KEY(i), stamped);
       }
     } catch (_) {
       /* ignore */
@@ -792,16 +817,7 @@ function doSave() {
   if (!exports_) return;
   let json = exports_.save_json(saveSlot);
   if (json && json.length) {
-    // Runtime leaves saved_at empty (no wall-clock FFI); stamp ISO time here.
-    try {
-      const obj = JSON.parse(json);
-      if (!obj.saved_at) {
-        obj.saved_at = new Date().toISOString();
-        json = JSON.stringify(obj);
-      }
-    } catch (_) {
-      /* keep raw json */
-    }
+    json = stampSavedAt(json);
     localStorage.setItem(SAVE_KEY(saveSlot), json);
     if (typeof exports_.set_slot_json === "function") {
       exports_.set_slot_json(saveSlot, json);
