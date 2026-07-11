@@ -189,7 +189,7 @@ pointerdown / pointermove (canvas)
 ### 5.2 主题包布局
 
 ```
-themes/amber_soft/
+apps/host-web/public/themes/amber_soft/
   theme.json
   dialogue_box.png
   nameplate.png
@@ -203,6 +203,8 @@ themes/amber_soft/
   slider_track.png
   slider_fill.png
 ```
+
+构建产物：`dist/**/themes/amber_soft/`（或打进 host dist 根 `themes/`），保证离线 demo 可加载。
 
 **`theme.json` 形状（示意）：**
 
