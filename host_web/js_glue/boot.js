@@ -595,26 +595,6 @@ function frame(ts) {
 }
 
 /**
- * FHD choice strip geometry — must match `UiLayout::default_fhd` in render/types.mbt.
- * Used only for pointer hit-tests (engine owns focus / commit).
- */
-const CHOICE_LAYOUT = (() => {
-  const canvas_w = 1920;
-  const canvas_h = 1080;
-  const dialogue_h = canvas_h * 0.3;
-  const dialogue_y = canvas_h - dialogue_h;
-  const margin = 48;
-  const pad = 32;
-  return {
-    x: margin + pad,
-    y: dialogue_y - 200,
-    w: canvas_w - margin * 2 - pad * 2,
-    lineH: 48,
-    maxRows: 9,
-  };
-})();
-
-/**
  * Map canvas client coords → logical 1920×1080 pixels.
  * @param {HTMLCanvasElement} canvas
  * @param {PointerEvent} ev
@@ -631,19 +611,13 @@ function pointerToLogical(canvas, ev) {
 }
 
 /**
- * If pointer is over a choice row, return index 0..maxRows-1; else -1.
- * @param {number} lx
- * @param {number} ly
+ * Cursor from export_pointer hover_kind: 1|2=pointer, 3=ew-resize, else default.
+ * @param {HTMLCanvasElement} canvas
+ * @param {number} kind
  */
-function choiceRowAt(lx, ly) {
-  const L = CHOICE_LAYOUT;
-  if (lx < L.x || lx > L.x + L.w || ly < L.y) return -1;
-  const i = Math.floor((ly - L.y) / L.lineH);
-  if (i < 0 || i >= L.maxRows) return -1;
-  // Only the painted bar height counts (lineH - 8 in snapshot).
-  const rowTop = L.y + i * L.lineH;
-  if (ly > rowTop + L.lineH - 8) return -1;
-  return i;
+function applyCursor(canvas, kind) {
+  canvas.style.cursor =
+    kind === 1 || kind === 2 ? "pointer" : kind === 3 ? "ew-resize" : "default";
 }
 
 function bindInput(canvas) {
@@ -739,16 +713,38 @@ function bindInput(canvas) {
     }
   });
 
-  canvas.addEventListener("pointerdown", (ev) => {
+  // Engine owns hit-test (Button / Choice / Slider / miss→Advance).
+  // phase: 0=move, 1=down, 3=leave. Parity with apps/host-web gameSession.
+  const onPointerMove = (ev) => {
+    if (!exports_ || typeof exports_.export_pointer !== "function") return;
     const { x, y } = pointerToLogical(canvas, ev);
-    const row = choiceRowAt(x, y);
-    if (row >= 0) {
-      // Select(row) — engine ignores when not in Choose; commits when it is.
-      pendingIntent = 10 + row;
+    const kind = exports_.export_pointer(x, y, 0) | 0;
+    applyCursor(canvas, kind);
+  };
+
+  const onPointerDown = (ev) => {
+    const { x, y } = pointerToLogical(canvas, ev);
+    if (exports_ && typeof exports_.export_pointer === "function") {
+      const kind = exports_.export_pointer(x, y, 1) | 0;
+      applyCursor(canvas, kind);
+      // Pointer already consumed the interaction; avoid same-frame double Advance.
+      pendingIntent = INTENT_NONE;
     } else {
+      // Fallback for older wasm without export_pointer.
       pendingIntent = INTENT_ADVANCE;
     }
-  });
+  };
+
+  const onPointerLeave = () => {
+    if (exports_ && typeof exports_.export_pointer === "function") {
+      exports_.export_pointer(0, 0, 3);
+    }
+    canvas.style.cursor = "default";
+  };
+
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointerleave", onPointerLeave);
 }
 
 function doSave() {

@@ -375,7 +375,11 @@ export async function init(canvas) {
   });
 
   makeWhiteTexture();
-  // UI placeholders — Amber Soft solids (warm flash before theme load)
+  // UI placeholders — Amber Soft solids (warm flash before theme load).
+  // Full theme PNG pack + loader live in apps/host-web (Svelte) as the
+  // default full theme path; this legacy js_glue path keeps solids only.
+  // Callers can re-register via registerSolid / registerImage if a theme pack
+  // is served next to this host.
   makePlaceholderSolid("ui.dialogue_box", [22, 16, 20, 220]);
   makePlaceholderSolid("ui.nameplate", [48, 36, 40, 230]);
   makePlaceholderSolid("ui.choice_row", [40, 30, 36, 200]);
@@ -498,6 +502,28 @@ export async function uploadPngUrl(id, url) {
   });
   bitmap.close();
   return id;
+}
+
+/**
+ * Theme API: (re)register a 1x1 solid color texture by role id.
+ * Prefer apps/host-web loadTheme for full Amber Soft PNG pack.
+ * @param {string} id
+ * @param {number[]} rgba  RGBA 0–255
+ */
+export function registerSolid(id, rgba) {
+  ensureGpu();
+  const prev = textures.get(id);
+  if (prev) prev.texture.destroy();
+  return makePlaceholderSolid(id, rgba);
+}
+
+/**
+ * Theme API: upload a PNG (or other image URL) as a role texture.
+ * @param {string} id
+ * @param {string} url
+ */
+export async function registerImage(id, url) {
+  return uploadPngUrl(id, url);
 }
 
 export function beginFrame() {
@@ -926,6 +952,8 @@ const api = {
   resize,
   uploadRgbaTexture,
   uploadPngUrl,
+  registerSolid,
+  registerImage,
   beginFrame,
   drawSprites,
   drawGlyphs,
