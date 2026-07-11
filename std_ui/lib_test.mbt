@@ -237,6 +237,49 @@ test "std_ui backlog modal registers and uses ScrollView" {
 }
 
 ///|
+/// Spec §2.3: empty backlog shows hint copy + Close (not only History + empty SV).
+test "std_ui empty backlog shows hint and Close" {
+  let app = @runtime.UiApp::new()
+  register(app)
+  let rt = @runtime.UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("backlog")
+  let empty = @runtime.UiBindCtx::empty()
+  rt.sync_bind(empty)
+  let ops = rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=empty)
+  let mut found_hint = false
+  let mut found_history = false
+  for op in ops {
+    match op.text {
+      Some(t) => {
+        if t == "No dialogue history yet." {
+          found_hint = true
+        }
+        if t == "History" {
+          found_history = true
+        }
+      }
+      None => ()
+    }
+  }
+  assert_true(found_history)
+  assert_true(found_hint)
+  // Close remains the only focusable.
+  let focus = rt.focusables_top(empty)
+  assert_eq(focus.length(), 1)
+  assert_eq(rt.scroll_max(), 0.0)
+  // With lines, empty-state hint is hidden.
+  let lined = { ..@runtime.UiBindCtx::empty(), backlog_lines: ["a: hi"] }
+  rt.sync_bind(lined)
+  let ops2 = rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=lined)
+  for op in ops2 {
+    match op.text {
+      Some(t) => assert_false(t == "No dialogue history yet.")
+      None => ()
+    }
+  }
+}
+
+///|
 test "typewriter bind exposes visible prefix only" {
   let src =
     #|- scene "entrypoint"

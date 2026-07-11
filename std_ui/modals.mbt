@@ -170,6 +170,14 @@ fn build_backlog(app : @runtime.UiApp) -> @runtime.UiNode {
         font_size=30.0,
         visible=@runtime.VisiblePred::Always,
       ),
+      // Spec §2.3: empty backlog shows hint copy + Close (not only title + empty SV).
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::Literal("No dialogue history yet."),
+        x=360.0,
+        y=150.0,
+        font_size=24.0,
+        visible=@runtime.VisiblePred::Not(@runtime.VisiblePred::HasBacklog),
+      ),
       @runtime.UiNode::ScrollView(
         x=360.0,
         y=150.0,

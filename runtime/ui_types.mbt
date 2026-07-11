@@ -25,6 +25,8 @@ pub(all) enum VisiblePred {
   Never
   HasText
   HasChoices
+  /// True when `bind.backlog_lines` is non-empty (backlog empty-state uses `Not`).
+  HasBacklog
   PrefBool(String)
   SlotOccupied(Int)
   ModeIs(String)
@@ -181,6 +183,7 @@ pub fn VisiblePred::eval(self : VisiblePred, bind : UiBindCtx) -> Bool {
     Never => false
     HasText => bind.has_text
     HasChoices => bind.has_choices
+    HasBacklog => bind.backlog_lines.length() > 0
     PrefBool(key) => pref_bool(bind.prefs, key)
     SlotOccupied(i) => {
       if i < 0 || i >= bind.occupied.length() {
