@@ -245,7 +245,30 @@ fn build_confirm(app : @runtime.UiApp) -> @runtime.UiNode {
 }
 
 ///|
-/// Six slots: label + Save/Load action on one row (HBox), then Back.
+/// Slot icon size (placeholder role; not a screenshot thumbnail).
+let slot_icon_w : Double = 56.0
+
+///|
+let slot_icon_h : Double = 48.0
+
+///|
+/// Left of the button column so icons sit beside each slot label row.
+let slot_icon_x : Double = 684.0
+
+///|
+/// VBox origin y for save_load body (title starts here).
+let save_load_body_y : Double = 64.0
+
+///|
+/// Title line (64) + spacer (12) before first slot label.
+let save_load_slots_y0 : Double = 140.0
+
+///|
+/// Per-slot vertical budget: SlotLabel line + Save/Load button line.
+let save_load_slot_stride : Double = 128.0
+
+///|
+/// Six slots: empty/filled icon + label + Save/Load action, then Back.
 fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
   let children : Array[@runtime.UiNode] = [
     @runtime.UiNode::Text(
@@ -257,6 +280,8 @@ fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
     ),
     @runtime.UiNode::Spacer(w=800.0, h=12.0),
   ]
+  // Absolute icon panels (Panel ignores flow origin); aligned to each slot label.
+  let icons : Array[@runtime.UiNode] = []
   for i in 0..<6 {
     let slot = i
     let save_id = app.alloc_action(fn(c : &@runtime.Capabilities) {
@@ -265,6 +290,29 @@ fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
     let load_id = app.alloc_action(fn(c : &@runtime.Capabilities) {
       c.load_slot(slot)
     })
+    let icon_y = save_load_slots_y0 + slot.to_double() * save_load_slot_stride + 8.0
+    icons.push(
+      @runtime.UiNode::Panel(
+        resource="ui.slot_empty",
+        x=slot_icon_x,
+        y=icon_y,
+        w=slot_icon_w,
+        h=slot_icon_h,
+        visible=@runtime.VisiblePred::Not(
+          @runtime.VisiblePred::SlotOccupied(slot),
+        ),
+      ),
+    )
+    icons.push(
+      @runtime.UiNode::Panel(
+        resource="ui.slot_filled",
+        x=slot_icon_x,
+        y=icon_y,
+        w=slot_icon_w,
+        h=slot_icon_h,
+        visible=@runtime.VisiblePred::SlotOccupied(slot),
+      ),
+    )
     // Label row (slot timestamp / empty marker).
     children.push(
       @runtime.UiNode::Text(
@@ -299,22 +347,32 @@ fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
   children.push(
     app.button("Back", fn(c : &@runtime.Capabilities) { c.return_modal() }),
   )
+  let root_children : Array[@runtime.UiNode] = [
+    @runtime.UiNode::Panel(
+      resource="ui.dialogue_box",
+      x=480.0,
+      y=40.0,
+      w=960.0,
+      h=1000.0,
+      visible=@runtime.VisiblePred::Always,
+    ),
+  ]
+  for n in icons {
+    root_children.push(n)
+  }
+  root_children.push(
+    @runtime.UiNode::VBox(
+      x=Some(modal_col_x),
+      y=Some(save_load_body_y),
+      children~,
+    ),
+  )
   @runtime.UiNode::Fixed(
     x=0.0,
     y=0.0,
     w=Some(1920.0),
     h=Some(1080.0),
-    children=[
-      @runtime.UiNode::Panel(
-        resource="ui.dialogue_box",
-        x=480.0,
-        y=40.0,
-        w=960.0,
-        h=1000.0,
-        visible=@runtime.VisiblePred::Always,
-      ),
-      @runtime.UiNode::VBox(x=Some(modal_col_x), y=Some(64.0), children~),
-    ],
+    children=root_children,
   )
 }
 

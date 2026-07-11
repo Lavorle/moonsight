@@ -1044,6 +1044,56 @@ test "confirm_no cancels" {
 }
 
 ///|
+/// Default focus on confirm is No (index 0); Advance activates cancel path.
+/// No is registered before Yes so focus 0 is the safe-cancel contract.
+test "confirm default focus is No; Advance cancels overwrite" {
+  let app = @runtime.UiApp::new()
+  let no_id = app.alloc_action(fn(c : &@runtime.Capabilities) { c.confirm_no() })
+  let yes_id = app.alloc_action(fn(c : &@runtime.Capabilities) { c.confirm_yes() })
+  app.register_modal(
+    "confirm",
+    @runtime.UiNode::VBox(
+      x=Some(0.0),
+      y=Some(0.0),
+      children=[
+        @runtime.UiNode::Button(
+          label="No",
+          action_id=no_id,
+          visible=@runtime.VisiblePred::Always,
+        ),
+        @runtime.UiNode::Button(
+          label="Yes",
+          action_id=yes_id,
+          visible=@runtime.VisiblePred::Always,
+        ),
+      ],
+    ),
+  )
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let ir = @script.compile_to_ir(src, file="confirm_focus.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", app~)
+  eng.stage.set_var("marker", Int(1))
+  let caps : &@runtime.Capabilities = eng
+  caps.save_slot(0)
+  eng.stage.set_var("marker", Int(2))
+  caps.save_slot(0)
+  assert_true(eng.pending_confirm == Some(OverwriteSave(0)))
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "confirm")
+  assert_eq(eng.ui.stack[0].focus, 0)
+  // Activate focused button without MenuDown → confirm_no.
+  eng.tick(Advance)
+  assert_true(eng.pending_confirm is None)
+  assert_eq(eng.ui.stack_depth(), 0)
+  guard eng.get_slot_blob(0) is Some(blob) else { fail("kept") }
+  let g = @runtime.parse_save_game(blob)
+  assert_true(g.vars.get("marker") == Some(Int(1)))
+}
+
+///|
 /// Esc on overwrite confirm must clear pending_confirm (same as confirm_no).
 test "OpenMenu on confirm clears pending without overwrite" {
   let src =

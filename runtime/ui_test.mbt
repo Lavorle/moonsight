@@ -496,6 +496,20 @@ test "VisiblePred And short-circuits ModeIs and SlotOccupied" {
 }
 
 ///|
+test "VisiblePred Not inverts SlotOccupied" {
+  let bind = {
+    ..UiBindCtx::empty(),
+    occupied: [false, true],
+  }
+  let empty0 = VisiblePred::Not(VisiblePred::SlotOccupied(0))
+  let empty1 = VisiblePred::Not(VisiblePred::SlotOccupied(1))
+  assert_true(empty0.eval(bind))
+  assert_true(!empty1.eval(bind))
+  assert_true(VisiblePred::Not(VisiblePred::Always).eval(bind) == false)
+  assert_true(VisiblePred::Not(VisiblePred::Never).eval(bind))
+}
+
+///|
 test "slider is focusable and MenuRight adjusts pref" {
   let app = UiApp::new()
   app.register_modal(

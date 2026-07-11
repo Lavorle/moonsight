@@ -30,6 +30,8 @@ pub(all) enum VisiblePred {
   ModeIs(String)
   /// Short-circuit conjunction of two predicates.
   And(VisiblePred, VisiblePred)
+  /// Negation of an inner predicate (e.g. empty slot icons).
+  Not(VisiblePred)
 } derive(Debug, Eq)
 
 ///|
@@ -193,6 +195,7 @@ pub fn VisiblePred::eval(self : VisiblePred, bind : UiBindCtx) -> Bool {
         None => false
       }
     And(a, b) => a.eval(bind) && b.eval(bind)
+    Not(inner) => !inner.eval(bind)
   }
 }
 

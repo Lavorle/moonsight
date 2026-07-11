@@ -99,6 +99,86 @@ test "load mode empty slots are not focusable" {
 }
 
 ///|
+test "save_load paints slot empty and filled icons" {
+  let app = @runtime.UiApp::new()
+  register(app)
+  let rt = @runtime.UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("save_load", mode="save")
+  let bind = {
+    ..@runtime.UiBindCtx::empty(),
+    occupied: [false, true, false, false, false, false],
+    modal_mode: Some("save"),
+  }
+  let ops = rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind~)
+  let mut empty_n = 0
+  let mut filled_n = 0
+  for op in ops {
+    if op.resource == "ui.slot_empty" {
+      empty_n = empty_n + 1
+    }
+    if op.resource == "ui.slot_filled" {
+      filled_n = filled_n + 1
+    }
+  }
+  // Slot 1 occupied → 5 empty icons + 1 filled icon.
+  assert_eq(empty_n, 5)
+  assert_eq(filled_n, 1)
+  // Same occupancy icons in load mode (icons are mode-independent).
+  rt.return_modal()
+  rt.show_modal("save_load", mode="load")
+  let bind_load = {
+    ..@runtime.UiBindCtx::empty(),
+    occupied: [false, true, false, false, false, false],
+    modal_mode: Some("load"),
+  }
+  let ops_load = rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=bind_load)
+  let mut empty_load = 0
+  let mut filled_load = 0
+  for op in ops_load {
+    if op.resource == "ui.slot_empty" {
+      empty_load = empty_load + 1
+    }
+    if op.resource == "ui.slot_filled" {
+      filled_load = filled_load + 1
+    }
+  }
+  assert_eq(empty_load, 5)
+  assert_eq(filled_load, 1)
+}
+
+///|
+test "confirm modal focuses No first" {
+  let app = @runtime.UiApp::new()
+  register(app)
+  let rt = @runtime.UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("confirm")
+  assert_eq(rt.stack[0].name, "confirm")
+  // show_modal seeds focus at 0; No is registered before Yes in build_confirm.
+  assert_eq(rt.stack[0].focus, 0)
+  let bind = @runtime.UiBindCtx::empty()
+  let focus = rt.focusables_top(bind)
+  assert_eq(focus.length(), 2)
+  let ops = rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind~)
+  let mut found_no_focused = false
+  let mut found_yes_unfocused = false
+  for op in ops {
+    match op.text {
+      Some(t) =>
+        if t == "No" {
+          assert_true(op.focused)
+          found_no_focused = true
+        } else if t == "Yes" {
+          assert_false(op.focused)
+          found_yes_unfocused = true
+        }
+      None => ()
+    }
+  }
+  assert_true(found_no_focused)
+  assert_true(found_yes_unfocused)
+}
+
+///|
 test "title modal Text MoonSight paints on centered card" {
   let app = @runtime.UiApp::new()
   register(app)
