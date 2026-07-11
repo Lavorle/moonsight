@@ -21,13 +21,14 @@ Based on:
 ### Host files
 
 ```
-host_web/js_glue/slug/
+apps/host-web/src/adapters/slug/   # active Svelte host path
   SlugVertexShader.wgsl   # from slug-webgpu
   SlugPixelShader.wgsl    # from slug-webgpu
   slug_pack.js            # curves + bands (adapted from slug-webgpu/src/slug.ts)
   slug_gpu.js             # pipeline + stamp into atlas sub-rect
   ttf.js                  # minimal TrueType glyf loader
   …
+archive/js_glue/slug/     # retired vanilla copy (historical)
 third_party/slug/         # Lengyel reference HLSL + NOTICE
 ```
 
@@ -49,4 +50,4 @@ non-16:9 windows do not stretch glyphs.
 
 - Eric Lengyel — Slug algorithm  
 - Konstantin Paulus / diffusionstudio — slug-webgpu WGSL port  
-- Noto Sans — Google (OFL; font file under `host_web/js_glue/fonts/`)
+- Noto Sans — Google (OFL; font file under `apps/host-web/public/fonts/`)

@@ -9,7 +9,8 @@ License: MIT OR Apache-2.0 (see LICENSE-MIT / LICENSE-APACHE in upstream;
 The patent for the Slug algorithm has been dedicated to the public domain.
 
 MoonSight uses the algorithm description and ideas for a Phase-1 host-side
-outline rasterizer (host_web/js_glue/slug/). A future revision may port the
+outline rasterizer (apps/host-web/src/adapters/slug/; retired copy under
+archive/js_glue/slug/). A future revision may port the
 full band-texture GPU path to WGSL using these reference shaders.
 
 If you redistribute software containing this code or a derivative of the

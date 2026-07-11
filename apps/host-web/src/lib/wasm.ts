@@ -1,5 +1,5 @@
 /**
- * MoonBit wasm-gc instantiation — matching host_web/js_glue/boot.js loadWasm.
+ * MoonBit wasm-gc instantiation — matching archived vanilla boot.js loadWasm.
  */
 
 /**

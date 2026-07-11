@@ -756,13 +756,13 @@ export function endFrame() {
 }
 
 /**
- * Optional CPU outline rasterizer (`js_glue/slug/index.js`).
+ * Optional CPU outline rasterizer (`adapters/slug/index.js`).
  * @type {null | { rasterizeCodepoint: (cp:number,w:number,h:number)=>Uint8ClampedArray|null, hasFont: ()=>boolean }}
  */
 let outlineRaster = null;
 
 /**
- * GPU Slug stamper (`js_glue/slug/slug_gpu.js`) — preferred when ready.
+ * GPU Slug stamper (`adapters/slug/slug_gpu.js`) — preferred when ready.
  * @type {null | { hasFont: ()=>boolean, stampGlyphToAtlas: Function, initSlugGpu?: Function, loadFontBuffer?: Function }}
  */
 let slugGpu = null;

@@ -9,7 +9,7 @@ Host devices map to **intent codes** each frame; the engine applies them in
 ## Intent table + codes
 
 Defined in `render.intent_from_code` / `intent_to_code`, wired by
-`host_web/js_glue/boot.js` → `export_frame(intent_code, dt_ms, skip_held)`.
+`apps/host-web` `gameSession.ts` → `export_frame(intent_code, dt_ms, skip_held)`.
 
 | Code | Intent | Meaning |
 |-----:|--------|---------|
@@ -120,8 +120,8 @@ synthesizes `Advance` when idle; hold skip is the faster path when both apply.
 
 **Blur / tab hide clear sticky skip:** browser hosts set `ctrlHeld = false` on
 `window` **blur** and when `document.visibilityState === "hidden"`, so a held
-Ctrl does not keep bursting after the tab loses focus. Both `js_glue/boot.js`
-and `apps/host-web` `gameSession.ts` implement this.
+Ctrl does not keep bursting after the tab loses focus.
+`apps/host-web` `gameSession.ts` implements this.
 
 ## `wait_remaining` gate
 
@@ -189,6 +189,6 @@ Wheel / drag on backlog never Advance narrative (modal gate). See
 - Engine: `runtime/engine.mbt` (`tick`, `tick_skip_burst`, `pointer_event`,
   `wheel_event`, backlog)
 - Host: `host_web/main.mbt` `export_pointer` / `export_wheel` / `export_frame`;
-  `js_glue/boot.js`; Svelte `apps/host-web/src/lib/gameSession.ts`
+  Svelte `apps/host-web/src/lib/gameSession.ts`
 - UI: `std_ui` modals `"backlog"`, `"confirm"`, settings `Slider`; themes in
   [`ui-moonbit.md`](./ui-moonbit.md)

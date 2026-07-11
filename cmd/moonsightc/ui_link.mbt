@@ -200,15 +200,6 @@ fn rebuild_host_web_wasm() -> Unit raise IoError {
       guard path_exists(wasm) else {
         raise IoError("host_web.wasm missing after build: \{wasm}")
       }
-      // Keep js_glue artifact in sync for consumers that copy only that tree.
-      let glue_wasm = join_path(root, "host_web/js_glue/host_web.wasm")
-      try {
-        copy_file(wasm, glue_wasm)
-        println("updated \{glue_wasm}")
-      } catch {
-        IoError(msg) =>
-          println("warning: could not update js_glue wasm: \{msg}")
-      }
       println("rebuilt host_web.wasm")
     }
   }

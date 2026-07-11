@@ -1,7 +1,7 @@
 import fs from "fs";
-import { parseTrueType } from "../host_web/js_glue/slug/ttf.js";
+import { parseTrueType } from "../apps/host-web/src/adapters/slug/ttf.js";
 
-const fontPath = "host_web/js_glue/fonts/NotoSans-Regular.ttf";
+const fontPath = "apps/host-web/public/fonts/NotoSans-Regular.ttf";
 const font = parseTrueType(fs.readFileSync(fontPath).buffer);
 const upem = font.unitsPerEm;
 

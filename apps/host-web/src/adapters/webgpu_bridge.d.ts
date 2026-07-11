@@ -1,5 +1,5 @@
 /**
- * Thin ambient types for webgpu_bridge.js (copied as-is from host_web/js_glue).
+ * Thin ambient types for webgpu_bridge.js (originally from vanilla js_glue).
  */
 
 export function init(canvas: HTMLCanvasElement): Promise<void>;

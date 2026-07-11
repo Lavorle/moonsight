@@ -43,12 +43,9 @@ cd dist/demo && python3 -m http.server 8080
 
 ## Web Host（Q2+）
 
-`moonsightc build` 会将 Web 壳复制到输出目录：
-
-1. 若存在 **`apps/host-web/dist`**（Svelte/Vite；需含 `index.html`）
-2. 否则回退到 **`host_web/js_glue`**（原生 JS — dist 缺失时的默认可玩路径）
-
-使用 Svelte Host 时的推荐顺序：
+`moonsightc build` 会从 **`apps/host-web/dist`** 复制 **Svelte** Web 壳（需含
+`index.html`）。无原生回退路径 — 请先构建 Svelte Host。历史源码见
+`archive/js_glue/`。
 
 ```bash
 export CC=gcc
@@ -57,14 +54,12 @@ moon build --target wasm-gc --release host_web
 moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
 ```
 
-未构建 Svelte dist 时，仍使用原生 `js_glue` 壳。若无 `ui_package`，也可手动
-把 wasm 刷到壳源码中：
+无 `ui_package` 时 moonsightc 不会自动重建 wasm — 开发时可手动刷入 Svelte
+`public/`：
 
 ```bash
 moon build --target wasm-gc --release host_web
-cp _build/wasm-gc/release/build/host_web/host_web.wasm host_web/js_glue/
-# 可选：同步到 Svelte public/ 供开发
-# cp _build/wasm-gc/release/build/host_web/host_web.wasm apps/host-web/public/
+cp _build/wasm-gc/release/build/host_web/host_web.wasm apps/host-web/public/
 ```
 
 ## 浏览器 / WebGPU（Linux 上尤其重要）
@@ -133,8 +128,8 @@ Advance。完整语义见 [游玩输入](./play-input)。
 | `audio` | 逻辑 BGM/SE 混音器（音量 / 淡入淡出） |
 | `std_commands` | 标准 `@` Host 命令（图层、dissolve、ui.show/hide、音频） |
 | `std_ui` | 默认 HUD + title / game_menu / save_load / settings / confirm / backlog |
-| `host_web` | 浏览器 wasm + `js_glue` 回退壳（WebGPU、prefs、多槽） |
-| `apps/host-web` | Svelte+TS Host 壳（`dist/` 存在时 `moonsightc` 优先使用） |
+| `host_web` | 浏览器 wasm 宿主（WebGPU 入口；壳为 `apps/host-web`） |
+| `apps/host-web` | Svelte+TS Host 壳（`moonsightc` **必需**；请先构建 `dist/`） |
 | `host_desktop` | Tauri 2 壳 |
 | `cmd/moonsightc` | `check` / `build` CLI（字面资源检查、可选 ui_package 链接） |
 | `demo/game` | 示例项目（+ 可选 `ui/` 覆盖） |

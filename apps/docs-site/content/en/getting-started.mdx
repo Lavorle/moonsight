@@ -46,12 +46,9 @@ cd dist/demo && python3 -m http.server 8080
 
 ## Web host (Q2+)
 
-`moonsightc build` copies a web shell into the output directory:
-
-1. **`apps/host-web/dist`** when present (Svelte/Vite; requires `index.html`)
-2. **`host_web/js_glue`** fallback (vanilla JS — default playable path if dist is missing)
-
-Recommended order when using the Svelte host:
+`moonsightc build` copies the **Svelte** web shell from **`apps/host-web/dist`**
+(requires `index.html`). There is no vanilla fallback — build the Svelte host
+first. Historical sources live under `archive/js_glue/`.
 
 ```bash
 export CC=gcc
@@ -60,14 +57,12 @@ moon build --target wasm-gc --release host_web
 moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
 ```
 
-Without a Svelte dist build, the vanilla `js_glue` shell is still used. With no
-`ui_package`, you may still refresh wasm into the shell sources manually:
+With no `ui_package`, moonsightc does not rebuild wasm automatically — refresh
+into Svelte `public/` for dev when needed:
 
 ```bash
 moon build --target wasm-gc --release host_web
-cp _build/wasm-gc/release/build/host_web/host_web.wasm host_web/js_glue/
-# optional: also into Svelte public/ for dev
-# cp _build/wasm-gc/release/build/host_web/host_web.wasm apps/host-web/public/
+cp _build/wasm-gc/release/build/host_web/host_web.wasm apps/host-web/public/
 ```
 
 ## Browser / WebGPU (important on Linux)
@@ -136,8 +131,8 @@ Build `dist/demo` first, then see `host_desktop/README.md` in the repository.
 | `audio` | Logical BGM/SE mixer (volume / fade) |
 | `std_commands` | Standard `@` host commands (layers, dissolve, ui.show/hide, audio) |
 | `std_ui` | Default HUD + title / game_menu / save_load / settings / confirm / backlog |
-| `host_web` | Browser wasm + `js_glue` fallback shell (WebGPU, prefs, multi-slot) |
-| `apps/host-web` | Svelte+TS host shell (preferred by `moonsightc` when `dist/` exists) |
+| `host_web` | Browser wasm host (WebGPU entry; shell is `apps/host-web`) |
+| `apps/host-web` | Svelte+TS host shell (**required** by `moonsightc`; build `dist/` first) |
 | `host_desktop` | Tauri 2 shell |
 | `cmd/moonsightc` | `check` / `build` CLI (literal resource check, optional ui_package link) |
 | `demo/game` | Sample project (+ optional `ui/` override) |

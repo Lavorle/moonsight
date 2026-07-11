@@ -22,19 +22,19 @@ moonsight/
   apps/
     host-web/              # Svelte+TS host shell (Vite 6 + Svelte 5); moonsightc prefers dist/
       src/
-        adapters/          # webgpu_bridge, slug, wasm boot (ported from js_glue)
+        adapters/          # webgpu_bridge, slug, wasm boot
         lib/               # gameSession + host glue (TS)
         App.svelte         # shell UI chrome
       public/              # wasm, fonts, demo placeholders for vite dev
-      dist/                # static production shell (index.html + assets/)
+      dist/                # static production shell (index.html + assets/) — required by moonsightc
     docs-site/             # Fumadocs (Next.js) bilingual author docs (zh default)
       content/
         zh/                # Chinese MDX (getting-started, moon-yuki, play-input, …)
         en/                # English MDX (same page set)
       app/                 # Next app router ([lang], docs, search, llms)
-  host_web/                # Wasm host entry + js_glue fallback (WebGPU/audio/input/prefs)
+  host_web/                # Wasm host entry (WebGPU/audio/input/prefs)
     project_ui/            # Overlay stub; moonsightc may link project ui_package here
-    js_glue/               # Vanilla JS shell (fallback when apps/host-web/dist missing)
+  archive/js_glue/         # Retired vanilla JS shell (historical only; not used by moonsightc)
   host_desktop/            # Minimal Tauri 2 shell over dist/demo
   cmd/moonsightc/          # check / build CLI (native)
   demo/game/               # Sample project (authoring source + optional ui/)
@@ -148,12 +148,12 @@ Typical `dist/demo/`:
 | `demo.yuki` | Copy of entry source (host load path today) |
 | `manifest.json` | name, logical size, resources, audio, save_slots |
 | `assets/**` | Copied media |
-| `index.html`, `host_web.wasm`, shell assets | Host shell from `apps/host-web/dist` (preferred) or `host_web/js_glue` (fallback). Wasm includes `std_ui` + linked project UI. Svelte dist ships Vite-bundled JS/CSS under `assets/`; vanilla glue ships `boot.js` + `webgpu_bridge.js` + `slug/`. |
+| `index.html`, `host_web.wasm`, shell assets | Host shell from `apps/host-web/dist` only (Svelte/Vite). Wasm includes `std_ui` + linked project UI. Dist ships Vite-bundled JS/CSS under `assets/`. |
 
-**Host shell discovery** (`moonsightc build`): `apps/host-web/dist` when it
-contains `index.html`, else `host_web/js_glue`. Project `manifest.json` always
-overwrites any shell placeholder; release `host_web.wasm` is injected when
-present under `_build/wasm-gc/release/build/host_web/`.
+**Host shell discovery** (`moonsightc build`): **only** `apps/host-web/dist`
+when it contains `index.html` (no vanilla fallback). Project `manifest.json`
+always overwrites any shell placeholder; release `host_web.wasm` is injected
+when present under `_build/wasm-gc/release/build/host_web/`.
 
 **No `screens.json` primary path.** UI trees live in the host wasm via
 `std_ui` / `project_ui` registration at engine init.
@@ -184,18 +184,18 @@ moon build --target wasm-gc --release host_web
 moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
 ```
 
-Without `apps/host-web/dist`, moonsightc falls back to `host_web/js_glue`.
-Without `ui_package`, moonsightc does not rebuild wasm automatically — refresh
-into the shell sources when needed:
+Without `apps/host-web/dist/index.html`, `moonsightc build` fails (Svelte dist
+required). Without `ui_package`, moonsightc does not rebuild wasm automatically
+— refresh into Svelte `public/` for dev when needed:
 
 ```bash
 moon build --target wasm-gc --release host_web
-cp _build/wasm-gc/release/build/host_web/host_web.wasm host_web/js_glue/
+cp _build/wasm-gc/release/build/host_web/host_web.wasm apps/host-web/public/
 ```
 
 ## Hosts
 
-### Browser (`apps/host-web` preferred, `host_web/js_glue` fallback)
+### Browser (`apps/host-web` only)
 
 Serve `dist/demo` (or a host shell root after copy) over localhost. WebGPU
 requires a secure context. **WebGPU only** — no WebGL fallback.
@@ -211,10 +211,9 @@ Cold start path: load narrative (`game.msb` / entry) → hydrate slots/prefs →
 | `src/lib/gameSession.ts` | Boot loop, input → intents, Ctrl→`skip_held`, frame export |
 | `src/adapters/` | `webgpu_bridge`, Slug shaders/JS, wasm helpers |
 | `src/App.svelte` | Minimal chrome (hints for Esc / Ctrl / …) |
-| `dist/` | Vite production output copied by `moonsightc` when present |
+| `dist/` | Vite production output copied by `moonsightc` |
 
-**Fallback shell** (`host_web/js_glue`): same wasm contract; used when
-`apps/host-web/dist/index.html` is missing.
+Retired vanilla sources (not used by build): `archive/js_glue/`.
 
 Input, prefs keys, and save keys are documented in
 [`host-commands.md`](./host-commands.md),
@@ -311,4 +310,4 @@ Do not expect or document as shipped:
 - Open host-string UI actions / general expression language on the tree
 - SE fade; OS user-directory saves (still webview `localStorage`)
 - Long-term Screen DSL lower compatibility (`- screen` is a hard error)
-- Deleting vanilla `host_web/js_glue` (kept as fallback)
+- (Q4+) Vanilla `js_glue` is archived under `archive/js_glue/` — not a playable path

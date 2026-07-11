@@ -451,7 +451,8 @@ var.set
 
 Canonical play semantics (skip vs `SkipTyping`, backlog, confirm):
 [`play-input.md`](./play-input.md). Codes also listed in
-[`draw-list-pack.md`](./draw-list-pack.md). Wired by `host_web/js_glue/boot.js`:
+[`draw-list-pack.md`](./draw-list-pack.md). Wired by `apps/host-web`
+`gameSession.ts`:
 
 | Code | Intent | Default binding |
 |-----:|--------|-----------------|

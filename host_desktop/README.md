@@ -5,10 +5,8 @@ Minimal **Tauri 2** window that loads the **same** static package as the browser
 and **no** React/Svelte toolchain inside Tauri — WebGPU + WASM run in the webview
 exactly as when serving `dist/demo` over HTTP.
 
-The packaged shell content is whatever moonsightc copied:
-
-1. **`apps/host-web/dist`** (Svelte/Vite) when present
-2. else **`host_web/js_glue`** (vanilla)
+The packaged shell content is whatever moonsightc copied from
+**`apps/host-web/dist`** (Svelte/Vite; required — no vanilla fallback).
 
 ## Layout
 
@@ -38,13 +36,12 @@ Both resolve to **repo-root** `dist/demo` (not `apps/host-web/dist` directly). R
 
 ## Prerequisites
 
-1. **Web dist** — build the demo (or any project) into `dist/demo` first.
-   `moonsightc` prefers `apps/host-web/dist` when present, else `host_web/js_glue`:
+1. **Web dist** — build the Svelte host and package the demo into `dist/demo`
+   first. `moonsightc` requires `apps/host-web/dist` (`index.html`):
 
    ```bash
    # from repo root
    export CC=gcc
-   # optional but recommended (Svelte host shell):
    cd apps/host-web && npm i && npm run build && cd ../..
    moon build --target wasm-gc --release host_web   # wasm used by ui_package / inject
    moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
@@ -92,7 +89,7 @@ loads the title screen (same behavior as browser on `dist/demo`).
 ## Saves (Phase 1)
 
 Phase 1 **keeps `localStorage`** inside the webview (`moonsight/save/{slot}` via the
-web shell: Svelte host or `host_web/js_glue/boot.js`). No Tauri filesystem plugin is wired yet.
+Svelte web shell). No Tauri filesystem plugin is wired yet.
 
 If later localStorage is insufficient (quota / multi-profile / export), map the save
 path to the OS app data dir with `@tauri-apps/plugin-fs` (or a thin Rust command)

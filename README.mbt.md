@@ -20,7 +20,11 @@ export CC=gcc
 moon check
 moon test
 
-# compile sample game + web dist (demo sets ui_package → rebuilds host wasm)
+# Svelte host shell (required — moonsightc has no vanilla fallback)
+cd apps/host-web && npm i && npm run build && cd ../..
+moon build --target wasm-gc --release host_web
+
+# compile sample game + package web dist (demo sets ui_package → rebuilds host wasm)
 moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
 
 # play in browser (WebGPU; use localhost — not file://)
@@ -30,12 +34,9 @@ cd dist/demo && python3 -m http.server 8080
 
 ## Web host (Q2+)
 
-`moonsightc build` copies a web shell into the output directory:
-
-1. **`apps/host-web/dist`** when present (Svelte/Vite; requires `index.html`)
-2. **`host_web/js_glue`** fallback (vanilla JS — default playable path if dist is missing)
-
-Recommended order when using the Svelte host:
+`moonsightc build` copies the **Svelte** web shell from **`apps/host-web/dist`**
+(requires `index.html`). There is no vanilla `js_glue` fallback — build the
+Svelte host first. Historical vanilla sources live under `archive/js_glue/`.
 
 ```bash
 export CC=gcc
@@ -44,14 +45,12 @@ moon build --target wasm-gc --release host_web
 moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
 ```
 
-Without a Svelte dist build, the vanilla `js_glue` shell is still used. With no
-`ui_package`, you may still refresh wasm into the shell sources manually:
+With no `ui_package`, moonsightc does not rebuild wasm automatically — refresh
+into Svelte `public/` for dev when needed:
 
 ```bash
 moon build --target wasm-gc --release host_web
-cp _build/wasm-gc/release/build/host_web/host_web.wasm host_web/js_glue/
-# optional: also into Svelte public/ for dev
-# cp _build/wasm-gc/release/build/host_web/host_web.wasm apps/host-web/public/
+cp _build/wasm-gc/release/build/host_web/host_web.wasm apps/host-web/public/
 ```
 
 ### Browser / WebGPU (important on Linux)
@@ -114,8 +113,8 @@ roles; host solids + optional PNGs). Author notes:
 | `audio` | Logical BGM/SE mixer (volume / fade) |
 | `std_commands` | Standard `@` host commands (layers, dissolve, ui.show/hide, audio) |
 | `std_ui` | Default HUD + title / game_menu / save_load / settings / confirm / backlog |
-| `host_web` | Browser wasm + `js_glue` fallback shell (WebGPU, prefs, multi-slot) |
-| `apps/host-web` | Svelte+TS host shell (preferred by `moonsightc` when `dist/` exists) |
+| `host_web` | Browser wasm host (WebGPU entry; shell is `apps/host-web`) |
+| `apps/host-web` | Svelte+TS host shell (**required** by `moonsightc`; build `dist/` first) |
 | `host_desktop` | Tauri 2 shell |
 | `cmd/moonsightc` | `check` / `build` CLI (literal resource check, optional ui_package link) |
 | `demo/game` | Sample project (+ optional `ui/` override) |
@@ -188,10 +187,10 @@ in [`docs/host-commands.md`](./docs/host-commands.md) /
 explicitly **not** in scope (SE status quo).
 
 **Host:** Vite + Svelte 5 + TypeScript shell at [`apps/host-web`](./apps/host-web)
-with WebGPU/Slug adapters under `src/adapters/`. `moonsightc build` **prefers**
-`apps/host-web/dist` when `index.html` is present; vanilla
-`host_web/js_glue` remains the fallback through Q4. Default playable path after
-`npm run build` in `apps/host-web` + `moonsightc build` is the Svelte shell.
+with WebGPU/Slug adapters under `src/adapters/`. `moonsightc build` requires
+`apps/host-web/dist` (`index.html`); the retired vanilla shell is archived at
+`archive/js_glue/`. Default playable path after `npm run build` in
+`apps/host-web` + `moonsightc build` is the Svelte shell.
 
 **Docs:** Fumadocs (Next.js) bilingual site at
 [`apps/docs-site`](./apps/docs-site) — Getting Started, MoonYuki subset, play
@@ -234,6 +233,5 @@ backlog into slots, rollback, DOM game menus, second native GPU backend, second
 wasm / dynamic UI load, runtime theme switcher / multi-theme store, transform
 animation stack, open host-string UI actions, official Yukimi bytecode
 compatibility, long-term Screen DSL lower compatibility, **`moonsight new` /
-project templates**, **desktop native save**, **deleting vanilla `js_glue`**,
-Host full consolidation, interactive WebGPU CI, committing wasm build artifacts
-to git.
+project templates**, **desktop native save**, Host full consolidation,
+interactive WebGPU CI, committing wasm build artifacts to git.

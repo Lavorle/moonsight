@@ -282,7 +282,7 @@ Authoritative sources:
 
 `theme.json` lists `fallback_solids` (RGBA) and optional `roles[role].file`
 PNGs. Host registers solids first, then tries each file; failed images keep the
-solid. Vanilla `js_glue` keeps Amber Soft solids only (no full PNG pack). Demo
+solid. (Archived vanilla `archive/js_glue` kept Amber Soft solids only.) Demo
 `moonsight.json` may set `"theme": "amber_soft"` as a project hint; the host
 loads `/themes/amber_soft` by default.
 

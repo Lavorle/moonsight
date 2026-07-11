@@ -1,6 +1,6 @@
 /**
  * Game session: owns wasm exports, intent, ctrlHeld, rAF loop, input.
- * Behavior ported from host_web/js_glue/boot.js.
+ * Behavior ported from archived vanilla boot.js (archive/js_glue).
  */
 
 import * as Gpu from "../adapters/webgpu_bridge.js";

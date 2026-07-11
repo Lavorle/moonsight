@@ -2,7 +2,7 @@
 
 MoonBit owns the CPU draw list (`DrawList`) and packs it into a dense
 `FixedArray[Float]` for the browser host. **JS owns WebGPU** via
-`globalThis.MoonSightGpu` (`host_web/js_glue/webgpu_bridge.js`).
+`globalThis.MoonSightGpu` (`apps/host-web/src/adapters/webgpu_bridge.js`).
 
 Player intent codes, `skip_held`, and wait gating: [`play-input.md`](./play-input.md).
 

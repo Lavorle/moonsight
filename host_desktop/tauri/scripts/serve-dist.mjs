@@ -3,7 +3,7 @@
  * Static file server for dist/demo during `tauri dev`.
  *
  * No React/Svelte toolchain inside Tauri — moonsightc packages the host shell
- * into dist/demo (prefers apps/host-web/dist Svelte build, else host_web/js_glue).
+ * into dist/demo from apps/host-web/dist (Svelte build required).
  * Paths: scripts/ → repo root is ../../../dist/demo (same as tauri.conf frontendDist).
  */
 import http from "node:http";

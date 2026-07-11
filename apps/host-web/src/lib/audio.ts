@@ -1,5 +1,5 @@
 /**
- * BGM/SE HTMLAudioElement glue — extracted from host_web/js_glue/boot.js.
+ * BGM/SE HTMLAudioElement glue — ported from archived vanilla boot.js.
  * Prefer OGG, fallback MP3. Web Audio unlock on first user gesture.
  */
 

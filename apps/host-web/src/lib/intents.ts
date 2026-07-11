@@ -1,5 +1,5 @@
 /**
- * Intent codes — must match host_web/js_glue/boot.js and docs/draw-list-pack.md.
+ * Intent codes — must match docs/draw-list-pack.md and export_frame contract.
  * Do not invent new codes.
  */
 
