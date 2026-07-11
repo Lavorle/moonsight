@@ -32,7 +32,8 @@ set every frame while **Control** is held.
 
 | Input | Effect |
 |-------|--------|
-| Click / Enter / Space / Z | `Advance` (on menus = activate focused button) |
+| Enter / Space / Z | `Advance` (on menus = activate focused button) |
+| Click (canvas) | `export_pointer` hit-test (see [Pointer](#pointer)); not a frame intent |
 | Esc | `OpenMenu` (open `game_menu` or pop modal) |
 | ↑ / W | `MenuUp` |
 | ↓ / S | `MenuDown` (plain **S**; **Ctrl/Cmd+S** = quick-save slot 0) |
@@ -136,7 +137,7 @@ Dangerous UI actions go through modal `"confirm"` and `ConfirmKind`:
 |------|------|
 | Source | Completed dialogue lines (`speaker` + full text) after typewriter complete |
 | Capacity | Ring buffer **100**; oldest dropped |
-| Persist | **Session only** — not in save v3; cleared on `start_game`, `quit_to_title`, load |
+| Persist | **Session only** — not persisted in saves; cleared on `start_game`, `quit_to_title`, load |
 | Open | **H** / `OpenBacklog`, or game menu **History** → `"backlog"` |
 | Close | Esc / Close → `return_modal` |
 | UI | Read-only list (last **12** lines via `BacklogLine`); no free scroll (Q3) |
