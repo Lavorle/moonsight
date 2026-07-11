@@ -1048,3 +1048,82 @@ test "content hit begins content drag" {
   assert_true(rt.scroll_y > 29.9 && rt.scroll_y < 30.1)
   rt.end_scroll_drag()
 }
+
+///|
+/// After leaving a ScrollView modal, stale viewport metrics must not consume
+/// pointer/wheel over the previous backlog geometry (Important 2).
+test "return_modal clears scroll viewport metrics" {
+  let app = UiApp::new()
+  // Menu under backlog: return leaves this top (no ScrollView).
+  app.register_modal(
+    "game_menu",
+    UiNode::Fixed(
+      x=0.0,
+      y=0.0,
+      w=Some(1920.0),
+      h=Some(1080.0),
+      children=[
+        UiNode::Button(label="Continue", action_id=0, visible=VisiblePred::Always),
+      ],
+    ),
+  )
+  // Enough lines that content_h exceeds viewport (20 × ~64 > 400).
+  let lines : Array[UiNode] = []
+  for i in 0..<20 {
+    lines.push(
+      UiNode::Text(
+        src=TextBindSrc::Literal("L\{i}"),
+        x=0.0,
+        y=0.0,
+        font_size=22.0,
+        visible=VisiblePred::Always,
+      ),
+    )
+  }
+  // Backlog-like viewport geometry so post-pop coords match a real leave path.
+  app.register_modal(
+    "backlog",
+    UiNode::Fixed(
+      x=0.0,
+      y=0.0,
+      w=Some(1920.0),
+      h=Some(1080.0),
+      children=[
+        UiNode::ScrollView(
+          x=360.0,
+          y=150.0,
+          w=1200.0,
+          h=400.0,
+          children=[UiNode::VBox(x=None, y=None, children=lines)],
+        ),
+        UiNode::Button(label="Close", action_id=1, visible=VisiblePred::Always),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("game_menu")
+  rt.show_modal("backlog")
+  rt.sync_bind(UiBindCtx::empty())
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
+  assert_true(rt.scroll_max() > 0.0)
+  // Wheel over measured viewport consumes while backlog is open.
+  assert_true(rt.handle_wheel(500.0, 400.0, 40.0))
+  let y_while_open = rt.scroll_y
+  // Pop backlog → game_menu (no ScrollView). Metrics must be invalidated.
+  rt.return_modal()
+  assert_eq(rt.stack_depth(), 1)
+  assert_eq(rt.scroll_vp_w.to_double(), 0.0)
+  assert_eq(rt.scroll_vp_h.to_double(), 0.0)
+  assert_eq(rt.scroll_content_h, 0.0)
+  // Old backlog viewport coords must not consume wheel or start content drag.
+  assert_false(rt.handle_wheel(500.0, 400.0, 40.0))
+  assert_eq(rt.scroll_y, 0.0)
+  let caps = FakeCaps::new()
+  let c : &Capabilities = caps
+  // Pointer in old content area: may hit menu button or miss; must not pan scroll.
+  ignore(rt.handle_pointer(c, 500.0, 400.0))
+  let before_move = rt.scroll_y
+  rt.pointer_scroll_move(y=450.0)
+  assert_eq(rt.scroll_y, before_move)
+  ignore(y_while_open)
+}

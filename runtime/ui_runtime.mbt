@@ -212,12 +212,32 @@ pub fn UiRuntime::pin_scroll_end(self : UiRuntime) -> Unit {
 }
 
 ///|
+/// Invalidate ScrollView metrics + drag (modal stack change; mirrors hover clear).
+///
+/// Zero viewport so `point_in_scroll_viewport` fails until a layout walk hits a
+/// ScrollView again — avoids content/bar drag or wheel after leaving backlog.
+fn UiRuntime::clear_scroll_viewport(self : UiRuntime) -> Unit {
+  self.scroll_drag = Idle
+  self.scroll_vp_x = 0.0
+  self.scroll_vp_y = 0.0
+  self.scroll_vp_w = 0.0
+  self.scroll_vp_h = 0.0
+  self.scroll_content_h = 0.0
+  self.scroll_y = 0.0
+  self.pin_on_next_layout = false
+}
+
+///|
 /// True when `(x, y)` lies inside the last measured ScrollView viewport.
 fn point_in_scroll_viewport(rt : UiRuntime, x : Double, y : Double) -> Bool {
   let vx = rt.scroll_vp_x.to_double()
   let vy = rt.scroll_vp_y.to_double()
   let vw = rt.scroll_vp_w.to_double()
   let vh = rt.scroll_vp_h.to_double()
+  // Unmeasured / cleared viewport (w or h == 0) never hits.
+  if vw <= 0.0 || vh <= 0.0 {
+    return false
+  }
   x >= vx && y >= vy && x < vx + vw && y < vy + vh
 }
 
@@ -360,13 +380,13 @@ pub fn UiRuntime::show_modal(
     self.mode = Menu
   }
   self.stack.push({ name, mode, focus: 0 })
-  // New modal layer: stale hover indices from the previous layer are invalid.
+  // New modal layer: stale hover / ScrollView metrics from the previous layer
+  // are invalid (top may not re-measure a ScrollView this frame).
   self.hover = -1
-  self.scroll_drag = Idle
+  self.clear_scroll_viewport()
   // Opening backlog pins scroll to newest (bottom) on next layout.
   if name == "backlog" {
     self.pin_on_next_layout = true
-    self.scroll_y = 0.0
   }
 }
 
@@ -380,9 +400,9 @@ pub fn UiRuntime::return_modal(self : UiRuntime) -> Unit {
   if self.stack.is_empty() && (self.mode is Menu) {
     self.mode = Playing
   }
-  // Focusables changed with the stack; drop hover until next pointer_hover.
+  // Focusables / ScrollView changed with the stack; drop hover + viewport metrics.
   self.hover = -1
-  self.scroll_drag = Idle
+  self.clear_scroll_viewport()
 }
 
 ///|
@@ -405,7 +425,7 @@ pub fn UiRuntime::hide_modal(self : UiRuntime, name? : String) -> Unit {
         self.mode = Playing
       }
       self.hover = -1
-      self.scroll_drag = Idle
+      self.clear_scroll_viewport()
     }
   }
 }
