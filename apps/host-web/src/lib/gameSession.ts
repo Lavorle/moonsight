@@ -53,8 +53,10 @@ export type HostExports = WebAssembly.Exports & {
   frame_len: () => number;
   frame_at: (i: number) => number;
   export_frame: (intent: number, dt: number, skipHeld: number) => void;
-  /** phase: 0=move, 1=down, 3=leave; returns hover_kind for cursor. */
+  /** phase: 0=move, 1=down, 2=up, 3=leave; returns hover_kind for cursor. */
   export_pointer?: (x: number, y: number, phase: number) => number;
+  /** Vertical wheel; dy>0 → reveal older (host maps -event.deltaY). */
+  export_wheel?: (x: number, y: number, dy: number) => number;
   resource_name?: (id: number) => string;
   pending_glyph_count?: () => number;
   pending_glyph_cp?: (i: number) => number;
@@ -196,10 +198,11 @@ function drawPack(
 
 /**
  * Map canvas client coords → logical 1920×1080 pixels.
+ * Accepts PointerEvent / WheelEvent (any clientX/clientY source).
  */
 function pointerToLogical(
   canvas: HTMLCanvasElement,
-  ev: PointerEvent,
+  ev: { clientX: number; clientY: number },
 ): { x: number; y: number } {
   const rect = canvas.getBoundingClientRect();
   const rw = rect.width || 1;
@@ -547,7 +550,7 @@ export class GameSession {
     };
 
     // Engine owns hit-test (Button / Choice / Slider / miss→Advance).
-    // phase: 0=move, 1=down, 3=leave.
+    // phase: 0=move, 1=down, 2=up, 3=leave.
     const onPointerMove = (ev: PointerEvent) => {
       if (!this.exports_?.export_pointer) return;
       const { x, y } = pointerToLogical(canvas, ev);
@@ -572,23 +575,56 @@ export class GameSession {
       }
     };
 
+    const onPointerUp = (ev: PointerEvent) => {
+      if (!this.exports_?.export_pointer) return;
+      const { x, y } = pointerToLogical(canvas, ev);
+      this.exports_.export_pointer(x, y, 2);
+    };
+
     const onPointerLeave = () => {
       this.exports_?.export_pointer?.(0, 0, 3);
       canvas.style.cursor = "default";
+    };
+
+    // Spec: dy>0 => scroll_y decreases (older). Map browser deltaY so "wheel up"
+    // reveals older: wheel up (deltaY < 0) → positive dy to engine.
+    const onWheel = (ev: WheelEvent) => {
+      if (!this.exports_?.export_wheel) return;
+      ev.preventDefault();
+      const { x, y } = pointerToLogical(canvas, ev);
+      const dy = -ev.deltaY;
+      this.exports_.export_wheel(x, y, dy);
+      this.pointerDirty = true;
+    };
+
+    // D3: blur / tab-hidden must clear sticky Ctrl skip.
+    const onBlur = () => {
+      this.ctrlHeld = false;
+    };
+    const onVis = () => {
+      if (document.visibilityState === "hidden") this.ctrlHeld = false;
     };
 
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     canvas.addEventListener("pointermove", onPointerMove);
     canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointerup", onPointerUp);
     canvas.addEventListener("pointerleave", onPointerLeave);
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("visibilitychange", onVis);
 
     this.unbindInput = () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointerleave", onPointerLeave);
+      canvas.removeEventListener("wheel", onWheel);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }
 

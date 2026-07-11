@@ -603,8 +603,9 @@ function frame(ts) {
 
 /**
  * Map canvas client coords → logical 1920×1080 pixels.
+ * Accepts PointerEvent / WheelEvent (any clientX/clientY source).
  * @param {HTMLCanvasElement} canvas
- * @param {PointerEvent} ev
+ * @param {{clientX:number, clientY:number}} ev
  * @returns {{x:number,y:number}}
  */
 function pointerToLogical(canvas, ev) {
@@ -721,7 +722,7 @@ function bindInput(canvas) {
   });
 
   // Engine owns hit-test (Button / Choice / Slider / miss→Advance).
-  // phase: 0=move, 1=down, 3=leave. Parity with apps/host-web gameSession.
+  // phase: 0=move, 1=down, 2=up, 3=leave. Parity with apps/host-web gameSession.
   const onPointerMove = (ev) => {
     if (!exports_ || typeof exports_.export_pointer !== "function") return;
     const { x, y } = pointerToLogical(canvas, ev);
@@ -746,6 +747,12 @@ function bindInput(canvas) {
     }
   };
 
+  const onPointerUp = (ev) => {
+    if (!exports_ || typeof exports_.export_pointer !== "function") return;
+    const { x, y } = pointerToLogical(canvas, ev);
+    exports_.export_pointer(x, y, 2);
+  };
+
   const onPointerLeave = () => {
     if (exports_ && typeof exports_.export_pointer === "function") {
       exports_.export_pointer(0, 0, 3);
@@ -753,9 +760,32 @@ function bindInput(canvas) {
     canvas.style.cursor = "default";
   };
 
+  // Spec: dy>0 => scroll_y decreases (older). Map browser deltaY so "wheel up"
+  // reveals older: wheel up (deltaY < 0) → positive dy to engine.
+  const onWheel = (ev) => {
+    if (!exports_ || typeof exports_.export_wheel !== "function") return;
+    ev.preventDefault();
+    const { x, y } = pointerToLogical(canvas, ev);
+    const dy = -ev.deltaY;
+    exports_.export_wheel(x, y, dy);
+    pointerDirty = true;
+  };
+
+  // D3: blur / tab-hidden must clear sticky Ctrl skip.
+  const onBlur = () => {
+    ctrlHeld = false;
+  };
+  const onVis = () => {
+    if (document.visibilityState === "hidden") ctrlHeld = false;
+  };
+
   canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointerup", onPointerUp);
   canvas.addEventListener("pointerleave", onPointerLeave);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+  window.addEventListener("blur", onBlur);
+  document.addEventListener("visibilitychange", onVis);
 }
 
 function doSave() {
