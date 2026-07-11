@@ -377,10 +377,10 @@ test "handle_pointer hits button and activates" {
   rt.show_modal("m")
   rt.sync_bind(UiBindCtx::empty())
   // Miss
-  rt.handle_pointer(c, 10.0, 10.0)
+  assert_false(rt.handle_pointer(c, 10.0, 10.0))
   assert_eq(n, 0)
   // Hit button rect [100,200]–[500,252]
-  rt.handle_pointer(c, 150.0, 220.0)
+  assert_true(rt.handle_pointer(c, 150.0, 220.0))
   assert_eq(n, 1)
 }
 
@@ -620,4 +620,63 @@ test "text in VBox paints at origin and takes a line of flow" {
   assert_true(found_title)
   // Start button is below the title line (~64px).
   assert_true(start_y >= 360.0 + 56.0 && start_y <= 360.0 + 64.0)
+}
+
+///|
+test "handle_pointer returns false on miss true on hit" {
+  let app = UiApp::new()
+  let mut n = 0
+  let id = app.alloc_action(fn(_c : &Capabilities) { n = n + 1 })
+  app.register_modal(
+    "m",
+    UiNode::VBox(
+      x=Some(100.0),
+      y=Some(200.0),
+      children=[
+        UiNode::Button(label="Hit", action_id=id, visible=VisiblePred::Always),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  let caps = FakeCaps::new()
+  let c : &Capabilities = caps
+  rt.show_modal("m")
+  rt.sync_bind(UiBindCtx::empty())
+  assert_false(rt.handle_pointer(c, 10.0, 10.0))
+  assert_eq(n, 0)
+  assert_true(rt.handle_pointer(c, 150.0, 220.0))
+  assert_eq(n, 1)
+}
+
+///|
+test "handle_pointer slider sets pref from x ratio" {
+  let app = UiApp::new()
+  app.register_modal(
+    "settings",
+    UiNode::Fixed(
+      x=100.0,
+      y=100.0,
+      w=Some(400.0),
+      h=Some(24.0),
+      children=[
+        UiNode::Slider(
+          key="master_volume",
+          x=0.0,
+          y=0.0,
+          w=400.0,
+          h=24.0,
+          visible=VisiblePred::Always,
+        ),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  let caps = FakeCaps::new()
+  let c : &Capabilities = caps
+  rt.show_modal("settings")
+  rt.sync_bind(UiBindCtx::empty())
+  // Mid-track: origin (100,100), width 400 → x=300
+  assert_true(rt.handle_pointer(c, 300.0, 112.0))
+  let p = caps.prefs()
+  assert_true(p.master_volume > 0.45 && p.master_volume < 0.55)
 }

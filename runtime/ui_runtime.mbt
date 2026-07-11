@@ -210,15 +210,16 @@ pub fn UiRuntime::slider_delta(
 
 ///|
 /// Hit-test focusables under (x,y); set focus and activate on hit.
+/// Returns `true` if a focusable was hit, `false` on miss.
 pub fn UiRuntime::handle_pointer(
   self : UiRuntime,
   caps : &Capabilities,
   x : Double,
   y : Double,
-) -> Unit {
+) -> Bool {
   let items = self.current_focusables(self.bind)
   if items.is_empty() {
-    return
+    return false
   }
   let px = Float::from_double(x)
   let py = Float::from_double(y)
@@ -230,11 +231,26 @@ pub fn UiRuntime::handle_pointer(
       match f.target {
         UiFocusTarget::Button(action_id) => self.app.invoke(action_id, caps)
         UiFocusTarget::Choice(ci) => caps.confirm_choice(ci)
-        UiFocusTarget::Slider(_) => ()
+        UiFocusTarget::Slider(key) => {
+          let t = (x - f.x.to_double()) / f.w.to_double()
+          apply_slider_normalized(caps, key, t)
+        }
       }
-      return
+      return true
     }
     i = i + 1
+  }
+  false
+}
+
+///|
+/// Map a normalized 0..1 slider click ratio to a prefs value via `set_pref_f`.
+fn apply_slider_normalized(caps : &Capabilities, key : String, t : Double) -> Unit {
+  let t = if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t }
+  match key {
+    "text_speed" => caps.set_pref_f(key, 0.25 + t * (3.0 - 0.25))
+    "master_volume" | "bgm_volume" | "se_volume" => caps.set_pref_f(key, t)
+    _ => ()
   }
 }
 
