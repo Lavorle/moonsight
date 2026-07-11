@@ -543,6 +543,55 @@ fn Engine::tick_skip_burst(self : Engine) -> Unit {
 }
 
 ///|
+/// Host pointer path: hover / leave / down with UI hit-test and miss→Advance.
+///
+/// `phase`: 0=move, 1=down, 3=leave.
+/// Returns `hover_kind` after the event (0 none, 1 button, 2 choice, 3 slider).
+///
+/// Does **not** advance `wait_remaining` or tweens — host still calls
+/// `export_frame(0, dt)` same frame for presentation clocks. On Playing miss,
+/// applies keyboard-equivalent Advance (typewriter complete-first) and
+/// `run_until_wait` when the VM becomes Running.
+pub fn Engine::pointer_event(
+  self : Engine,
+  x : Double,
+  y : Double,
+  phase~ : Int,
+) -> Int {
+  self.sync_ui_bind()
+  if phase == 3 {
+    self.ui.pointer_leave()
+    return 0
+  }
+  if phase == 0 {
+    ignore(self.ui.pointer_hover(x, y))
+    return self.ui.hover_kind()
+  }
+  // phase == 1 down
+  ignore(self.ui.pointer_hover(x, y))
+  let caps : &Capabilities = self
+  let ui_active = self.ui.stack_depth() > 0 || (self.ui.mode is Title)
+  if ui_active {
+    ignore(self.ui.handle_pointer(caps, x, y))
+    return self.ui.hover_kind()
+  }
+  // Playing, no modal
+  if self.stage.wait_remaining > 0.0 {
+    return self.ui.hover_kind()
+  }
+  if self.ui.handle_pointer(caps, x, y) {
+    return self.ui.hover_kind()
+  }
+  // Miss → Advance (same path as keyboard)
+  self.apply_intent(Advance)
+  // If Apply left VM Running, run until wait so one click advances a line
+  if self.vm.wait is Running {
+    self.vm.run_until_wait(self.director, self.stage)
+  }
+  self.ui.hover_kind()
+}
+
+///|
 /// Build UiBindCtx from stage + prefs + slots and store on UiRuntime.
 ///
 /// Hosts should call this before `ui.paint_modal` / `ui.paint_hud` each frame

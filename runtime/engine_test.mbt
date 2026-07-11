@@ -1105,3 +1105,110 @@ test "set_pref volume updates global mixer gains" {
   assert_true(volume > 0.24 && volume < 0.26)
   @audio.reset_global_mixer()
 }
+
+///|
+/// Simple HUD with ChoiceList at known geometry (mirrors std_ui defaults).
+fn app_hud_choices() -> @runtime.UiApp {
+  let app = @runtime.UiApp::new()
+  app.set_hud(
+    @runtime.UiNode::ChoiceList(
+      x=80.0,
+      y=556.0,
+      w=1760.0,
+      line_h=48.0,
+      visible=@runtime.VisiblePred::HasChoices,
+    ),
+  )
+  app
+}
+
+///|
+/// Pointer miss on Playing dialogue: first down completes typewriter (Advance parity).
+test "pointer miss advances dialogue when Playing" {
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|y:There
+    #|
+  let ir = @script.compile_to_ir(src, file="ptr_miss.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.tick(None_, dt=0.0)
+  assert_true(eng.vm.wait == Yield)
+  guard eng.stage.text is Some(t0) else { fail("text") }
+  assert_eq(t0.full_text, "Hi")
+  assert_false(t0.complete)
+  eng.sync_ui_bind()
+  // Miss empty HUD (no choices / no focusables).
+  let kind = eng.pointer_event(50.0, 50.0, phase=1)
+  assert_eq(kind, 0)
+  guard eng.stage.text is Some(t1) else { fail("after complete") }
+  assert_true(t1.complete)
+  assert_true(eng.vm.wait == Yield)
+  // Second miss advances to next line (run_until_wait).
+  ignore(eng.pointer_event(50.0, 50.0, phase=1))
+  guard eng.stage.text is Some(t2) else { fail("second line") }
+  assert_eq(t2.full_text, "There")
+}
+
+///|
+/// Timed wait gate: pointer down must not Advance while wait_remaining > 0.
+test "pointer down ignored while wait_remaining" {
+  let src =
+    #|- scene "s"
+    #|y:Wait
+    #|y:Next
+    #|
+  let ir = @script.compile_to_ir(src, file="ptr_wait.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.tick(None_, dt=0.0)
+  eng.tick(Advance) // complete typewriter
+  guard eng.stage.text is Some(t0) else { fail("text") }
+  assert_true(t0.complete)
+  assert_eq(t0.full_text, "Wait")
+  eng.stage.wait_remaining = 1.0
+  eng.sync_ui_bind()
+  ignore(eng.pointer_event(100.0, 100.0, phase=1))
+  assert_eq(eng.stage.wait_remaining, 1.0)
+  assert_true(eng.vm.wait == Yield)
+  guard eng.stage.text is Some(t1) else { fail("unchanged") }
+  assert_eq(t1.full_text, "Wait")
+  assert_true(t1.complete)
+}
+
+///|
+/// Pointer down on a choice row confirms that index (Choose + HUD hit).
+test "pointer hits choice while Choose" {
+  let src =
+    #|- scene "s"
+    #|@flow.choice "Yes" "No" --result c
+    #|
+  let ir = @script.compile_to_ir(src, file="ptr_choice.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", app=app_hud_choices())
+  eng.tick(None_, dt=0.0)
+  assert_true(eng.vm.wait == Choose)
+  eng.sync_ui_bind()
+  // Second row: y = 556 + 1*48 = 604; hit center of row (h = line_h - 8).
+  let kind = eng.pointer_event(100.0, 604.0 + 10.0, phase=1)
+  assert_eq(kind, 2)
+  assert_true(eng.stage.get_var("c") == Int(1))
+  assert_true(eng.stage.choices is None)
+}
+
+///|
+/// phase=0 move updates hover; phase=3 leave clears hover.
+test "pointer move and leave update hover_kind" {
+  let src =
+    #|- scene "s"
+    #|@flow.choice "A" "B" --result c
+    #|
+  let ir = @script.compile_to_ir(src, file="ptr_hover.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", app=app_hud_choices())
+  eng.tick(None_, dt=0.0)
+  eng.sync_ui_bind()
+  let k0 = eng.pointer_event(100.0, 556.0 + 10.0, phase=0)
+  assert_eq(k0, 2)
+  assert_eq(eng.ui.hover_kind(), 2)
+  let k1 = eng.pointer_event(0.0, 0.0, phase=3)
+  assert_eq(k1, 0)
+  assert_eq(eng.ui.hover_kind(), 0)
+}
