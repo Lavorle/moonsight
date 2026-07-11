@@ -27,6 +27,24 @@ let ui_res_button : String = "ui.button"
 let ui_res_button_focus : String = "ui.button_focus"
 
 ///|
+let ui_res_button_hover : String = "ui.button_hover"
+
+///|
+let ui_res_choice : String = "ui.choice_row"
+
+///|
+let ui_res_choice_focus : String = "ui.choice_row_focus"
+
+///|
+let ui_res_choice_hover : String = "ui.choice_row_hover"
+
+///|
+let ui_res_slider_track : String = "ui.slider_track"
+
+///|
+let ui_res_slider_fill : String = "ui.slider_fill"
+
+///|
 let ui_res_dim : String = "ui.menu_dim"
 
 ///|
@@ -46,6 +64,8 @@ struct UiWalkState {
   focusables : Array[LaidFocus]
   bind : UiBindCtx
   focus_index : Int
+  /// Hovered focusable index (-1 = none).
+  hover_index : Int
   mut focus_counter : Int
   paint : Bool
 } derive(Debug)
@@ -62,6 +82,8 @@ pub(all) struct UiRuntime {
   mut bind : UiBindCtx
   /// Focus index when no modal is open (HUD choices).
   mut hud_focus : Int
+  /// Hovered focusable index (-1 = none).
+  mut hover : Int
 }
 
 ///|
@@ -82,6 +104,7 @@ pub fn UiRuntime::from_app(app : UiApp, save_slots~ : Int) -> UiRuntime {
     prefs: Prefs::default(),
     bind: UiBindCtx::empty(),
     hud_focus: 0,
+    hover: -1,
   }
 }
 
@@ -244,6 +267,57 @@ pub fn UiRuntime::handle_pointer(
 }
 
 ///|
+/// Hit-test focusables under (x,y); set hover index on hit, clear on miss.
+/// Returns `true` if some focusable contains (x,y).
+pub fn UiRuntime::pointer_hover(
+  self : UiRuntime,
+  x : Double,
+  y : Double,
+) -> Bool {
+  let items = self.current_focusables(self.bind)
+  if items.is_empty() {
+    self.hover = -1
+    return false
+  }
+  let px = Float::from_double(x)
+  let py = Float::from_double(y)
+  let mut i = 0
+  while i < items.length() {
+    let f = items[i]
+    if px >= f.x && px < f.x + f.w && py >= f.y && py < f.y + f.h {
+      self.hover = i
+      return true
+    }
+    i = i + 1
+  }
+  self.hover = -1
+  false
+}
+
+///|
+/// Clear hover state (pointer left the canvas / UI).
+pub fn UiRuntime::pointer_leave(self : UiRuntime) -> Unit {
+  self.hover = -1
+}
+
+///|
+/// Hovered focusable kind: 0=none, 1=button, 2=choice, 3=slider.
+pub fn UiRuntime::hover_kind(self : UiRuntime) -> Int {
+  if self.hover < 0 {
+    return 0
+  }
+  let items = self.current_focusables(self.bind)
+  if self.hover >= items.length() {
+    return 0
+  }
+  match items[self.hover].target {
+    UiFocusTarget::Button(_) => 1
+    UiFocusTarget::Choice(_) => 2
+    UiFocusTarget::Slider(_) => 3
+  }
+}
+
+///|
 /// Map a normalized 0..1 slider click ratio to a prefs value via `set_pref_f`.
 fn apply_slider_normalized(caps : &Capabilities, key : String, t : Double) -> Unit {
   let t = if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t }
@@ -291,6 +365,7 @@ pub fn UiRuntime::paint_modal(
         text: None,
         font_size: 0.0,
         focused: false,
+        hovered: false,
       },
     )
   }
@@ -302,6 +377,7 @@ pub fn UiRuntime::paint_modal(
         focusables: [],
         bind: bind2,
         focus_index: top.focus,
+        hover_index: self.hover,
         focus_counter: 0,
         paint: true,
       }
@@ -341,6 +417,7 @@ pub fn UiRuntime::paint_hud(
         focusables: [],
         bind,
         focus_index: self.hud_focus,
+        hover_index: self.hover,
         focus_counter: 0,
         paint: true,
       }
@@ -404,6 +481,7 @@ fn UiRuntime::collect_modal_focusables(
         focusables: [],
         bind: bind2,
         focus_index: top.focus,
+        hover_index: self.hover,
         focus_counter: 0,
         paint: false,
       }
@@ -426,6 +504,7 @@ fn UiRuntime::collect_hud_focusables(
         focusables: [],
         bind,
         focus_index: self.hud_focus,
+        hover_index: self.hover,
         focus_counter: 0,
         paint: false,
       }
@@ -522,6 +601,7 @@ fn walk_ui_node(
             text: None,
             font_size: 0.0,
             focused: false,
+            hovered: false,
           },
         )
       }
@@ -549,6 +629,7 @@ fn walk_ui_node(
             text: Some(label),
             font_size: Float::from_double(font_size),
             focused: false,
+            hovered: false,
           },
         )
       }
@@ -570,6 +651,7 @@ fn walk_ui_node(
             text: None,
             font_size: 0.0,
             focused: false,
+            hovered: false,
           },
         )
       }
@@ -582,6 +664,7 @@ fn walk_ui_node(
       let idx = st.focus_counter
       st.focus_counter = idx + 1
       let focused = idx == st.focus_index
+      let hovered = (!focused) && (idx == st.hover_index)
       st.focusables.push(
         {
           target: UiFocusTarget::Button(action_id),
@@ -592,8 +675,20 @@ fn walk_ui_node(
         },
       )
       if st.paint {
-        let res = if focused { ui_res_button_focus } else { ui_res_button }
-        let opacity : Float = if focused { 1.0 } else { 0.75 }
+        let res = if focused {
+          ui_res_button_focus
+        } else if hovered {
+          ui_res_button_hover
+        } else {
+          ui_res_button
+        }
+        let opacity : Float = if focused {
+          1.0
+        } else if hovered {
+          0.9
+        } else {
+          0.75
+        }
         st.ops.push(
           {
             kind: 0,
@@ -607,6 +702,7 @@ fn walk_ui_node(
             text: Some(label),
             font_size: ui_font_size,
             focused,
+            hovered,
           },
         )
       }
@@ -623,6 +719,7 @@ fn walk_ui_node(
       let idx = st.focus_counter
       st.focus_counter = idx + 1
       let focused = idx == st.focus_index
+      let hovered = (!focused) && (idx == st.hover_index)
       st.focusables.push(
         {
           target: UiFocusTarget::Slider(key),
@@ -639,16 +736,23 @@ fn walk_ui_node(
         st.ops.push(
           {
             kind: 0,
-            resource: ui_res_button,
+            resource: ui_res_slider_track,
             x: px,
             y: py,
             w: bw,
             h: bh,
-            opacity: if focused { 0.55 } else { 0.4 },
+            opacity: if focused {
+              0.55
+            } else if hovered {
+              0.5
+            } else {
+              0.4
+            },
             z: ui_z_widget,
             text: None,
             font_size: 0.0,
             focused: false,
+            hovered: false,
           },
         )
         // Fill proportional to normalized pref value.
@@ -656,16 +760,23 @@ fn walk_ui_node(
           st.ops.push(
             {
               kind: 0,
-              resource: if focused { ui_res_button_focus } else { ui_res_button },
+              resource: ui_res_slider_fill,
               x: px,
               y: py,
               w: fill_w,
               h: bh,
-              opacity: if focused { 1.0 } else { 0.85 },
+              opacity: if focused {
+                1.0
+              } else if hovered {
+                0.95
+              } else {
+                0.85
+              },
               z: ui_z_widget,
               text: None,
               font_size: 0.0,
               focused,
+              hovered,
             },
           )
         }
@@ -689,6 +800,7 @@ fn walk_ui_node(
         let idx = st.focus_counter
         st.focus_counter = idx + 1
         let focused = idx == st.focus_index
+        let hovered = (!focused) && (idx == st.hover_index)
         st.focusables.push(
           {
             target: UiFocusTarget::Choice(i),
@@ -699,8 +811,20 @@ fn walk_ui_node(
           },
         )
         if st.paint {
-          let res = if focused { ui_res_button_focus } else { ui_res_button }
-          let opacity : Float = if focused { 1.0 } else { 0.75 }
+          let res = if focused {
+            ui_res_choice_focus
+          } else if hovered {
+            ui_res_choice_hover
+          } else {
+            ui_res_choice
+          }
+          let opacity : Float = if focused {
+            1.0
+          } else if hovered {
+            0.9
+          } else {
+            0.75
+          }
           let btn_h = if lh > 8.0 { lh - 8.0 } else { lh }
           st.ops.push(
             {
@@ -715,6 +839,7 @@ fn walk_ui_node(
               text: Some(labels[i]),
               font_size: ui_font_size,
               focused,
+              hovered,
             },
           )
         }

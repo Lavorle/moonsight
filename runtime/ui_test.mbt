@@ -343,7 +343,9 @@ test "choice list expands and activate confirms index" {
   let ops = rt.paint_hud(canvas_w=1920.0, canvas_h=1080.0, bind~)
   let mut rows = 0
   for op in ops {
-    if op.resource == "ui.button" || op.resource == "ui.button_focus" {
+    if op.resource == "ui.choice_row" ||
+      op.resource == "ui.choice_row_focus" ||
+      op.resource == "ui.choice_row_hover" {
       rows = rows + 1
     }
   }
@@ -565,8 +567,7 @@ test "slider paint fill width tracks normalized pref" {
   // Track (full) + fill (0.25 * 400 = 100). First focusable is focused.
   let mut fill_w : Float = -1.0
   for op in ops {
-    if op.focused &&
-      (op.resource == "ui.button" || op.resource == "ui.button_focus") {
+    if op.focused && op.resource == "ui.slider_fill" {
       fill_w = op.w
     }
   }
@@ -679,4 +680,44 @@ test "handle_pointer slider sets pref from x ratio" {
   assert_true(rt.handle_pointer(c, 300.0, 112.0))
   let p = caps.prefs()
   assert_true(p.master_volume > 0.45 && p.master_volume < 0.55)
+}
+
+///|
+test "pointer_hover sets hover and paint uses button_hover" {
+  let app = UiApp::new()
+  let id = app.alloc_action(fn(_c : &Capabilities) { () })
+  app.register_modal(
+    "m",
+    UiNode::VBox(
+      x=Some(100.0),
+      y=Some(200.0),
+      children=[
+        UiNode::Button(label="A", action_id=id, visible=VisiblePred::Always),
+        UiNode::Button(label="B", action_id=id, visible=VisiblePred::Always),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("m")
+  let bind = UiBindCtx::empty()
+  rt.sync_bind(bind)
+  // Default focus index 0; hover index 1 (second button at y = 200 + ui_line_h)
+  assert_true(rt.pointer_hover(100.0 + 10.0, 200.0 + 64.0 + 10.0))
+  assert_eq(rt.hover_kind(), 1)
+  let ops = rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind~)
+  let mut found_hover = false
+  for op in ops {
+    if op.resource == "ui.button_hover" || op.hovered {
+      found_hover = true
+    }
+  }
+  assert_true(found_hover)
+  rt.pointer_leave()
+  assert_eq(rt.hover_kind(), 0)
+  // after leave, no hover resource on unfocused button
+  let ops2 = rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind~)
+  for op in ops2 {
+    assert_false(op.hovered)
+    assert_false(op.resource == "ui.button_hover")
+  }
 }

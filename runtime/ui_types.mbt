@@ -103,6 +103,8 @@ pub(all) struct UiDrawOp {
   text : String?
   font_size : Float
   focused : Bool
+  /// True when this focusable is hovered but not focused.
+  hovered : Bool
 } derive(Debug)
 
 ///|

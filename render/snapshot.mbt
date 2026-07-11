@@ -23,6 +23,26 @@ pub let ui_button : String = "ui.button"
 pub let ui_button_focus : String = "ui.button_focus"
 
 ///|
+/// UI button panel (hovered, not focused).
+pub let ui_button_hover : String = "ui.button_hover"
+
+///|
+/// Choice row panel (focused).
+pub let ui_choice_row_focus : String = "ui.choice_row_focus"
+
+///|
+/// Choice row panel (hovered, not focused).
+pub let ui_choice_row_hover : String = "ui.choice_row_hover"
+
+///|
+/// Slider track background.
+pub let ui_slider_track : String = "ui.slider_track"
+
+///|
+/// Slider fill (value portion).
+pub let ui_slider_fill : String = "ui.slider_fill"
+
+///|
 /// Convert a read-only stage snapshot into a GPU-agnostic draw list.
 ///
 /// - Visible layers → `SpriteDraw` (full-canvas size × layer.scale, origin top-left).

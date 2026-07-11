@@ -48,6 +48,7 @@ fn dialogue_ops(layout : UiLayout, speaker : String?, body : String) -> Array[
     text: None,
     font_size: 0.0,
     focused: false,
+    hovered: false,
   })
   match speaker {
     None => ()
@@ -64,6 +65,7 @@ fn dialogue_ops(layout : UiLayout, speaker : String?, body : String) -> Array[
         text: Some(name),
         font_size: 28.0,
         focused: false,
+        hovered: false,
       })
     }
   }
@@ -79,6 +81,7 @@ fn dialogue_ops(layout : UiLayout, speaker : String?, body : String) -> Array[
     text: Some(body),
     font_size: layout.font_size,
     focused: false,
+    hovered: false,
   })
   ops
 }
@@ -160,6 +163,7 @@ test "ui draw ops emit button sprite and glyphs" {
       text: Some("Start"),
       font_size: 30.0,
       focused: false,
+      hovered: false,
     },
   ]
   let dl = build_draw_list(view, layout, ui_ops=ops)
@@ -239,6 +243,7 @@ test "choices emit rows and glyphs from ui ops" {
     text: Some("Yes"),
     font_size: 30.0,
     focused: true,
+    hovered: false,
   })
   ops.push({
     kind: 0,
@@ -252,6 +257,7 @@ test "choices emit rows and glyphs from ui ops" {
     text: Some("No"),
     font_size: 30.0,
     focused: false,
+    hovered: false,
   })
   let dl = build_draw_list(view, layout, ui_ops=ops)
   let mut rows = 0
