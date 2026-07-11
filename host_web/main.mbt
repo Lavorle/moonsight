@@ -142,6 +142,11 @@ fn install_engine_from_ir(ir : @script.IrModule) -> Unit {
   ignore(s.resources.intern(@render.ui_menu_dim))
   ignore(s.resources.intern(@render.ui_button))
   ignore(s.resources.intern(@render.ui_button_focus))
+  ignore(s.resources.intern("ui.button_hover"))
+  ignore(s.resources.intern("ui.choice_row_focus"))
+  ignore(s.resources.intern("ui.choice_row_hover"))
+  ignore(s.resources.intern("ui.slider_track"))
+  ignore(s.resources.intern("ui.slider_fill"))
   ignore(s.resources.intern("bg/demo"))
 }
 
@@ -219,6 +224,17 @@ pub fn set_slot_json(slot : Int, json : String) -> Int {
       eng.set_slot_blob(slot, json)
       0
     }
+  }
+}
+
+///|
+/// Pointer path: logical pixels, phase 0=move 1=down 3=leave.
+/// Returns hover_kind: 0 none, 1 button, 2 choice, 3 slider.
+pub fn export_pointer(x : Float, y : Float, phase : Int) -> Int {
+  let s = session.val
+  match s.engine {
+    None => 0
+    Some(eng) => eng.pointer_event(x.to_double(), y.to_double(), phase~)
   }
 }
 
