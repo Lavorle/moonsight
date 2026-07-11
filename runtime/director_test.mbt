@@ -30,6 +30,38 @@ test "director layer.show and layer.hide" {
 }
 
 ///|
+/// `scale=` snaps on show/set when duration is 0; named args use `#:key` packing.
+test "builtin layer.show accepts scale named arg" {
+  let stage = @runtime.Stage::new()
+  let dir = @runtime.Director::with_builtins()
+  assert_true(
+    dir.call(
+      "layer.show",
+      stage,
+      [
+        Str("y"),
+        Str("char_y"),
+        Str("#:kind"),
+        Str("character"),
+        Str("#:scale"),
+        Float(0.5),
+      ],
+    ) ==
+    Ok,
+  )
+  assert_eq(stage.layers[0].scale, 0.5)
+  assert_true(
+    dir.call(
+      "layer.set",
+      stage,
+      [Str("y"), Str("#:scale"), Float(1.0), Str("#:duration"), Float(0.0)],
+    ) ==
+    Ok,
+  )
+  assert_eq(stage.layers[0].scale, 1.0)
+}
+
+///|
 test "director var.set stores values" {
   let stage = @runtime.Stage::new()
   let dir = @runtime.Director::with_builtins()

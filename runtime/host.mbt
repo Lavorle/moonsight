@@ -225,8 +225,9 @@ fn find_layer_index(stage : Stage, id : String) -> Int? {
 }
 
 ///|
-/// `layer.show id resource [z] [x] [y] [opacity]` plus named kind/duration/etc.
+/// `layer.show id resource [z] [x] [y] [opacity]` plus named kind/duration/scale/etc.
 /// Kind defaults to **Character**. New + duration>0: opacity starts at 0.
+/// Scale defaults to 1.0; when `scale` is set, snap unless duration>0 then tween.
 fn builtin_layer_show(stage : Stage, args : Array[Value]) -> HostResult {
   let (pos, named) = split_host_args(args)
   let id = match pos {
@@ -281,6 +282,7 @@ fn builtin_layer_show(stage : Stage, args : Array[Value]) -> HostResult {
         _ => None
       }
   }
+  let scale_opt = named_double(named, "scale")
   let duration = match named_double(named, "duration") {
     Some(d) => d
     None => 0.0
@@ -303,6 +305,7 @@ fn builtin_layer_show(stage : Stage, args : Array[Value]) -> HostResult {
   }
   match find_layer_index(stage, id) {
     Some(i) => {
+      // Existing layer: z/kind/resource immediate; specified x/y/opacity/scale tween or snap.
       // Cancel pending hide + its opacity→0 tween so re-show cannot vanish the layer.
       let cur = stage.layers[i]
       let new_z = match z_opt {
@@ -340,10 +343,16 @@ fn builtin_layer_show(stage : Stage, args : Array[Value]) -> HostResult {
         Some(ov) => stage.start_layer_tween(id~, prop=Opacity, to=ov, duration~)
         None => ()
       }
+      match scale_opt {
+        Some(sv) => stage.start_layer_tween(id~, prop=Scale, to=sv, duration~)
+        None => ()
+      }
       Ok
     }
     None => {
+      // New layer. show_layer defaults scale=1.0 (current for Scale tween).
       if duration > 0.0 {
+        // x/y/z/kind/resource immediate; opacity starts at 0 and tweens to target.
         stage.show_layer(
           id~,
           layer=kind,
@@ -369,6 +378,11 @@ fn builtin_layer_show(stage : Stage, args : Array[Value]) -> HostResult {
           y~,
           opacity=opacity_target,
         )
+      }
+      // Snap scale unless duration>0 then tween from current (1.0) to target.
+      match scale_opt {
+        Some(sv) => stage.start_layer_tween(id~, prop=Scale, to=sv, duration~)
+        None => ()
       }
       Ok
     }
@@ -423,7 +437,8 @@ fn builtin_layer_move(stage : Stage, args : Array[Value]) -> HostResult {
 }
 
 ///|
-/// `layer.set id` with named x/y/opacity/duration. Missing id → Error.
+/// `layer.set id` with named x/y/opacity/scale/duration. Missing id → Error.
+/// `scale=` with `duration=` starts a Scale tween (duration <= 0 snaps).
 fn builtin_layer_set(stage : Stage, args : Array[Value]) -> HostResult {
   let (pos, named) = split_host_args(args)
   let id = match pos {
@@ -447,6 +462,10 @@ fn builtin_layer_set(stage : Stage, args : Array[Value]) -> HostResult {
       }
       match named_double(named, "opacity") {
         Some(ov) => stage.start_layer_tween(id~, prop=Opacity, to=ov, duration~)
+        None => ()
+      }
+      match named_double(named, "scale") {
+        Some(sv) => stage.start_layer_tween(id~, prop=Scale, to=sv, duration~)
         None => ()
       }
       Ok
