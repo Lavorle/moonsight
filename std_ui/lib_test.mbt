@@ -132,6 +132,31 @@ test "title modal Text MoonSight paints on centered card" {
 }
 
 ///|
+test "std_ui backlog modal registers and uses ScrollView" {
+  let app = @runtime.UiApp::new()
+  register(app)
+  let rt = @runtime.UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("backlog")
+  // Many preformatted lines so content height exceeds ScrollView viewport (780).
+  let lines : Array[String] = []
+  for i in 0..<30 {
+    lines.push("line \{i}")
+  }
+  let bind = { ..@runtime.UiBindCtx::empty(), backlog_lines: lines }
+  rt.sync_bind(bind)
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind~))
+  assert_true(rt.scroll_max() > 0.0)
+  // Close lives outside ScrollView and remains the only focusable.
+  let focus = rt.focusables_top(bind)
+  assert_eq(focus.length(), 1)
+  // Few lines must not inflate content via empty BacklogLine slots (collapse).
+  let few = { ..@runtime.UiBindCtx::empty(), backlog_lines: ["a", "b"] }
+  rt.sync_bind(few)
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=few))
+  assert_eq(rt.scroll_max(), 0.0)
+}
+
+///|
 test "typewriter bind exposes visible prefix only" {
   let src =
     #|- scene "entrypoint"

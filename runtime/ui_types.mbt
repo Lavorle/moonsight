@@ -14,7 +14,7 @@ pub(all) enum TextBindSrc {
   Pref(String)
   SlotLabel(Int)
   Var(String)
-  /// Preformatted backlog line at index `i` (0 = oldest of the last 12).
+  /// Preformatted backlog line at index `i` (0 = oldest of the bound window).
   BacklogLine(Int)
 } derive(Debug, Eq)
 
@@ -146,7 +146,8 @@ pub(all) struct UiBindCtx {
   choice_labels : Array[String]
   dialogue_name : String
   dialogue_body : String
-  /// Last 12 backlog lines preformatted as "Name: text" (or bare text); newest last.
+  /// Bound backlog lines preformatted as "Name: text" (or bare text); newest last.
+  /// Length is `min(store.len(), capacity)` from the engine ring (up to 100 by default).
   backlog_lines : Array[String]
   /// Per-slot labels (length = save_slots); resolved by `TextBindSrc::SlotLabel`.
   slot_labels : Array[String]

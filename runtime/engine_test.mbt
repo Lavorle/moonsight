@@ -340,6 +340,31 @@ test "sync_ui_bind fills backlog_lines after dialogue complete" {
 }
 
 ///|
+test "sync_ui_bind exposes up to backlog capacity lines" {
+  let src =
+    #|- scene "s"
+    #|y:seed
+    #|
+  let ir = @script.compile_to_ir(src, file="bl_cap.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  for i in 0..<20 {
+    eng.backlog.push(speaker=Some("H"), text="line \{i}")
+  }
+  eng.sync_ui_bind()
+  assert_eq(eng.ui.bind.backlog_lines.length(), 20)
+  assert_eq(eng.ui.bind.backlog_lines[0], "H: line 0")
+  assert_eq(eng.ui.bind.backlog_lines[19], "H: line 19")
+  // Still bound by store capacity (default 100), not a hard 12.
+  for i in 20..<100 {
+    eng.backlog.push(speaker=None, text="x\{i}")
+  }
+  eng.sync_ui_bind()
+  assert_eq(eng.ui.bind.backlog_lines.length(), 100)
+  assert_eq(eng.ui.bind.backlog_lines[0], "H: line 0")
+  assert_eq(eng.ui.bind.backlog_lines[99], "x99")
+}
+
+///|
 test "sync_ui_bind fills slot_labels" {
   let src =
     #|- scene "s"

@@ -642,8 +642,8 @@ pub fn Engine::sync_ui_bind(self : Engine) -> Unit {
   } else {
     self.ui.stack[self.ui.stack.length() - 1].mode
   }
-  // Last 12 backlog lines (oldest first among the window; newest last).
-  let backlog_lines = format_backlog_lines(self.backlog, 12)
+  // Up to capacity backlog lines (oldest first; newest last).
+  let backlog_lines = format_backlog_lines(self.backlog, self.backlog.capacity)
   let n_slots = self.ui.save_slots
   let slot_labels : Array[String] = []
   for i in 0..<n_slots {

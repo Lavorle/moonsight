@@ -131,20 +131,15 @@ fn build_game_menu(app : @runtime.UiApp) -> @runtime.UiNode {
 }
 
 ///|
-/// Backlog: wide card, 12 lines + Close.
+/// Backlog: wide card + ScrollView of up to 100 bound lines; Close outside viewport.
+///
+/// Layout mirrors confirm Fixed+absolute style so ScrollView absolute geometry
+/// does not fight a flowing VBox stack.
 fn build_backlog(app : @runtime.UiApp) -> @runtime.UiNode {
-  let children : Array[@runtime.UiNode] = [
-    @runtime.UiNode::Text(
-      src=@runtime.TextBindSrc::Literal("History"),
-      x=0.0,
-      y=0.0,
-      font_size=30.0,
-      visible=@runtime.VisiblePred::Always,
-    ),
-    @runtime.UiNode::Spacer(w=800.0, h=8.0),
-  ]
-  for i in 0..<12 {
-    children.push(
+  // Pre-create max capacity text rows; empty BacklogLine slots collapse in walk.
+  let line_nodes : Array[@runtime.UiNode] = []
+  for i in 0..<100 {
+    line_nodes.push(
       @runtime.UiNode::Text(
         src=@runtime.TextBindSrc::BacklogLine(i),
         x=0.0,
@@ -154,10 +149,6 @@ fn build_backlog(app : @runtime.UiApp) -> @runtime.UiNode {
       ),
     )
   }
-  children.push(@runtime.UiNode::Spacer(w=400.0, h=8.0))
-  children.push(
-    app.button("Close", fn(c : &@runtime.Capabilities) { c.return_modal() }),
-  )
   @runtime.UiNode::Fixed(
     x=0.0,
     y=0.0,
@@ -172,7 +163,33 @@ fn build_backlog(app : @runtime.UiApp) -> @runtime.UiNode {
         h=980.0,
         visible=@runtime.VisiblePred::Always,
       ),
-      @runtime.UiNode::VBox(x=Some(360.0), y=Some(72.0), children~),
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::Literal("History"),
+        x=360.0,
+        y=72.0,
+        font_size=30.0,
+        visible=@runtime.VisiblePred::Always,
+      ),
+      @runtime.UiNode::ScrollView(
+        x=360.0,
+        y=150.0,
+        w=1200.0,
+        h=780.0,
+        children=[
+          @runtime.UiNode::VBox(x=None, y=None, children=line_nodes),
+        ],
+      ),
+      // Close outside ScrollView so it stays clickable/focusable at bottom.
+      @runtime.UiNode::VBox(
+        x=Some(modal_col_x),
+        y=Some(960.0),
+        children=[
+          app.button(
+            "Close",
+            fn(c : &@runtime.Capabilities) { c.return_modal() },
+          ),
+        ],
+      ),
     ],
   )
 }

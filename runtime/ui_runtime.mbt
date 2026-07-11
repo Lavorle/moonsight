@@ -932,11 +932,15 @@ fn walk_ui_node(
       if !visible.eval(st.bind) {
         return (0.0, 0.0)
       }
+      let label = src.resolve(st.bind)
+      // Empty backlog slots collapse so pre-created capacity rows do not pad content.
+      if label == "" && src is BacklogLine(_) {
+        return (0.0, 0.0)
+      }
       // node x/y are offsets from the parent flow origin (0 for modal titles).
       let px = origin_x + Float::from_double(x)
       let py = origin_y + Float::from_double(y)
       if st.paint && rect_intersects_clip(st, px, py, ui_btn_w, ui_line_h) {
-        let label = src.resolve(st.bind)
         st.ops.push(
           {
             kind: 1,
