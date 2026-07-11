@@ -24,7 +24,11 @@ fn moonsight_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 fn atomic_write(path: &Path, body: String) -> Result<(), String> {
     let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, body).map_err(|e| e.to_string())?;
+    fs::write(&tmp, &body).map_err(|e| e.to_string())?;
+    // On Windows, rename fails if the destination already exists.
+    if path.exists() {
+        fs::remove_file(path).map_err(|e| e.to_string())?;
+    }
     fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 

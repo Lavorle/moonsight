@@ -109,6 +109,10 @@ Commands (ACL: `allow-moonsight-save`): `read_prefs`, `write_prefs`,
 `read_save_slot`, `write_save_slot`. Browser builds keep `WebSaveStore` /
 `localStorage` (`moonsight/prefs`, `moonsight/save/{n}`).
 
+**Web slots and desktop slots are not interchangeable** — no automatic migration
+between browser `localStorage` and appData files. Engine save JSON remains v4
+on both; only the Host persistence backend differs.
+
 ### Manual desktop save checklist
 
 1. Build the web host + package demo into `dist/demo` (see Prerequisites).
