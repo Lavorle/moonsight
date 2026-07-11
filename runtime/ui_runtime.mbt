@@ -131,6 +131,8 @@ pub fn UiRuntime::show_modal(
     self.mode = Menu
   }
   self.stack.push({ name, mode, focus: 0 })
+  // New modal layer: stale hover indices from the previous layer are invalid.
+  self.hover = -1
 }
 
 ///|
@@ -143,6 +145,8 @@ pub fn UiRuntime::return_modal(self : UiRuntime) -> Unit {
   if self.stack.is_empty() && (self.mode is Menu) {
     self.mode = Playing
   }
+  // Focusables changed with the stack; drop hover until next pointer_hover.
+  self.hover = -1
 }
 
 ///|
@@ -164,6 +168,7 @@ pub fn UiRuntime::hide_modal(self : UiRuntime, name? : String) -> Unit {
       if self.stack.is_empty() && (self.mode is Menu) {
         self.mode = Playing
       }
+      self.hover = -1
     }
   }
 }

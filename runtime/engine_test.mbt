@@ -1212,3 +1212,27 @@ test "pointer move and leave update hover_kind" {
   assert_eq(k1, 0)
   assert_eq(eng.ui.hover_kind(), 0)
 }
+
+///|
+/// Unknown phase (not 0/1/3) must not activate UI or Advance; only hover update.
+test "pointer unknown phase is not down" {
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|y:There
+    #|
+  let ir = @script.compile_to_ir(src, file="ptr_phase.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s")
+  eng.tick(None_, dt=0.0)
+  assert_true(eng.vm.wait == Yield)
+  guard eng.stage.text is Some(t0) else { fail("text") }
+  assert_eq(t0.full_text, "Hi")
+  assert_false(t0.complete)
+  eng.sync_ui_bind()
+  // phase=2 (or any non-0/1/3) must not complete typewriter / Advance.
+  ignore(eng.pointer_event(50.0, 50.0, phase=2))
+  guard eng.stage.text is Some(t1) else { fail("unchanged") }
+  assert_false(t1.complete)
+  assert_eq(t1.full_text, "Hi")
+  assert_true(eng.vm.wait == Yield)
+}

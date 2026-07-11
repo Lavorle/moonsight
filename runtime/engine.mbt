@@ -567,6 +567,11 @@ pub fn Engine::pointer_event(
     ignore(self.ui.pointer_hover(x, y))
     return self.ui.hover_kind()
   }
+  // Only phase == 1 is down; other phases just return hover_kind after move.
+  if phase != 1 {
+    ignore(self.ui.pointer_hover(x, y))
+    return self.ui.hover_kind()
+  }
   // phase == 1 down
   ignore(self.ui.pointer_hover(x, y))
   let caps : &Capabilities = self
