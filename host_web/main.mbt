@@ -147,6 +147,10 @@ fn install_engine_from_ir(ir : @script.IrModule) -> Unit {
   ignore(s.resources.intern("ui.choice_row_hover"))
   ignore(s.resources.intern("ui.slider_track"))
   ignore(s.resources.intern("ui.slider_fill"))
+  ignore(s.resources.intern("ui.scroll_track"))
+  ignore(s.resources.intern("ui.scroll_thumb"))
+  ignore(s.resources.intern("ui.slot_empty"))
+  ignore(s.resources.intern("ui.slot_filled"))
   ignore(s.resources.intern("bg/demo"))
 }
 

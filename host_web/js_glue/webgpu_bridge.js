@@ -392,6 +392,10 @@ export async function init(canvas) {
   makePlaceholderSolid("ui.button_hover", [90, 56, 42, 230]);
   makePlaceholderSolid("ui.slider_track", [36, 28, 32, 200]);
   makePlaceholderSolid("ui.slider_fill", [200, 140, 90, 240]);
+  makePlaceholderSolid("ui.scroll_track", [36, 28, 32, 200]);
+  makePlaceholderSolid("ui.scroll_thumb", [200, 140, 90, 240]);
+  makePlaceholderSolid("ui.slot_empty", [40, 32, 36, 180]);
+  makePlaceholderSolid("ui.slot_filled", [90, 56, 42, 220]);
   makePlaceholderSolid("bg/demo", [60, 90, 140, 255]);
   // Empty atlas placeholder (1x1) until glyphs upload
   makePlaceholderSolid("atlas", [255, 255, 255, 0]);

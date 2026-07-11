@@ -43,6 +43,22 @@ pub let ui_slider_track : String = "ui.slider_track"
 pub let ui_slider_fill : String = "ui.slider_fill"
 
 ///|
+/// ScrollView scrollbar track.
+pub let ui_scroll_track : String = "ui.scroll_track"
+
+///|
+/// ScrollView scrollbar thumb.
+pub let ui_scroll_thumb : String = "ui.scroll_thumb"
+
+///|
+/// Save/load slot panel (empty).
+pub let ui_slot_empty : String = "ui.slot_empty"
+
+///|
+/// Save/load slot panel (occupied).
+pub let ui_slot_filled : String = "ui.slot_filled"
+
+///|
 /// Convert a read-only stage snapshot into a GPU-agnostic draw list.
 ///
 /// - Visible layers → `SpriteDraw` (full-canvas size × layer.scale, origin top-left).

@@ -34,6 +34,12 @@ const SPECS = {
   "menu_dim.png": { w: 32, h: 32, r: 0, style: "dim" },
   "slider_track.png": { w: 256, h: 28, r: 14, style: "slider_track" },
   "slider_fill.png": { w: 256, h: 28, r: 14, style: "slider_fill" },
+  // Scrollbar (independent roles from slider; similar palette)
+  "scroll_track.png": { w: 24, h: 256, r: 10, style: "scroll_track" },
+  "scroll_thumb.png": { w: 24, h: 96, r: 10, style: "scroll_thumb" },
+  // Save/load slots
+  "slot_empty.png": { w: 320, h: 80, r: 16, style: "slot_empty" },
+  "slot_filled.png": { w: 320, h: 80, r: 16, style: "slot_filled" },
 };
 
 // Amber Soft palette (sRGB).
@@ -259,6 +265,38 @@ function drawPanel(w, h, r, style) {
           base = mix(C.fill, C.amberHot, (1 - t) * 0.45);
           alpha = 0.96;
           sheen = Math.max(0, 1 - t * 1.8) * 0.35;
+          borderBoost = 0.5;
+          break;
+        }
+        case "scroll_track": {
+          // Vertical scrollbar gutter — same ink as slider track.
+          base = mix(C.track, C.ink, t * 0.35);
+          alpha = 0.78;
+          sheen = Math.max(0, 1 - t * 2.0) * 0.06;
+          borderBoost = 0.25;
+          break;
+        }
+        case "scroll_thumb": {
+          // Scroll thumb — amber fill, slightly less hot than slider.
+          base = mix(C.fill, C.amberHot, (1 - t) * 0.35);
+          alpha = 0.94;
+          sheen = Math.max(0, 1 - t * 1.8) * 0.28;
+          borderBoost = 0.45;
+          break;
+        }
+        case "slot_empty": {
+          // Empty save slot — muted row, lower alpha.
+          base = mix([40, 32, 36], C.deep, t * 0.4);
+          alpha = 0.7;
+          sheen = Math.max(0, 1 - t * 2.8) * 0.08;
+          borderBoost = 0.3;
+          break;
+        }
+        case "slot_filled": {
+          // Occupied save slot — warm hover plate.
+          base = mix(C.hover, C.row, t * 0.3);
+          alpha = 0.86;
+          sheen = Math.max(0, 1 - t * 2.4) * 0.18;
           borderBoost = 0.5;
           break;
         }

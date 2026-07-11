@@ -12,7 +12,11 @@
     "ui.button_hover": [90, 56, 42, 230],
     "ui.menu_dim": [8, 6, 10, 150],
     "ui.slider_track": [36, 28, 32, 200],
-    "ui.slider_fill": [200, 140, 90, 240]
+    "ui.slider_fill": [200, 140, 90, 240],
+    "ui.scroll_track": [36, 28, 32, 200],
+    "ui.scroll_thumb": [200, 140, 90, 240],
+    "ui.slot_empty": [40, 32, 36, 180],
+    "ui.slot_filled": [90, 56, 42, 220]
   },
   "roles": {
     "ui.dialogue_box": { "file": "dialogue_box.png" },
@@ -25,6 +29,10 @@
     "ui.button_hover": { "file": "button_hover.png" },
     "ui.menu_dim": { "file": "menu_dim.png" },
     "ui.slider_track": { "file": "slider_track.png" },
-    "ui.slider_fill": { "file": "slider_fill.png" }
+    "ui.slider_fill": { "file": "slider_fill.png" },
+    "ui.scroll_track": { "file": "scroll_track.png" },
+    "ui.scroll_thumb": { "file": "scroll_thumb.png" },
+    "ui.slot_empty": { "file": "slot_empty.png" },
+    "ui.slot_filled": { "file": "slot_filled.png" }
   }
 }
