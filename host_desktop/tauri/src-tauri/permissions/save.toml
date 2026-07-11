@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-moonsight-save"
+description = "Read/write moonsight prefs and save slots under appData"
+commands.allow = ["read_prefs", "write_prefs", "read_save_slot", "write_save_slot"]

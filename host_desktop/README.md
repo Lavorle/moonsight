@@ -86,18 +86,46 @@ curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4173/host_web.wasm
 **Manual GUI check** (local desktop): after `npm run tauri dev`, confirm the window
 loads the title screen (same behavior as browser on `dist/demo`).
 
-## Saves (Phase 1)
+## Saves (appData SaveStore)
 
-Phase 1 **keeps `localStorage`** inside the webview (`moonsight/save/{slot}` via the
-Svelte web shell). No Tauri filesystem plugin is wired yet.
+Desktop uses **OS app data** files via custom Tauri commands (not webview
+`localStorage`). The Svelte host detects Tauri (`window.__TAURI_INTERNALS__`) and
+constructs `DesktopSaveStore`, which preloads prefs + slots then write-throughs on save.
 
-If later localStorage is insufficient (quota / multi-profile / export), map the save
-path to the OS app data dir with `@tauri-apps/plugin-fs` (or a thin Rust command)
-under e.g. `{appDataDir}/moonsight/save/`. That is intentionally deferred past Phase 1.
+| Kind | Path under appData |
+|------|--------------------|
+| Prefs | `{appDataDir}/moonsight/prefs.json` |
+| Slot *n* | `{appDataDir}/moonsight/saves/{n}.json` |
+
+`appDataDir` is Tauri’s `app.path().app_data_dir()` → typically:
+
+| Platform | Example |
+|----------|---------|
+| Linux | `~/.local/share/app.moonsight.desktop/` |
+| macOS | `~/Library/Application Support/app.moonsight.desktop/` |
+| Windows | `%APPDATA%\app.moonsight.desktop\` |
+
+Commands (ACL: `allow-moonsight-save`): `read_prefs`, `write_prefs`,
+`read_save_slot`, `write_save_slot`. Browser builds keep `WebSaveStore` /
+`localStorage` (`moonsight/prefs`, `moonsight/save/{n}`).
+
+### Manual desktop save checklist
+
+1. Build the web host + package demo into `dist/demo` (see Prerequisites).
+2. From `host_desktop/tauri`: `npm install && npm run tauri dev`.
+3. Play → open menu → **save slot 0** (or Ctrl+S) → quit the app fully.
+4. Relaunch (`npm run tauri dev` again) → **load slot 0** — progress should restore.
+5. Confirm files on disk, e.g. Linux:
+   ```bash
+   ls -la ~/.local/share/app.moonsight.desktop/moonsight/
+   ls -la ~/.local/share/app.moonsight.desktop/moonsight/saves/
+   # expect prefs.json and/or saves/0.json after a save
+   ```
+6. Change a preference (volume / text speed), quit, relaunch — prefs should stick.
 
 ## Design notes
 
-- **Same web build** — do not reimplement GPU/audio in Rust; only shell chrome and (future) native paths.
+- **Same web build** — do not reimplement GPU/audio in Rust; only shell chrome and appData save/prefs commands.
 - **No in-Tauri frontend framework** — Tauri only hosts static files from `dist/demo`.
 - **CSP** — left open (`null`) so WASM + WebGPU glue match browser hosting.
 - **WebGPU in webview** — depends on the platform webview (WebView2 / WKWebView / WebKitGTK). If GPU init fails, fall back to browser serve of `dist/demo`.

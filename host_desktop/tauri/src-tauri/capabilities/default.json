@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.tauri.app/config/2/capability.json",
   "identifier": "default",
-  "description": "Default capability for the main MoonSight window (Phase 1: no FS plugins; saves use webview localStorage).",
+  "description": "Default capability for the main MoonSight window (appData SaveStore commands).",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "allow-moonsight-save"]
 }

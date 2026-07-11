@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import {
+    DesktopSaveStore,
+    getTauriInvoke,
+    isTauriRuntime,
+  } from "./lib/desktopSaveStore";
   import { startGameSession, type GameSessionHandle } from "./lib/gameSession";
+  import { WebSaveStore, type SaveStore } from "./lib/saveStore";
 
   let status = $state("loading…");
   let canvasEl: HTMLCanvasElement | undefined = $state();
@@ -19,29 +25,43 @@
     return msg.startsWith("error:") ? msg : `error: ${msg}`;
   }
 
+  /** Web → localStorage; desktop Tauri → appData via DesktopSaveStore. */
+  async function createSaveStore(): Promise<SaveStore> {
+    if (isTauriRuntime()) {
+      const invoke = getTauriInvoke();
+      if (!invoke) {
+        throw new Error("Tauri runtime detected but invoke is unavailable");
+      }
+      return DesktopSaveStore.create(invoke);
+    }
+    return new WebSaveStore();
+  }
+
   onMount(() => {
     if (!canvasEl) {
       status = "error: no canvas";
       return;
     }
     let cancelled = false;
-    startGameSession(canvasEl, {
-      onStatus: (m) => {
-        if (!cancelled) status = m;
-      },
-    })
-      .then((h) => {
-        if (cancelled) {
-          h.stop();
-          return;
-        }
-        handle = h;
-      })
-      .catch((e) => {
-        // WebGPU missing / other boot errors already set via onStatus
-        // with error: prefix (preserves Gpu.init text from webgpu_bridge).
-        if (!cancelled) status = formatError(e);
+    (async () => {
+      const store = await createSaveStore();
+      if (cancelled) return;
+      const h = await startGameSession(canvasEl!, {
+        store,
+        onStatus: (m) => {
+          if (!cancelled) status = m;
+        },
       });
+      if (cancelled) {
+        h.stop();
+        return;
+      }
+      handle = h;
+    })().catch((e) => {
+      // WebGPU missing / other boot errors already set via onStatus
+      // with error: prefix (preserves Gpu.init text from webgpu_bridge).
+      if (!cancelled) status = formatError(e);
+    });
 
     return () => {
       cancelled = true;
