@@ -10,7 +10,7 @@ fn build_staging_dir(out_dir : String) -> String {
 /// 1. Read moonsight.json
 /// 2. Compile all `.yuki` → `game.msb`
 /// 3. Copy assets + write manifest.json
-/// 4. Copy host shell (apps/host-web/dist preferred, host_web/js_glue fallback)
+/// 4. Copy host shell from apps/host-web/dist (required)
 ///
 /// Writes go to a staging directory first; `out_dir` is replaced only on full
 /// success. On failure, staging is deleted and any prior `out_dir` is left intact.
@@ -59,16 +59,22 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     println("wrote \{msb_path} (\{bytecode.length()} bytes, entry=\{ir.entry})")
 
     // Host shell first (may include a placeholder manifest.json).
-    // Prefer Svelte dist when present; fall back to vanilla js_glue.
+    // Svelte dist is required; fail hard when missing.
     match find_host_shell() {
       Some(shell) => {
         copy_host_shell(shell, staging)
         println("copied host shell from \{shell}")
       }
-      None =>
+      None => {
         println(
-          "warning: host shell not found (apps/host-web/dist or host_web/js_glue); skip wasm/js copy",
+          "error: Svelte host shell not found (apps/host-web/dist/index.html).\n" +
+          "  Build it first: cd apps/host-web && npm i && npm run build\n" +
+          "  Then: moon run cmd/moonsightc --target native -- build <project> -o <out>",
         )
+        remove_tree_best_effort(staging)
+        restore_project_ui_stub()
+        return 1
+      }
     }
 
     // Assets + project manifest (overwrite any glue placeholder).
@@ -195,25 +201,16 @@ fn is_audio_name(name : String) -> Bool {
 }
 
 ///|
-/// Locate the web host shell relative to cwd or project parents.
-///
-/// Discovery order (`find_host_shell`):
-/// 1. `apps/host-web/dist` — Svelte/Vite build (requires `index.html`)
-/// 2. `host_web/js_glue` — vanilla fallback (requires `index.html` or `boot.js`)
-///
-/// Default playable path still works when dist is missing (js_glue fallback).
+/// Locate the web host shell: **only** `apps/host-web/dist` with `index.html`.
 fn find_host_shell() -> String? {
-  // Relative candidates: Svelte dist first, then vanilla js_glue.
   let candidates = [
     "apps/host-web/dist", "./apps/host-web/dist", "../apps/host-web/dist",
-    "host_web/js_glue", "./host_web/js_glue", "../host_web/js_glue",
   ]
   for c in candidates {
     if is_host_shell_dir(c) {
       return Some(c)
     }
   }
-  // Walk parents of cwd looking for either shell root.
   match @env.current_dir() {
     Some(cwd) => {
       let mut dir = cwd
@@ -221,10 +218,6 @@ fn find_host_shell() -> String? {
         let dist = join_path(dir, "apps/host-web/dist")
         if is_host_shell_dir(dist) {
           return Some(dist)
-        }
-        let glue = join_path(dir, "host_web/js_glue")
-        if is_host_shell_dir(glue) {
-          return Some(glue)
         }
         let parent = dirname(dir)
         if parent == dir {
@@ -239,11 +232,9 @@ fn find_host_shell() -> String? {
 }
 
 ///|
-/// True if `dir` looks like a usable host shell root.
-/// Svelte dist and js_glue both ship `index.html`; js_glue also has `boot.js`.
+/// Svelte/Vite dist must ship `index.html` (no boot.js fallback).
 fn is_host_shell_dir(dir : String) -> Bool {
-  path_exists(join_path(dir, "index.html")) ||
-  path_exists(join_path(dir, "boot.js"))
+  path_exists(join_path(dir, "index.html"))
 }
 
 ///|
