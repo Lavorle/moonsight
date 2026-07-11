@@ -50,10 +50,10 @@ test "hud paints dialogue box when bind has text" {
   for op in ops {
     if op.resource == "ui.dialogue_box" {
       has_box = true
-      assert_eq(op.x, 48.0)
-      assert_eq(op.y, 756.0)
-      assert_eq(op.w, 1824.0)
-      assert_eq(op.h, 324.0)
+      assert_eq(op.x, 64.0)
+      assert_eq(op.y, 772.0)
+      assert_eq(op.w, 1792.0)
+      assert_eq(op.h, 276.0)
     }
     if op.resource == "ui.nameplate" {
       has_nameplate = true
@@ -99,7 +99,7 @@ test "load mode empty slots are not focusable" {
 }
 
 ///|
-test "title modal Text MoonSight paints near VBox origin" {
+test "title modal Text MoonSight paints on centered card" {
   let app = @runtime.UiApp::new()
   register(app)
   let rt = @runtime.UiRuntime::from_app(app, save_slots=6)
@@ -110,18 +110,25 @@ test "title modal Text MoonSight paints near VBox origin" {
     bind=@runtime.UiBindCtx::empty(),
   )
   let mut found = false
+  let mut has_card = false
   for op in ops {
+    if op.resource == "ui.dialogue_box" {
+      has_card = true
+      assert_eq(op.x, 680.0)
+      assert_eq(op.w, 560.0)
+    }
     match op.text {
       Some(t) =>
         if t == "MoonSight" {
           found = true
           assert_eq(op.x, 760.0)
-          assert_eq(op.y, 360.0)
+          assert_eq(op.y, 300.0)
         }
       None => ()
     }
   }
   assert_true(found)
+  assert_true(has_card)
 }
 
 ///|

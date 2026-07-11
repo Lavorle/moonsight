@@ -1,60 +1,62 @@
 ///|
-/// Default HUD geometry constants (port of old `UiLayout::default_fhd` dialogue chrome).
-/// Canvas is 1920×1080 logical pixels.
+/// Default HUD geometry for FHD (1920×1080). Amber Soft: bottom dialogue band
+/// with nameplate on the top edge, choices stacked above the box.
 
 ///|
-let hud_dialogue_x : Double = 48.0
+let hud_dialogue_x : Double = 64.0
 
 ///|
-let hud_dialogue_y : Double = 756.0
+/// Slightly higher so choices have room without overlapping the box.
+let hud_dialogue_y : Double = 772.0
 
 ///|
-let hud_dialogue_w : Double = 1824.0
+let hud_dialogue_w : Double = 1792.0
 
 ///|
-let hud_dialogue_h : Double = 324.0
+/// Shorter band — less visual weight, more stage room.
+let hud_dialogue_h : Double = 276.0
 
 ///|
-let hud_nameplate_x : Double = 80.0
+let hud_nameplate_x : Double = 96.0
 
 ///|
-let hud_nameplate_y : Double = 788.0
+/// Sits on the dialogue box top rim.
+let hud_nameplate_y : Double = 748.0
 
 ///|
-let hud_nameplate_w : Double = 360.0
+let hud_nameplate_w : Double = 400.0
 
 ///|
-let hud_nameplate_h : Double = 48.0
+let hud_nameplate_h : Double = 44.0
 
 ///|
-let hud_text_x : Double = 80.0
+let hud_text_x : Double = 96.0
 
 ///|
-let hud_text_y : Double = 848.0
+let hud_text_y : Double = 828.0
 
 ///|
-let hud_body_font : Double = 32.0
+let hud_body_font : Double = 30.0
 
 ///|
-let hud_name_font : Double = 28.0
+let hud_name_font : Double = 26.0
 
 ///|
-let hud_choice_x : Double = 80.0
+/// Choice stack sits above the dialogue band, full width with side margin.
+let hud_choice_x : Double = 160.0
 
 ///|
-let hud_choice_y : Double = 556.0
+let hud_choice_y : Double = 480.0
 
 ///|
-let hud_choice_w : Double = 1760.0
+let hud_choice_w : Double = 1600.0
 
 ///|
-let hud_choice_line_h : Double = 48.0
+/// Comfortable click target (~52px painted height with 8px gap).
+let hud_choice_line_h : Double = 56.0
 
 ///|
 /// Build the default dialogue + choice HUD tree.
-///
-/// Geometry mirrors the former hard-coded FHD dialogue chrome; visibility is
-/// gated by `HasText` / `HasChoices` so chrome only paints during narrative.
 fn build_hud(_app : @runtime.UiApp) -> @runtime.UiNode {
   @runtime.UiNode::Fixed(
     x=0.0,
@@ -80,8 +82,8 @@ fn build_hud(_app : @runtime.UiApp) -> @runtime.UiNode {
       ),
       @runtime.UiNode::Text(
         src=@runtime.TextBindSrc::DialogueName,
-        x=hud_nameplate_x,
-        y=hud_nameplate_y,
+        x=hud_nameplate_x + 20.0,
+        y=hud_nameplate_y + 6.0,
         font_size=hud_name_font,
         visible=@runtime.VisiblePred::HasText,
       ),
