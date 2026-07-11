@@ -26,6 +26,7 @@ options(
         "last_error",
         "export_frame",
         "export_pointer",
+        "export_wheel",
         "frame_len",
         "frame_at",
         "resource_count",

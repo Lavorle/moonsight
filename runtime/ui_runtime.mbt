@@ -186,6 +186,21 @@ pub fn UiRuntime::scroll_by(self : UiRuntime, delta : Double) -> Unit {
 }
 
 ///|
+/// Keyboard / wheel line step in logical pixels (matches text row height).
+pub let ui_scroll_line_h : Double = 64.0
+
+///|
+/// Measure top-modal layout so ScrollView metrics (vp, content_h, pin) are current.
+///
+/// No-op when the stack is empty. Safe to call before `handle_wheel` / `scroll_by`.
+pub fn UiRuntime::ensure_scroll_metrics(
+  self : UiRuntime,
+  bind : UiBindCtx,
+) -> Unit {
+  ignore(self.collect_modal_focusables(bind))
+}
+
+///|
 /// Pin scroll to the newest content (bottom). If content is not yet measured,
 /// defers via `pin_on_next_layout` until the next ScrollView layout walk.
 pub fn UiRuntime::pin_scroll_end(self : UiRuntime) -> Unit {

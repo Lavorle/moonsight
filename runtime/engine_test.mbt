@@ -1327,3 +1327,98 @@ test "pointer unknown phase is not down" {
   assert_eq(t1.full_text, "Hi")
   assert_true(eng.vm.wait == Yield)
 }
+
+///|
+/// UiApp: backlog ScrollView (tall content) + Close outside viewport.
+fn app_backlog_scroll() -> @runtime.UiApp {
+  let app = @runtime.UiApp::new()
+  let lines : Array[@runtime.UiNode] = []
+  for i in 0..<8 {
+    lines.push(
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::Literal("L\{i}"),
+        x=0.0,
+        y=0.0,
+        font_size=22.0,
+        visible=@runtime.VisiblePred::Always,
+      ),
+    )
+  }
+  app.register_modal(
+    "backlog",
+    @runtime.UiNode::Fixed(
+      x=0.0,
+      y=0.0,
+      w=Some(1920.0),
+      h=Some(1080.0),
+      children=[
+        @runtime.UiNode::ScrollView(
+          x=100.0,
+          y=100.0,
+          w=400.0,
+          h=200.0,
+          children=[@runtime.UiNode::VBox(x=None, y=None, children=lines)],
+        ),
+        app.button(
+          "Close",
+          fn(c : &@runtime.Capabilities) { c.return_modal() },
+        ),
+      ],
+    ),
+  )
+  app
+}
+
+///|
+/// Wheel while backlog is open must scroll (or no-op) but never Advance narrative.
+test "wheel on backlog does not Advance narrative" {
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|y:There
+    #|
+  let ir = @script.compile_to_ir(src, file="wheel_bl.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", app=app_backlog_scroll())
+  eng.tick(None_, dt=0.0)
+  assert_true(eng.vm.wait == Yield)
+  guard eng.stage.text is Some(t0) else { fail("text") }
+  assert_eq(t0.full_text, "Hi")
+  assert_false(t0.complete)
+  eng.tick(OpenBacklog)
+  assert_eq(eng.ui.stack_depth(), 1)
+  assert_eq(eng.ui.stack[0].name, "backlog")
+  // Wheel over ScrollView viewport; modal gate ⇒ no typewriter complete / Advance.
+  ignore(eng.wheel_event(150.0, 120.0, 40.0))
+  guard eng.stage.text is Some(t1) else { fail("after wheel") }
+  assert_false(t1.complete)
+  assert_eq(t1.full_text, "Hi")
+  assert_true(eng.vm.wait == Yield)
+  assert_eq(eng.ui.stack_depth(), 1)
+}
+
+///|
+/// MenuUp on backlog always scrolls toward older content (even with Close focused).
+test "MenuUp on backlog decreases scroll_y toward older" {
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|
+  let ir = @script.compile_to_ir(src, file="menu_scroll.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", app=app_backlog_scroll())
+  eng.tick(None_, dt=0.0)
+  eng.tick(OpenBacklog)
+  assert_eq(eng.ui.stack[0].name, "backlog")
+  // Focus stays on Close (only focusable); ↑ must still scroll, not focus-wrap.
+  assert_eq(eng.ui.stack[0].focus, 0)
+  eng.sync_ui_bind()
+  eng.ui.ensure_scroll_metrics(eng.ui.bind)
+  assert_true(eng.ui.scroll_max() > 0.0)
+  // show_modal("backlog") pins to newest (bottom) after layout.
+  assert_true(eng.ui.scroll_y >= eng.ui.scroll_max() - 0.01)
+  let before = eng.ui.scroll_y
+  eng.tick(MenuUp)
+  assert_eq(eng.ui.stack[0].focus, 0)
+  assert_true(eng.ui.scroll_y < before)
+  let expected = before - @runtime.ui_scroll_line_h
+  assert_true(eng.ui.scroll_y > expected - 0.1 && eng.ui.scroll_y < expected + 0.1)
+}

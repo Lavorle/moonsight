@@ -228,13 +228,23 @@ pub fn set_slot_json(slot : Int, json : String) -> Int {
 }
 
 ///|
-/// Pointer path: logical pixels, phase 0=move 1=down 3=leave.
+/// Pointer path: logical pixels, phase 0=move, 1=down, 2=up, 3=leave.
 /// Returns hover_kind: 0 none, 1 button, 2 choice, 3 slider.
 pub fn export_pointer(x : Float, y : Float, phase : Int) -> Int {
   let s = session.val
   match s.engine {
     None => 0
     Some(eng) => eng.pointer_event(x.to_double(), y.to_double(), phase~)
+  }
+}
+
+///|
+/// Wheel: logical x,y and vertical dy (dy>0 => reveal older content).
+/// Returns hover_kind after the event (0 when no engine / no modal).
+pub fn export_wheel(x : Float, y : Float, dy : Float) -> Int {
+  match session.val.engine {
+    None => 0
+    Some(eng) => eng.wheel_event(x.to_double(), y.to_double(), dy.to_double())
   }
 }
 

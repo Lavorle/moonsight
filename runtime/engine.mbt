@@ -183,6 +183,13 @@ fn Engine::confirm_is_top(self : Engine) -> Bool {
 }
 
 ///|
+/// True when the top modal is `"backlog"` (History).
+fn Engine::backlog_is_top(self : Engine) -> Bool {
+  self.ui.stack_depth() > 0 &&
+    self.ui.stack[self.ui.stack_depth() - 1].name == "backlog"
+}
+
+///|
 /// Pop confirm modal when it is on top of the stack.
 fn Engine::pop_confirm_if_top(self : Engine) -> Unit {
   if self.confirm_is_top() {
@@ -543,6 +550,26 @@ fn Engine::tick_skip_burst(self : Engine) -> Unit {
 }
 
 ///|
+/// Host wheel path: scroll top modal when open; never Advances narrative.
+///
+/// `dy > 0` reveals older content (`scroll_y` decreases). No-op when no modal.
+/// Returns `hover_kind` after the event.
+pub fn Engine::wheel_event(
+  self : Engine,
+  x : Double,
+  y : Double,
+  dy : Double,
+) -> Int {
+  self.sync_ui_bind()
+  if self.ui.stack_depth() == 0 {
+    return 0
+  }
+  self.ui.ensure_scroll_metrics(self.ui.bind)
+  ignore(self.ui.handle_wheel(x, y, dy))
+  self.ui.hover_kind()
+}
+
+///|
 /// Host pointer path: hover / leave / down / up with UI hit-test and miss→Advance.
 ///
 /// `phase`: 0=move, 1=down, 2=up, 3=leave.
@@ -702,8 +729,21 @@ fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
         self.ui.return_modal()
       }
     Advance | SkipTyping => self.ui.activate(caps)
-    MenuUp => self.ui.focus_delta(caps, -1)
-    MenuDown => self.ui.focus_delta(caps, 1)
+    // Backlog top: ↑↓ always scroll (even if Close is focused); Activate still Enter.
+    MenuUp =>
+      if self.backlog_is_top() {
+        self.ui.ensure_scroll_metrics(self.ui.bind)
+        self.ui.scroll_by(0.0 - ui_scroll_line_h)
+      } else {
+        self.ui.focus_delta(caps, -1)
+      }
+    MenuDown =>
+      if self.backlog_is_top() {
+        self.ui.ensure_scroll_metrics(self.ui.bind)
+        self.ui.scroll_by(ui_scroll_line_h)
+      } else {
+        self.ui.focus_delta(caps, 1)
+      }
     MenuLeft => self.ui.slider_delta(caps, -1)
     MenuRight => self.ui.slider_delta(caps, 1)
     // OpenBacklog is handled on the Playing path (empty stack).
