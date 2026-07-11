@@ -33,6 +33,10 @@ export CC=gcc
 moon check
 moon test
 
+# 先构建 Svelte Host 壳（moonsightc build 需要 apps/host-web/dist）
+cd apps/host-web && npm i && npm run build && cd ../..
+moon build --target wasm-gc --release host_web
+
 # 编译示例游戏 + Web 产物（demo 设置了 ui_package → 会重建 host wasm）
 moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
 
@@ -41,11 +45,24 @@ cd dist/demo && python3 -m http.server 8080
 # 打开 http://localhost:8080/
 ```
 
-## Web Host（Q2+）
+## 从空项目开始
+
+```bash
+export CC=gcc
+moon run cmd/moonsightc --target native -- new mygame
+cd apps/host-web && npm i && npm run build && cd ../..
+moon run cmd/moonsightc --target native -- check mygame
+moon run cmd/moonsightc --target native -- build mygame -o dist/mygame
+```
+
+`new` 从 monorepo 的 `templates/minimal` 复制最小可 build 工程（`moonsight.json`、
+`main.yuki`、可选 `assets/`）。默认使用引擎 `std_ui`（无项目 `ui/`）。也可
+`new <name> -o <parent_dir>` 指定父目录。目标路径已存在时会失败，不会覆盖。
+
+## Web Host（Svelte）
 
 `moonsightc build` 会从 **`apps/host-web/dist`** 复制 **Svelte** Web 壳（需含
-`index.html`）。无原生回退路径 — 请先构建 Svelte Host。历史源码见
-`archive/js_glue/`。
+`index.html`）。请先构建 Svelte Host，再打包游戏。
 
 ```bash
 export CC=gcc
@@ -61,6 +78,9 @@ moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
 moon build --target wasm-gc --release host_web
 cp _build/wasm-gc/release/build/host_web/host_web.wasm apps/host-web/public/
 ```
+
+一键打包 Web 静态目录见 [构建与发布（Web）](./publish)
+（`./scripts/publish-web.sh`）。
 
 ## 浏览器 / WebGPU（Linux 上尤其重要）
 
@@ -116,7 +136,8 @@ Advance。完整语义见 [游玩输入](./play-input)。
 
 ## 桌面壳
 
-先构建 `dist/demo`，再参阅仓库中的 `host_desktop/README.md`。
+先构建 `dist/demo`，再参阅 [桌面端（Tauri）](./desktop) 与仓库
+`host_desktop/README.md`。桌面存档走 appData，与浏览器 `localStorage` **不互通**。
 
 ## 包一览
 
@@ -131,7 +152,8 @@ Advance。完整语义见 [游玩输入](./play-input)。
 | `host_web` | 浏览器 wasm 宿主（WebGPU 入口；壳为 `apps/host-web`） |
 | `apps/host-web` | Svelte+TS Host 壳（`moonsightc` **必需**；请先构建 `dist/`） |
 | `host_desktop` | Tauri 2 壳 |
-| `cmd/moonsightc` | `check` / `build` CLI（字面资源检查、可选 ui_package 链接） |
+| `cmd/moonsightc` | `new` / `check` / `build` CLI（模板脚手架、字面资源检查、可选 ui_package） |
+| `templates/minimal` | `moonsightc new` 的复制源 |
 | `demo/game` | 示例项目（+ 可选 `ui/` 覆盖） |
 | `apps/docs-site` | 本文档站点 |
 
@@ -139,4 +161,6 @@ Advance。完整语义见 [游玩输入](./play-input)。
 
 - 学习脚本语言：[MoonYuki 子集](./moon-yuki)
 - 正确集成输入：[游玩输入](./play-input)
+- 打包静态站：[构建与发布（Web）](./publish)
+- 桌面打包与存档：[桌面端](./desktop)
 - 尚未迁入本站的主题仍在仓库 `docs/`（UI MoonBit、Host 命令、工程布局、绘制列表打包）

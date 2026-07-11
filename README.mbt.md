@@ -20,7 +20,7 @@ export CC=gcc
 moon check
 moon test
 
-# Svelte host shell (required — moonsightc has no vanilla fallback)
+# Svelte host shell (required by moonsightc build)
 cd apps/host-web && npm i && npm run build && cd ../..
 moon build --target wasm-gc --release host_web
 
@@ -32,11 +32,24 @@ cd dist/demo && python3 -m http.server 8080
 # open http://localhost:8080/
 ```
 
-## Web host (Q2+)
+Scaffold a new project (copies `templates/minimal`):
+
+```bash
+export CC=gcc
+moon run cmd/moonsightc --target native -- new mygame
+cd apps/host-web && npm i && npm run build && cd ../..
+moon run cmd/moonsightc --target native -- check mygame
+moon run cmd/moonsightc --target native -- build mygame -o dist/mygame
+```
+
+One-shot web package: `./scripts/publish-web.sh [project] [out]` (default
+`demo/game` → `dist/demo`). Desktop: `./scripts/publish-desktop.sh` (see
+[`host_desktop/README.md`](./host_desktop/README.md)).
+
+## Web host (Svelte)
 
 `moonsightc build` copies the **Svelte** web shell from **`apps/host-web/dist`**
-(requires `index.html`). There is no vanilla `js_glue` fallback — build the
-Svelte host first. Historical vanilla sources live under `archive/js_glue/`.
+(requires `index.html`). Build that shell first, then package the game.
 
 ```bash
 export CC=gcc
@@ -101,7 +114,9 @@ roles; host solids + optional PNGs). Author notes:
 [`docs/ui-moonbit.md`](./docs/ui-moonbit.md#themes).
 
 **Desktop shell:** build `dist/demo` first, then see
-[`host_desktop/README.md`](./host_desktop/README.md).
+[`host_desktop/README.md`](./host_desktop/README.md). Desktop saves use
+**appData** (`DesktopSaveStore`); browser uses **`localStorage`** — slots are
+**not** interchangeable.
 
 ## Packages
 
@@ -115,15 +130,17 @@ roles; host solids + optional PNGs). Author notes:
 | `std_ui` | Default HUD + title / game_menu / save_load / settings / confirm / backlog |
 | `host_web` | Browser wasm host (WebGPU entry; shell is `apps/host-web`) |
 | `apps/host-web` | Svelte+TS host shell (**required** by `moonsightc`; build `dist/` first) |
-| `host_desktop` | Tauri 2 shell |
-| `cmd/moonsightc` | `check` / `build` CLI (literal resource check, optional ui_package link) |
+| `host_desktop` | Tauri 2 shell (appData SaveStore) |
+| `cmd/moonsightc` | `new` / `check` / `build` CLI (scaffold, resource check, optional ui_package) |
+| `templates/minimal` | Source tree for `moonsightc new` |
 | `demo/game` | Sample project (+ optional `ui/` override) |
 
 ## Documentation
 
-**Site (Q2):** bilingual Fumadocs app at [`apps/docs-site`](./apps/docs-site) —
-Getting Started, MoonYuki subset, and play input (zh + en). From that directory:
-`npm install && npm run dev` → `http://localhost:3000` (default `/zh`).
+**Site:** bilingual Fumadocs app at [`apps/docs-site`](./apps/docs-site) —
+Getting Started (incl. `new`), MoonYuki, play input, UI, **publish**, **desktop**
+(zh + en). From that directory: `npm install && npm run dev` →
+`http://localhost:3000` (default `/zh`).
 
 Repo markdown (engine source of truth until migration completes; Q2 core pages
 on the site are authoritative for listed topics):
@@ -188,13 +205,12 @@ explicitly **not** in scope (SE status quo).
 
 **Host:** Vite + Svelte 5 + TypeScript shell at [`apps/host-web`](./apps/host-web)
 with WebGPU/Slug adapters under `src/adapters/`. `moonsightc build` requires
-`apps/host-web/dist` (`index.html`); the retired vanilla shell is archived at
-`archive/js_glue/`. Default playable path after `npm run build` in
-`apps/host-web` + `moonsightc build` is the Svelte shell.
+`apps/host-web/dist` (`index.html`). Default playable path after `npm run build`
+in `apps/host-web` + `moonsightc build` is the Svelte shell.
 
 **Docs:** Fumadocs (Next.js) bilingual site at
 [`apps/docs-site`](./apps/docs-site) — Getting Started, MoonYuki subset, play
-input for **zh** and **en**. Routes:
+input, publish, desktop for **zh** and **en**. Routes:
 `/{lang}/docs/getting-started` (and sibling pages under `/{lang}/docs/…`).
 Default locale **zh**. Repo `docs/*.md` remain engine source of truth for
 unmigrated topics.

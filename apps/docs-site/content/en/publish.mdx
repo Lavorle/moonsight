@@ -1,0 +1,122 @@
+---
+title: Build & Publish (Web)
+description: Package a static web dist with publish-web.sh, host it, WebGPU and saves
+---
+
+# Build & Publish (Web)
+
+> **Source of truth:** Engine behavior must match repo docs until migration
+> completes; core pages are authoritative for listed topics.
+>
+> Distilled from `scripts/publish-web.sh`, `README.mbt.md`, and
+> `docs/project-layout.md`.
+
+Package a playable **static directory** for any static host. MoonSight needs a
+**WebGPU** browser and **`http://` / `https://`** (not `file://`).
+
+See also: [Getting Started](./getting-started), [Desktop](./desktop).
+
+## Prerequisites
+
+- MoonBit toolchain (`moon`) and a C compiler (`export CC=gcc` on Linux)
+- Node.js + npm (builds the Svelte host shell)
+- A game project (`demo/game`, or one from `moonsightc new`)
+
+`moonsightc build` copies the production shell from **`apps/host-web/dist`**
+(must contain `index.html`). Build that shell before packaging.
+
+## One-shot: `publish-web.sh`
+
+From the **repository root**:
+
+```bash
+./scripts/publish-web.sh [project_dir] [out_dir]
+# defaults: demo/game → dist/demo
+```
+
+The script:
+
+1. `cd apps/host-web && npm ci && npm run build`
+2. `moon build --target wasm-gc --release host_web`
+3. `moon run cmd/moonsightc --target native -- build <project> -o <out>`
+
+Example for a project created with `new`:
+
+```bash
+export CC=gcc
+moon run cmd/moonsightc --target native -- new mygame
+./scripts/publish-web.sh mygame dist/mygame
+cd dist/mygame && python3 -m http.server 8080
+# open http://localhost:8080/
+```
+
+## Manual equivalent
+
+```bash
+export CC=gcc
+cd apps/host-web && npm i && npm run build && cd ../..
+moon build --target wasm-gc --release host_web
+moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
+```
+
+`moonsightc` does **not** run `npm` itself. If `apps/host-web/dist/index.html`
+is missing, build fails with a clear error — run the Svelte build first.
+
+## Static hosting
+
+Upload or serve the **entire** output directory (`index.html`, `host_web.wasm`,
+`game.msb` / entry `.yuki`, `manifest.json`, `assets/`, Vite `assets/`, fonts,
+themes, …).
+
+```bash
+cd dist/demo && python3 -m http.server 8080
+# or: npx serve dist/demo
+# or any CDN / object storage / nginx root that serves static files
+```
+
+| Requirement | Why |
+|-------------|-----|
+| Serve over **http(s)** | `file://` blocks WebGPU / secure-context APIs |
+| Keep relative paths | Shell and wasm load assets relative to `index.html` |
+| Correct MIME for `.wasm` | Hosts should serve `application/wasm` when possible |
+
+No server-side runtime is required beyond static files.
+
+## WebGPU
+
+MoonSight **requires WebGPU**. There is no WebGL fallback. On Linux, Chromium
+flags are often needed — see [Getting Started](./getting-started#browser--webgpu-important-on-linux).
+
+If the canvas stays blank or the console reports `WebGPU not available`, fix the
+browser/GPU path first; packaging is unrelated.
+
+## Saves (Web)
+
+Browser builds use **`WebSaveStore`** → **`localStorage`**:
+
+| Kind | Key |
+|------|-----|
+| Prefs | `moonsight/prefs` |
+| Slot *n* | `moonsight/save/{n}` |
+
+- Data is **per origin** (scheme + host + port). Changing port or domain is a
+  different store.
+- Clearing site data wipes saves and prefs.
+- Engine slot JSON remains **v4**; only the Host persistence backend differs
+  from desktop.
+
+**Web slots and desktop slots are not interchangeable** — there is no automatic
+migration between `localStorage` and desktop appData. See [Desktop](./desktop).
+
+## Verify after publish
+
+1. Cold start lands on the **title** modal.
+2. **Start** → play a short beat; Esc → save slot 0 (or Ctrl+S).
+3. Reload the page → load slot 0; progress should restore.
+4. Optional: DevTools → Application → Local Storage shows `moonsight/*` keys.
+
+## Next steps
+
+- Package a native window: [Desktop](./desktop)
+- Install & WebGPU flags: [Getting Started](./getting-started)
+- Repo layout: `docs/project-layout.md`

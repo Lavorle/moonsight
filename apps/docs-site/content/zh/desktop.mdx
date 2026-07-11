@@ -1,0 +1,140 @@
+---
+title: 桌面端（Tauri）
+description: Tauri 前置条件、publish-desktop、appData 存档；Web 槽位 ≠ 桌面槽位
+---
+
+# 桌面端（Tauri）
+
+> **权威说明：** 引擎行为在迁移完成前仍须与仓库文档一致；核心页面在所列主题上为权威说明。
+>
+> 内容提炼自 `host_desktop/README.md` 与 `scripts/publish-desktop.sh`。
+
+桌面壳是最小的 **Tauri 2** 窗口，加载与浏览器**同一套**静态包（`moonsightc build`
+产出的 `dist/demo`）。没有第二套 GPU 后端，Tauri 内也不再引入前端工具链 —
+WebGPU + WASM 在 webview 中的行为与 HTTP 托管 dist 时一致。
+
+另见：[构建与发布（Web）](./publish)、[快速开始](./getting-started)。
+
+## 前置条件
+
+1. **Web 产物** — 已构建 Svelte Host 并将游戏打包进 `dist/demo`（或你的输出目录）。
+   `moonsightc` 需要 `apps/host-web/dist`（含 `index.html`）。
+
+2. **Rust** stable + Tauri 2 系统依赖：
+   - [Tauri 前置条件](https://v2.tauri.app/start/prerequisites/)
+   - Fedora 示例：`webkit2gtk4.1-devel`、`openssl-devel`、`gtk3-devel`、
+     `libayatana-appindicator-gtk3-devel`、`librsvg2-devel`、`gcc`、`pkg-config`
+
+3. **Node.js** + npm（用于 `@tauri-apps/cli`）
+
+4. **显示器** — `tauri dev` / `tauri build` 会打开原生窗口（需要 GUI /
+   WebKitGTK）。无头 CI 或无显示的 SSH 环境请跳过 GUI，仅做静态路径冒烟（见下）。
+
+## 一键：`publish-desktop.sh`
+
+在**仓库根目录**：
+
+```bash
+./scripts/publish-desktop.sh
+```
+
+依次：
+
+1. `./scripts/publish-web.sh demo/game dist/demo`（Svelte 壳 + wasm + 打包）
+2. `cd host_desktop/tauri && npm ci && npm run tauri build`
+
+生产产物位于 Tauri 常规的 `target/release` / 平台 bundle 目录。
+
+## 手动步骤
+
+```bash
+# 1) Web 包
+./scripts/publish-web.sh demo/game dist/demo
+# 或：先构建 apps/host-web/dist 再 moonsightc build
+
+# 2) Tauri
+cd host_desktop/tauri
+npm install
+npm run tauri dev    # 开发窗口
+# 或
+npm run tauri build  # 生产打包
+```
+
+| 模式 | 内容来源 |
+|------|----------|
+| 生产 bundle | `build.frontendDist` → 仓库根 `dist/demo` |
+| 开发 | `serve-dist` 在 `http://127.0.0.1:4173` 托管同一 `dist/demo` |
+
+修改 Svelte Host 或脚本后请重新打包游戏产物。
+
+### 无头 / 无显示冒烟
+
+当 `DISPLAY` 未设置或 WebKit 不可用时：
+
+```bash
+# dist/demo 须已存在
+cd host_desktop/tauri && node scripts/serve-dist.mjs &
+curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4173/
+curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4173/host_web.wasm
+# 期望 200；结束后停止服务
+```
+
+## 存档（appData SaveStore）
+
+桌面端**不**用 webview 的 `localStorage` 存偏好/槽位。Svelte Host 检测 Tauri
+（`window.__TAURI_INTERNALS__`）后使用 **`DesktopSaveStore`**，经 Tauri 命令读写
+操作系统 **app data** 目录。
+
+| 种类 | appData 下路径 |
+|------|----------------|
+| 偏好 | `{appDataDir}/moonsight/prefs.json` |
+| 槽位 *n* | `{appDataDir}/moonsight/saves/{n}.json` |
+
+`appDataDir` 为 Tauri 的 `app.path().app_data_dir()` — 典型路径：
+
+| 平台 | 示例 |
+|------|------|
+| Linux | `~/.local/share/app.moonsight.desktop/` |
+| macOS | `~/Library/Application Support/app.moonsight.desktop/` |
+| Windows | `%APPDATA%\app.moonsight.desktop\` |
+
+命令（ACL：`allow-moonsight-save`）：`read_prefs`、`write_prefs`、
+`read_save_slot`、`write_save_slot`。浏览器构建仍用 `WebSaveStore` /
+`localStorage`（`moonsight/prefs`、`moonsight/save/{n}`）。
+
+### Web 槽位 ≠ 桌面槽位
+
+**Web 槽位与桌面槽位不互通。** 浏览器 `localStorage` 与 appData 文件之间没有
+自动迁移。两端引擎存档 JSON 仍为 **v4**；仅 Host 持久化后端不同。
+
+在 Chrome 与 Tauri 中玩同一工程时，进度是两套独立数据。
+
+### 手动存档检查清单
+
+1. 构建 Web Host 并打包到 `dist/demo`（见前置条件）。
+2. 在 `host_desktop/tauri`：`npm install && npm run tauri dev`。
+3. 游玩 → 菜单 → **存档槽 0**（或 Ctrl+S）→ 完全退出应用。
+4. 再次启动 → **读档槽 0** — 进度应恢复。
+5. 确认磁盘文件，例如 Linux：
+
+```bash
+ls -la ~/.local/share/app.moonsight.desktop/moonsight/
+ls -la ~/.local/share/app.moonsight.desktop/moonsight/saves/
+# 存档后应有 prefs.json 和/或 saves/0.json
+```
+
+6. 改偏好（音量 / 文字速度），退出再开 — 偏好应保留。
+
+## 设计说明
+
+- **同一 Web 构建** — 不在 Rust 中重做 GPU/音频；仅壳层 chrome 与 appData 存档/偏好。
+- **Tauri 内无前端框架** — 仅托管 `dist/demo` 静态文件。
+- **webview 中的 WebGPU** — 依赖平台 webview（WebView2 / WKWebView / WebKitGTK）。
+  GPU 初始化失败时可回退为浏览器托管 dist。
+
+更多布局细节见仓库 `host_desktop/README.md`。
+
+## 下一步
+
+- Web 静态发布：[构建与发布（Web）](./publish)
+- 游玩操作：[游玩输入](./play-input)

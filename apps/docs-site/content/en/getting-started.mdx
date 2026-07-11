@@ -36,6 +36,10 @@ export CC=gcc
 moon check
 moon test
 
+# build the Svelte host shell first (moonsightc build needs apps/host-web/dist)
+cd apps/host-web && npm i && npm run build && cd ../..
+moon build --target wasm-gc --release host_web
+
 # compile sample game + web dist (demo sets ui_package → rebuilds host wasm)
 moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
 
@@ -44,11 +48,26 @@ cd dist/demo && python3 -m http.server 8080
 # open http://localhost:8080/
 ```
 
-## Web host (Q2+)
+## Start from an empty project
+
+```bash
+export CC=gcc
+moon run cmd/moonsightc --target native -- new mygame
+cd apps/host-web && npm i && npm run build && cd ../..
+moon run cmd/moonsightc --target native -- check mygame
+moon run cmd/moonsightc --target native -- build mygame -o dist/mygame
+```
+
+`new` copies the monorepo **`templates/minimal`** scaffold (`moonsight.json`,
+`main.yuki`, optional `assets/`) into a minimal buildable project. Default UI is
+engine `std_ui` (no project `ui/`). You can also pass
+`new <name> -o <parent_dir>`. If the destination already exists, the command
+fails without overwriting.
+
+## Web host (Svelte)
 
 `moonsightc build` copies the **Svelte** web shell from **`apps/host-web/dist`**
-(requires `index.html`). There is no vanilla fallback — build the Svelte host
-first. Historical sources live under `archive/js_glue/`.
+(requires `index.html`). Build that shell first, then package the game.
 
 ```bash
 export CC=gcc
@@ -64,6 +83,9 @@ into Svelte `public/` for dev when needed:
 moon build --target wasm-gc --release host_web
 cp _build/wasm-gc/release/build/host_web/host_web.wasm apps/host-web/public/
 ```
+
+One-shot packaging of a static web directory: [Build & Publish (Web)](./publish)
+(`./scripts/publish-web.sh`).
 
 ## Browser / WebGPU (important on Linux)
 
@@ -119,7 +141,9 @@ pause narrative Advance. Full semantics: [Play input](./play-input).
 
 ## Desktop shell
 
-Build `dist/demo` first, then see `host_desktop/README.md` in the repository.
+Build `dist/demo` first, then see [Desktop (Tauri)](./desktop) and
+`host_desktop/README.md` in the repository. Desktop saves use appData — **not**
+interchangeable with browser `localStorage`.
 
 ## Packages (map)
 
@@ -134,7 +158,8 @@ Build `dist/demo` first, then see `host_desktop/README.md` in the repository.
 | `host_web` | Browser wasm host (WebGPU entry; shell is `apps/host-web`) |
 | `apps/host-web` | Svelte+TS host shell (**required** by `moonsightc`; build `dist/` first) |
 | `host_desktop` | Tauri 2 shell |
-| `cmd/moonsightc` | `check` / `build` CLI (literal resource check, optional ui_package link) |
+| `cmd/moonsightc` | `new` / `check` / `build` CLI (scaffold, resource check, optional ui_package) |
+| `templates/minimal` | Source tree copied by `moonsightc new` |
 | `demo/game` | Sample project (+ optional `ui/` override) |
 | `apps/docs-site` | This documentation site |
 
@@ -142,4 +167,6 @@ Build `dist/demo` first, then see `host_desktop/README.md` in the repository.
 
 - Learn the script language: [MoonYuki subset](./moon-yuki)
 - Integrate input correctly: [Play input](./play-input)
+- Package a static site: [Build & Publish (Web)](./publish)
+- Desktop package & saves: [Desktop](./desktop)
 - Repo-only topics still in `docs/` (UI MoonBit, host commands, project layout, draw-list pack)

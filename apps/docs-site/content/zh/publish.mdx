@@ -1,0 +1,116 @@
+---
+title: 构建与发布（Web）
+description: 用 publish-web.sh 打包静态 Web 产物、托管、WebGPU 与存档说明
+---
+
+# 构建与发布（Web）
+
+> **权威说明：** 引擎行为在迁移完成前仍须与仓库文档一致；核心页面在所列主题上为权威说明。
+>
+> 内容提炼自 `scripts/publish-web.sh`、`README.mbt.md` 与 `docs/project-layout.md`。
+
+将可玩内容打成**静态目录**，可托管到任意静态站点。MoonSight 需要支持
+**WebGPU** 的浏览器，并通过 **`http://` / `https://`** 访问（不要用 `file://`）。
+
+另见：[快速开始](./getting-started)、[桌面端](./desktop)。
+
+## 前置条件
+
+- MoonBit 工具链（`moon`）与 C 编译器（Linux 上 `export CC=gcc`）
+- Node.js + npm（构建 Svelte Host 壳）
+- 游戏工程（`demo/game`，或由 `moonsightc new` 创建）
+
+`moonsightc build` 会从 **`apps/host-web/dist`** 复制生产壳（须含
+`index.html`）。打包前请先构建该壳。
+
+## 一键：`publish-web.sh`
+
+在**仓库根目录**：
+
+```bash
+./scripts/publish-web.sh [project_dir] [out_dir]
+# 默认：demo/game → dist/demo
+```
+
+脚本依次：
+
+1. `cd apps/host-web && npm ci && npm run build`
+2. `moon build --target wasm-gc --release host_web`
+3. `moon run cmd/moonsightc --target native -- build <project> -o <out>`
+
+对用 `new` 创建的工程：
+
+```bash
+export CC=gcc
+moon run cmd/moonsightc --target native -- new mygame
+./scripts/publish-web.sh mygame dist/mygame
+cd dist/mygame && python3 -m http.server 8080
+# 打开 http://localhost:8080/
+```
+
+## 手动等价步骤
+
+```bash
+export CC=gcc
+cd apps/host-web && npm i && npm run build && cd ../..
+moon build --target wasm-gc --release host_web
+moon run cmd/moonsightc --target native -- build demo/game -o dist/demo
+```
+
+`moonsightc` **不会**自行调用 `npm`。若缺少
+`apps/host-web/dist/index.html`，构建会失败并给出明确错误 — 请先完成 Svelte 构建。
+
+## 静态托管
+
+上传或托管**整个**输出目录（`index.html`、`host_web.wasm`、`game.msb` / 入口
+`.yuki`、`manifest.json`、`assets/`、Vite 的 `assets/`、字体、主题等）。
+
+```bash
+cd dist/demo && python3 -m http.server 8080
+# 或: npx serve dist/demo
+# 或任意 CDN / 对象存储 / nginx 静态根目录
+```
+
+| 要求 | 原因 |
+|------|------|
+| 通过 **http(s)** 访问 | `file://` 会阻止 WebGPU / 安全上下文 API |
+| 保持相对路径 | 壳与 wasm 相对 `index.html` 加载资源 |
+| `.wasm` MIME 尽量正确 | 主机宜提供 `application/wasm` |
+
+除静态文件外不需要服务端运行时。
+
+## WebGPU
+
+MoonSight **要求 WebGPU**，没有 WebGL 回退。Linux 上 Chromium 常需开启标志 —
+见 [快速开始](./getting-started#浏览器--webgpulinux-上尤其重要)。
+
+若画布空白或控制台报 `WebGPU not available`，先修浏览器/GPU 路径；与打包本身无关。
+
+## 存档（Web）
+
+浏览器构建使用 **`WebSaveStore`** → **`localStorage`**：
+
+| 种类 | 键 |
+|------|-----|
+| 偏好 | `moonsight/prefs` |
+| 槽位 *n* | `moonsight/save/{n}` |
+
+- 数据按 **源站**（协议 + 主机 + 端口）隔离。换端口或域名即另一套存储。
+- 清除站点数据会抹掉存档与偏好。
+- 引擎槽位 JSON 仍为 **v4**；与桌面端仅 Host 持久化后端不同。
+
+**Web 槽位与桌面槽位不互通** — 不会在 `localStorage` 与桌面 appData 之间自动迁移。
+见 [桌面端](./desktop)。
+
+## 发布后验收
+
+1. 冷启动落在 **标题** 模态。
+2. **Start** → 玩一小段；Esc → 存档槽 0（或 Ctrl+S）。
+3. 刷新页面 → 读档槽 0；进度应恢复。
+4. 可选：开发者工具 → Application → Local Storage 可见 `moonsight/*` 键。
+
+## 下一步
+
+- 打包原生窗口：[桌面端](./desktop)
+- 安装与 WebGPU 标志：[快速开始](./getting-started)
+- 仓库布局：`docs/project-layout.md`

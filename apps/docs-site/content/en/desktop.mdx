@@ -1,0 +1,147 @@
+---
+title: Desktop (Tauri)
+description: Tauri prerequisites, publish-desktop, appData saves; web slots ≠ desktop slots
+---
+
+# Desktop (Tauri)
+
+> **Source of truth:** Engine behavior must match repo docs until migration
+> completes; core pages are authoritative for listed topics.
+>
+> Distilled from `host_desktop/README.md` and `scripts/publish-desktop.sh`.
+
+The desktop shell is a minimal **Tauri 2** window over the **same** static
+package as the browser (`dist/demo` from `moonsightc build`). There is no second
+GPU backend and no extra frontend toolchain inside Tauri — WebGPU + WASM run in
+the webview exactly as when serving the dist over HTTP.
+
+See also: [Build & Publish (Web)](./publish), [Getting Started](./getting-started).
+
+## Prerequisites
+
+1. **Web dist** — Svelte host built and game packaged into `dist/demo` (or your
+   out dir). `moonsightc` requires `apps/host-web/dist` (`index.html`).
+
+2. **Rust** stable + system dependencies for Tauri 2:
+   - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
+   - Fedora example: `webkit2gtk4.1-devel`, `openssl-devel`, `gtk3-devel`,
+     `libayatana-appindicator-gtk3-devel`, `librsvg2-devel`, `gcc`, `pkg-config`
+
+3. **Node.js** + npm (for `@tauri-apps/cli`)
+
+4. **Display** — `tauri dev` / `tauri build` open a native window (GUI /
+   WebKitGTK). On headless CI or SSH without display, skip the GUI and smoke the
+   static path only (see below).
+
+## One-shot: `publish-desktop.sh`
+
+From the **repository root**:
+
+```bash
+./scripts/publish-desktop.sh
+```
+
+This runs:
+
+1. `./scripts/publish-web.sh demo/game dist/demo` (Svelte host + wasm + package)
+2. `cd host_desktop/tauri && npm ci && npm run tauri build`
+
+Production artifacts land under Tauri’s usual `target/release` / bundle output
+for your platform.
+
+## Manual steps
+
+```bash
+# 1) web package
+./scripts/publish-web.sh demo/game dist/demo
+# or: moonsightc build after building apps/host-web/dist
+
+# 2) Tauri
+cd host_desktop/tauri
+npm install
+npm run tauri dev    # development window
+# or
+npm run tauri build  # production bundle
+```
+
+| Mode | Content source |
+|------|----------------|
+| Production bundle | `build.frontendDist` → repo-root `dist/demo` |
+| Dev | `serve-dist` on `http://127.0.0.1:4173` serving the same `dist/demo` |
+
+Rebuild the game package after changing the Svelte host or scripts.
+
+### Headless / no-display smoke
+
+When `DISPLAY` is unset or WebKit is unavailable:
+
+```bash
+# dist/demo must already exist
+cd host_desktop/tauri && node scripts/serve-dist.mjs &
+curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4173/
+curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4173/host_web.wasm
+# expect 200; stop the server when done
+```
+
+## Saves (appData SaveStore)
+
+Desktop does **not** use webview `localStorage` for prefs/slots. The Svelte host
+detects Tauri (`window.__TAURI_INTERNALS__`) and uses **`DesktopSaveStore`**,
+which reads/writes under the OS **app data** directory via Tauri commands.
+
+| Kind | Path under appData |
+|------|--------------------|
+| Prefs | `{appDataDir}/moonsight/prefs.json` |
+| Slot *n* | `{appDataDir}/moonsight/saves/{n}.json` |
+
+`appDataDir` is Tauri’s `app.path().app_data_dir()` — typically:
+
+| Platform | Example |
+|----------|---------|
+| Linux | `~/.local/share/app.moonsight.desktop/` |
+| macOS | `~/Library/Application Support/app.moonsight.desktop/` |
+| Windows | `%APPDATA%\app.moonsight.desktop\` |
+
+Commands (ACL: `allow-moonsight-save`): `read_prefs`, `write_prefs`,
+`read_save_slot`, `write_save_slot`. Browser builds keep `WebSaveStore` /
+`localStorage` (`moonsight/prefs`, `moonsight/save/{n}`).
+
+### Web slots ≠ desktop slots
+
+**Web slots and desktop slots are not interchangeable.** There is no automatic
+migration between browser `localStorage` and appData files. Engine save JSON
+remains **v4** on both; only the Host persistence backend differs.
+
+Expect separate progress if you play the same project in Chrome and in the
+Tauri app.
+
+### Manual save checklist
+
+1. Build web host + package into `dist/demo` (see Prerequisites).
+2. From `host_desktop/tauri`: `npm install && npm run tauri dev`.
+3. Play → menu → **save slot 0** (or Ctrl+S) → quit the app fully.
+4. Relaunch → **load slot 0** — progress should restore.
+5. Confirm files on disk, e.g. Linux:
+
+```bash
+ls -la ~/.local/share/app.moonsight.desktop/moonsight/
+ls -la ~/.local/share/app.moonsight.desktop/moonsight/saves/
+# expect prefs.json and/or saves/0.json after a save
+```
+
+6. Change a preference (volume / text speed), quit, relaunch — prefs should stick.
+
+## Design notes
+
+- **Same web build** — do not reimplement GPU/audio in Rust; shell chrome +
+  appData save/prefs only.
+- **No in-Tauri frontend framework** — Tauri hosts static files from `dist/demo`.
+- **WebGPU in webview** — depends on the platform webview (WebView2 / WKWebView /
+  WebKitGTK). If GPU init fails, fall back to browser serve of the dist.
+
+More layout detail: repo `host_desktop/README.md`.
+
+## Next steps
+
+- Web static publish: [Build & Publish (Web)](./publish)
+- Play controls: [Play input](./play-input)
