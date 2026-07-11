@@ -1037,7 +1037,16 @@ export async function boot(options = {}) {
 
   const status = document.querySelector("#status");
   const setStatus = (m) => {
-    if (status) status.textContent = m;
+    if (status) {
+      status.textContent = m;
+      const running = typeof m === "string" && m.startsWith("running");
+      const err =
+        typeof m === "string" &&
+        (m.startsWith("error:") || m.startsWith("error "));
+      status.classList.toggle("running", running);
+      status.classList.toggle("panel", !running);
+      status.classList.toggle("error", err && !running);
+    }
     console.info("[moonsight]", m);
   };
 
@@ -1098,24 +1107,27 @@ export async function boot(options = {}) {
     const wasmUrl =
       options.wasmUrl || params.get("wasm") || "./host_web.wasm";
 
-    setStatus(`load wasm ${wasmUrl}…`);
+    setStatus("loading wasm…");
     exports_ = await loadWasm(wasmUrl);
 
     const manifestUrl =
       options.manifestUrl || params.get("manifest") || "./manifest.json";
+    setStatus("loading manifest…");
     const manifest = await loadManifest(manifestUrl);
 
     // _start may have run (println). Explicit demo init:
     // Pass manifest so save_slots applies before slot hydration / boot_title.
     setStatus("init engine…");
     await maybeLoadSource(manifest);
+    setStatus("loading assets…");
     await applyManifest(manifest);
 
     // Delay first frame one rAF so font/GPU state settles before typewriter.
-    setStatus("running (click / Enter to advance)");
+    setStatus("running");
     requestAnimationFrame(() => requestAnimationFrame(frame));
   } catch (e) {
-    setStatus(String(e && e.message ? e.message : e));
+    const msg = String(e && e.message ? e.message : e);
+    setStatus(msg.startsWith("error:") ? msg : `error: ${msg}`);
     console.error(e);
     throw e;
   }

@@ -748,20 +748,22 @@ export class GameSession {
       const wasmUrl =
         options.wasmUrl || params.get("wasm") || "./host_web.wasm";
 
-      this.setStatus(`load wasm ${wasmUrl}…`);
+      this.setStatus("loading wasm…");
       this.exports_ = (await loadWasm(wasmUrl)) as HostExports;
 
       const manifestUrl =
         options.manifestUrl || params.get("manifest") || "./manifest.json";
+      this.setStatus("loading manifest…");
       const manifest = (await loadManifest(manifestUrl)) as Manifest | null;
 
       // Pass manifest so save_slots applies before slot hydration / boot_title.
       this.setStatus("init engine…");
       await this.maybeLoadSource(manifest);
+      this.setStatus("loading assets…");
       await this.applyManifest(manifest);
 
       // Delay first frame one rAF so font/GPU state settles before typewriter.
-      this.setStatus("running (click / Enter to advance)");
+      this.setStatus("running");
       requestAnimationFrame(() => {
         if (this.running) {
           this.rafId = requestAnimationFrame(this.frame);
@@ -773,7 +775,8 @@ export class GameSession {
           ? (e as Error).message
           : e,
       );
-      this.setStatus(msg);
+      const errText = msg.startsWith("error:") ? msg : `error: ${msg}`;
+      this.setStatus(errText);
       console.error(e);
       throw e;
     }
