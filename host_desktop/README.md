@@ -37,10 +37,15 @@ Both resolve to **repo-root** `dist/demo` (not `apps/host-web/dist` directly). R
 ## Prerequisites
 
 1. **Web dist** — build the Svelte host and package the demo into `dist/demo`
-   first. `moonsightc` requires `apps/host-web/dist` (`index.html`):
+   first. `moonsightc` requires `apps/host-web/dist` (`index.html`).
+
+   One-shot from repo root: [`scripts/publish-web.sh`](../scripts/publish-web.sh)
+   (or [`scripts/publish-desktop.sh`](../scripts/publish-desktop.sh) for web + Tauri bundle).
 
    ```bash
    # from repo root
+   ./scripts/publish-web.sh demo/game dist/demo
+   # equivalent manual steps:
    export CC=gcc
    cd apps/host-web && npm i && npm run build && cd ../..
    moon build --target wasm-gc --release host_web   # wasm used by ui_package / inject
@@ -67,6 +72,9 @@ cd host_desktop/tauri && npm install && npm run tauri dev
 Production-style package (embeds `dist/demo`):
 
 ```bash
+# one-shot: web dist + tauri build
+./scripts/publish-desktop.sh
+# or manually after publish-web:
 cd host_desktop/tauri && npm run tauri build
 ```
 
