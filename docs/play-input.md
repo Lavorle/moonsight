@@ -18,8 +18,8 @@ Defined in `render.intent_from_code` / `intent_to_code`, wired by
 | 2 | `SkipTyping` | One-shot complete typing / advance (compat); host prefers hold skip |
 | 3 | `OpenMenu` | Playing + empty stack → `game_menu`; modal open → pop one layer |
 | 4 | `ToggleAuto` | Toggle auto-advance (+ prefs `auto_mode`) |
-| 5 | `MenuUp` | Previous focusable (menus / choices) |
-| 6 | `MenuDown` | Next focusable |
+| 5 | `MenuUp` | Previous focusable (menus / choices); **backlog top → scroll older** by one line step |
+| 6 | `MenuDown` | Next focusable; **backlog top → scroll newer** by one line step |
 | 7 | `MenuLeft` | Focused slider step down (or left focus where used) |
 | 8 | `MenuRight` | Focused slider step up |
 | 9 | `OpenBacklog` | Playing + empty stack → show `"backlog"` modal |

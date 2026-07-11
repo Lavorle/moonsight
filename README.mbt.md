@@ -200,27 +200,40 @@ input for **zh** and **en**. Routes:
 Default locale **zh**. Repo `docs/*.md` remain engine source of truth for
 unmigrated topics.
 
-### Q2 acceptance checklist (hygiene)
+### Q3 / 0.8 (system UI) — automated gate green
 
-Automated gates (see also `.superpowers/sdd/task-13-report.md`): `moon check`,
-`moon test`, `apps/host-web` build, `apps/docs-site` build,
+**In:** vertical `UiNode::ScrollView` (clip, scrollbar track/thumb) consumed by
+the backlog modal (full ring bind, pin newest on open); wheel + content pan +
+bar drag + ↑/↓ line scroll; pointer **phase 2** (`pointerup`) ends drag without
+Advance; dual-host wheel sign (`dy = -deltaY`) and **Ctrl blur/visibility**
+clears sticky skip; confirm unified (overwrite / quit-to-title, default **No**);
+slot empty/filled theme icons; scroll + slot theme roles; host full-panel
+loading/error; `layer.show`/`set` **scale** on both builtins and std_commands
+paths; mid-dissolve load **hard-clears** dissolve veil; menu/quick-save host
+stamps `saved_at` for slot labels; author docs + Fumadocs zh/en (play-input +
+UI). See [`.superpowers/sdd/q3-final-verify-report.md`](./.superpowers/sdd/q3-final-verify-report.md).
+
+**Automated gates (0.8):** `export CC=gcc` then `moon check`, `moon test`,
 `moon build --target wasm-gc --release host_web`,
-`moonsightc build demo/game -o dist/demo`.
+`moon run cmd/moonsightc --target native -- build demo/game -o dist/demo`,
+`apps/host-web` `npm run build`, `apps/docs-site` `npm run build` — all exit 0.
 
-Manual / interactive play (Title → dialogue, dissolve/scale visibility, Ctrl
-skip vs `@flow.wait`, H backlog / Esc menu on Svelte host) requires a WebGPU
-browser on localhost. When WebGPU is unavailable in the agent environment,
-those items are recorded as **not verified in-session** with how to verify;
-static evidence (dist artifacts, unit tests, docs routes HTTP 200) is not a
-substitute for visual play.
+**Manual D6 (WebGPU browser):** Title → Start → long backlog scroll (wheel /
+drag / bar / ↑↓) → Close/Esc; mouse Advance / choices / Esc menu / overwrite
+confirm defaults No; dissolve + scale visible; Ctrl skip vs `@flow.wait`; blur
+clears skip; force error path message. **Deferred to human browser** (same
+honest pattern as Pointer Theme) — not claimed pass in CI/agent headless.
 
-### Out of scope (through Q2 non-goals)
+### Out of scope / deferred to Q4+
 
 Visual editor, full product i18n beyond docs-site locales, achievements,
 Live2D / 3D, particle/postprocess stack, full timeline / animation queues,
 blocking presentation DSL, rotate/anchor, voice track, slot screenshots,
-backlog free-scroll / ScrollView, saving backlog into slots, rollback, DOM
-game menus, second native GPU backend, second wasm / dynamic UI load, runtime
-theme switcher / multi-theme store, transform animation stack, open host-string
-UI actions, official Yukimi bytecode compatibility, long-term Screen DSL lower
-compatibility, deleting vanilla `js_glue`.
+horizontal / nested ScrollView, list virtualization, fling/rubber-band, saving
+backlog into slots, rollback, DOM game menus, second native GPU backend, second
+wasm / dynamic UI load, runtime theme switcher / multi-theme store, transform
+animation stack, open host-string UI actions, official Yukimi bytecode
+compatibility, long-term Screen DSL lower compatibility, **`moonsight new` /
+project templates**, **desktop native save**, **deleting vanilla `js_glue`**,
+Host full consolidation, interactive WebGPU CI, committing wasm build artifacts
+to git.
