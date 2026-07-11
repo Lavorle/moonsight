@@ -543,15 +543,18 @@ fn Engine::tick_skip_burst(self : Engine) -> Unit {
 }
 
 ///|
-/// Host pointer path: hover / leave / down with UI hit-test and miss→Advance.
+/// Host pointer path: hover / leave / down / up with UI hit-test and miss→Advance.
 ///
-/// `phase`: 0=move, 1=down, 3=leave.
+/// `phase`: 0=move, 1=down, 2=up, 3=leave.
 /// Returns `hover_kind` after the event (0 none, 1 button, 2 choice, 3 slider).
 ///
 /// Does **not** advance `wait_remaining` or tweens — host still calls
 /// `export_frame(0, dt)` same frame for presentation clocks. On Playing miss,
 /// applies keyboard-equivalent Advance (typewriter complete-first) and
 /// `run_until_wait` when the VM becomes Running.
+///
+/// phase=2 ends scroll drag without Advance. phase=0 updates content/bar drag
+/// when active, then hover.
 pub fn Engine::pointer_event(
   self : Engine,
   x : Double,
@@ -563,7 +566,13 @@ pub fn Engine::pointer_event(
     self.ui.pointer_leave()
     return 0
   }
+  if phase == 2 {
+    // Pointer up: end content/bar drag; never Advance.
+    self.ui.end_scroll_drag()
+    return self.ui.hover_kind()
+  }
   if phase == 0 {
+    self.ui.pointer_scroll_move(y=y)
     ignore(self.ui.pointer_hover(x, y))
     return self.ui.hover_kind()
   }

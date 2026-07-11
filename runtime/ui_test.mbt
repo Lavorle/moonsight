@@ -878,3 +878,159 @@ test "show_modal backlog pins scroll to newest" {
   assert_true(rt.scroll_max() > 0.0)
   assert_true(rt.scroll_y >= rt.scroll_max() - 0.01)
 }
+
+///|
+/// Content pan: pointer y increases → scroll_y decreases (same natural feel as wheel).
+test "content drag pans scroll_y" {
+  // Viewport at (100,100) 400×200; content taller so scroll_max > 0
+  let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 200.0)
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
+  assert_true(rt.scroll_max() > 50.0)
+  rt.scroll_y = 50.0
+  // Drag content down by 20 (pointer y increases) => scroll_y decreases by 20
+  rt.begin_scroll_drag_content(y=200.0)
+  rt.pointer_scroll_move(y=220.0)
+  assert_true(rt.scroll_y > 29.9 && rt.scroll_y < 30.1)
+  rt.end_scroll_drag()
+  // After end, further move is a no-op
+  let after = rt.scroll_y
+  rt.pointer_scroll_move(y=250.0)
+  assert_eq(rt.scroll_y, after)
+}
+
+///|
+/// Thumb drag: move pointer toward bottom of track → scroll_y near max.
+test "scrollbar thumb drag maps to scroll_y" {
+  // Tall content, short viewport so thumb is small and travel is large
+  let rt = make_scroll_runtime(8, 100.0, 100.0, 400.0, 200.0)
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
+  assert_true(rt.scroll_max() > 0.0)
+  rt.scroll_y = 0.0
+  let caps = FakeCaps::new()
+  let c : &Capabilities = caps
+  // Thumb sits on right edge of viewport (bar_w=16): x in [484, 500)
+  // At scroll_y=0 thumb is near top of track (y≈100)
+  assert_true(rt.handle_pointer(c, 492.0, 110.0))
+  // Drag toward bottom of track → scroll near max
+  rt.pointer_scroll_move(y=280.0)
+  assert_true(rt.scroll_y >= rt.scroll_max() * 0.7)
+  rt.end_scroll_drag()
+}
+
+///|
+/// Track click jumps scroll_y by vertical ratio and may start Bar drag.
+test "scrollbar track click jumps scroll_y" {
+  let rt = make_scroll_runtime(8, 100.0, 100.0, 400.0, 200.0)
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
+  rt.scroll_y = 0.0
+  let caps = FakeCaps::new()
+  let c : &Capabilities = caps
+  // Click track near bottom (below thumb at top) → jump toward max
+  assert_true(rt.handle_pointer(c, 492.0, 280.0))
+  assert_true(rt.scroll_y > rt.scroll_max() * 0.5)
+  rt.end_scroll_drag()
+}
+
+///|
+/// Focusable Button wins over content pan; drag state stays Idle.
+test "button hit preferred over content pan" {
+  let app = UiApp::new()
+  let mut n = 0
+  let id = app.alloc_action(fn(_c : &Capabilities) { n = n + 1 })
+  // Fixed: ScrollView viewport + Button laid at Fixed origin outside content pan
+  // area is not required — Button is a focusable child of ScrollView content.
+  app.register_modal(
+    "sv",
+    UiNode::Fixed(
+      x=0.0,
+      y=0.0,
+      w=Some(800.0),
+      h=Some(600.0),
+      children=[
+        UiNode::ScrollView(
+          x=100.0,
+          y=100.0,
+          w=400.0,
+          h=200.0,
+          children=[
+            UiNode::VBox(
+              x=None,
+              y=None,
+              children=[
+                UiNode::Button(
+                  label="Close",
+                  action_id=id,
+                  visible=VisiblePred::Always,
+                ),
+                UiNode::Text(
+                  src=TextBindSrc::Literal("L1"),
+                  x=0.0,
+                  y=0.0,
+                  font_size=22.0,
+                  visible=VisiblePred::Always,
+                ),
+                UiNode::Text(
+                  src=TextBindSrc::Literal("L2"),
+                  x=0.0,
+                  y=0.0,
+                  font_size=22.0,
+                  visible=VisiblePred::Always,
+                ),
+                UiNode::Text(
+                  src=TextBindSrc::Literal("L3"),
+                  x=0.0,
+                  y=0.0,
+                  font_size=22.0,
+                  visible=VisiblePred::Always,
+                ),
+                UiNode::Text(
+                  src=TextBindSrc::Literal("L4"),
+                  x=0.0,
+                  y=0.0,
+                  font_size=22.0,
+                  visible=VisiblePred::Always,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("sv")
+  rt.sync_bind(UiBindCtx::empty())
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
+  assert_true(rt.scroll_max() > 0.0)
+  rt.scroll_y = 50.0
+  let before = rt.scroll_y
+  let caps = FakeCaps::new()
+  let c : &Capabilities = caps
+  // Button at scroll origin: (100, 100 - scroll_y) = (100, 50) but clipped;
+  // at scroll_y=0 button is at (100,100); with scroll_y=50 button at (100,50)
+  // and is fully above viewport → not focusable. Reset to 0 so button is hit.
+  rt.scroll_y = 0.0
+  // Hit button rect [100,100]–[500,152]
+  assert_true(rt.handle_pointer(c, 150.0, 120.0))
+  assert_eq(n, 1)
+  // No content drag started — move must not pan
+  rt.pointer_scroll_move(y=180.0)
+  assert_eq(rt.scroll_y, 0.0)
+  ignore(before)
+}
+
+///|
+/// Down on empty viewport content starts Content drag (consumed).
+test "content hit begins content drag" {
+  let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 200.0)
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
+  rt.scroll_y = 50.0
+  let caps = FakeCaps::new()
+  let c : &Capabilities = caps
+  // Hit left side of viewport (not on scrollbar)
+  assert_true(rt.handle_pointer(c, 150.0, 150.0))
+  rt.pointer_scroll_move(y=170.0)
+  // y +20 → scroll_y -20
+  assert_true(rt.scroll_y > 29.9 && rt.scroll_y < 30.1)
+  rt.end_scroll_drag()
+}

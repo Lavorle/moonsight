@@ -1214,7 +1214,73 @@ test "pointer move and leave update hover_kind" {
 }
 
 ///|
-/// Unknown phase (not 0/1/3) must not activate UI or Advance; only hover update.
+/// phase=2 is pointer-up: ends scroll drag and must not Advance.
+test "pointer phase 2 ends scroll drag without Advance" {
+  let app = @runtime.UiApp::new()
+  let lines : Array[@runtime.UiNode] = []
+  for i in 0..<5 {
+    lines.push(
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::Literal("L\{i}"),
+        x=0.0,
+        y=0.0,
+        font_size=22.0,
+        visible=@runtime.VisiblePred::Always,
+      ),
+    )
+  }
+  app.register_modal(
+    "sv",
+    @runtime.UiNode::ScrollView(
+      x=100.0,
+      y=100.0,
+      w=400.0,
+      h=200.0,
+      children=[@runtime.UiNode::VBox(x=None, y=None, children=lines)],
+    ),
+  )
+  let src =
+    #|- scene "s"
+    #|y:Hi
+    #|y:There
+    #|
+  let ir = @script.compile_to_ir(src, file="ptr_up.yuki")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", app~)
+  eng.tick(None_, dt=0.0)
+  assert_true(eng.vm.wait == Yield)
+  guard eng.stage.text is Some(t0) else { fail("text") }
+  assert_eq(t0.full_text, "Hi")
+  assert_false(t0.complete)
+  // Open ScrollView modal (Playing → Menu); measure layout
+  eng.ui.show_modal("sv")
+  eng.sync_ui_bind()
+  ignore(
+    eng.ui.paint_modal(
+      canvas_w=1920.0,
+      canvas_h=1080.0,
+      bind=@runtime.UiBindCtx::empty(),
+    ),
+  )
+  assert_true(eng.ui.scroll_max() > 50.0)
+  eng.ui.scroll_y = 50.0
+  // phase 1: down on content → Content drag
+  ignore(eng.pointer_event(150.0, 150.0, phase=1))
+  // phase 0: drag down → scroll_y decreases
+  ignore(eng.pointer_event(150.0, 170.0, phase=0))
+  assert_true(eng.ui.scroll_y > 29.9 && eng.ui.scroll_y < 30.1)
+  // phase 2: up ends drag; no Advance (modal active, typewriter still incomplete)
+  ignore(eng.pointer_event(150.0, 170.0, phase=2))
+  let sy = eng.ui.scroll_y
+  ignore(eng.pointer_event(150.0, 220.0, phase=0))
+  assert_eq(eng.ui.scroll_y, sy)
+  guard eng.stage.text is Some(t1) else { fail("text after up") }
+  assert_false(t1.complete)
+  assert_eq(t1.full_text, "Hi")
+  assert_true(eng.vm.wait == Yield)
+}
+
+///|
+/// Unknown phase (not 0/1/2/3) must not activate UI or Advance; only hover update.
 test "pointer unknown phase is not down" {
   let src =
     #|- scene "s"
@@ -1229,8 +1295,8 @@ test "pointer unknown phase is not down" {
   assert_eq(t0.full_text, "Hi")
   assert_false(t0.complete)
   eng.sync_ui_bind()
-  // phase=2 (or any non-0/1/3) must not complete typewriter / Advance.
-  ignore(eng.pointer_event(50.0, 50.0, phase=2))
+  // phase=4 (not 0/1/2/3) must not complete typewriter / Advance.
+  ignore(eng.pointer_event(50.0, 50.0, phase=4))
   guard eng.stage.text is Some(t1) else { fail("unchanged") }
   assert_false(t1.complete)
   assert_eq(t1.full_text, "Hi")

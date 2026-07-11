@@ -60,6 +60,14 @@ let ui_res_scroll_track : String = "ui.scroll_track"
 let ui_res_scroll_thumb : String = "ui.scroll_thumb"
 
 ///|
+/// Active ScrollView pointer drag (content pan or scrollbar thumb/track).
+enum ScrollDrag {
+  Idle
+  Content(Double)
+  Bar
+} derive(Debug)
+
+///|
 /// Laid-out focusable with hit rect.
 struct LaidFocus {
   target : UiFocusTarget
@@ -113,6 +121,8 @@ pub(all) struct UiRuntime {
   mut scroll_bar_w : Float
   /// When true, next ScrollView measure sets `scroll_y` to `scroll_max()` (pin to newest).
   mut pin_on_next_layout : Bool
+  /// Active content-pan / scrollbar drag (not saved).
+  mut scroll_drag : ScrollDrag
 }
 
 ///|
@@ -142,6 +152,7 @@ pub fn UiRuntime::from_app(app : UiApp, save_slots~ : Int) -> UiRuntime {
     scroll_vp_h: 0.0,
     scroll_bar_w: ui_scroll_bar_w,
     pin_on_next_layout: false,
+    scroll_drag: Idle,
   }
 }
 
@@ -196,6 +207,101 @@ fn point_in_scroll_viewport(rt : UiRuntime, x : Double, y : Double) -> Bool {
 }
 
 ///|
+/// True when content overflows the viewport (scrollbar is shown).
+fn UiRuntime::scroll_overflows(self : UiRuntime) -> Bool {
+  self.scroll_content_h > self.scroll_vp_h.to_double() + 0.0
+}
+
+///|
+/// Thumb height for the last measured ScrollView (min `ui_scroll_thumb_min_h`).
+fn UiRuntime::scroll_thumb_h(self : UiRuntime) -> Float {
+  let vh = self.scroll_vp_h
+  let ch = Float::from_double(self.scroll_content_h)
+  if ch <= 0.0 {
+    return vh
+  }
+  let ratio = vh / ch
+  let mut thumb_h = vh * ratio
+  if thumb_h < ui_scroll_thumb_min_h {
+    thumb_h = ui_scroll_thumb_min_h
+  }
+  if thumb_h > vh {
+    thumb_h = vh
+  }
+  thumb_h
+}
+
+///|
+/// Thumb top y for the last measured ScrollView.
+fn UiRuntime::scroll_thumb_y(self : UiRuntime) -> Float {
+  let vh = self.scroll_vp_h
+  let vy = self.scroll_vp_y
+  let thumb_h = self.scroll_thumb_h()
+  let max_scroll = self.scroll_max()
+  let travel = vh - thumb_h
+  if max_scroll > 0.0 && travel > 0.0 {
+    vy + Float::from_double(self.scroll_y / max_scroll) * travel
+  } else {
+    vy
+  }
+}
+
+///|
+/// Track x for the scrollbar (right edge of viewport).
+fn UiRuntime::scroll_track_x(self : UiRuntime) -> Float {
+  self.scroll_vp_x + self.scroll_vp_w - self.scroll_bar_w
+}
+
+///|
+/// Map pointer y so the thumb center follows the pointer; clamp scroll_y.
+fn UiRuntime::map_bar_y_to_scroll(self : UiRuntime, y : Double) -> Unit {
+  let max = self.scroll_max()
+  if max <= 0.0 {
+    self.scroll_y = 0.0
+    return
+  }
+  let vy = self.scroll_vp_y.to_double()
+  let vh = self.scroll_vp_h.to_double()
+  let thumb_h = self.scroll_thumb_h().to_double()
+  let travel = vh - thumb_h
+  if travel <= 0.0 {
+    self.scroll_y = 0.0
+    return
+  }
+  let thumb_top = y - thumb_h / 2.0
+  let t = (thumb_top - vy) / travel
+  self.scroll_y = t * max
+  self.clamp_scroll()
+}
+
+///|
+/// Begin a content-pan drag at pointer y (tests + pointer down path).
+pub fn UiRuntime::begin_scroll_drag_content(self : UiRuntime, y~ : Double) -> Unit {
+  self.scroll_drag = Content(y)
+}
+
+///|
+/// End any active scroll drag (pointer up / leave).
+pub fn UiRuntime::end_scroll_drag(self : UiRuntime) -> Unit {
+  self.scroll_drag = Idle
+}
+
+///|
+/// While dragging: Content pans by dy; Bar maps y to scroll_y. No-op when Idle.
+pub fn UiRuntime::pointer_scroll_move(self : UiRuntime, y~ : Double) -> Unit {
+  match self.scroll_drag {
+    Idle => ()
+    Content(last_y) => {
+      let dy = y - last_y
+      self.scroll_y = self.scroll_y - dy
+      self.clamp_scroll()
+      self.scroll_drag = Content(y)
+    }
+    Bar => self.map_bar_y_to_scroll(y)
+  }
+}
+
+///|
 /// Wheel over viewport. `dy > 0` decreases `scroll_y` (reveal earlier lines).
 /// Returns true if the event was consumed.
 pub fn UiRuntime::handle_wheel(
@@ -241,6 +347,7 @@ pub fn UiRuntime::show_modal(
   self.stack.push({ name, mode, focus: 0 })
   // New modal layer: stale hover indices from the previous layer are invalid.
   self.hover = -1
+  self.scroll_drag = Idle
   // Opening backlog pins scroll to newest (bottom) on next layout.
   if name == "backlog" {
     self.pin_on_next_layout = true
@@ -260,6 +367,7 @@ pub fn UiRuntime::return_modal(self : UiRuntime) -> Unit {
   }
   // Focusables changed with the stack; drop hover until next pointer_hover.
   self.hover = -1
+  self.scroll_drag = Idle
 }
 
 ///|
@@ -282,6 +390,7 @@ pub fn UiRuntime::hide_modal(self : UiRuntime, name? : String) -> Unit {
         self.mode = Playing
       }
       self.hover = -1
+      self.scroll_drag = Idle
     }
   }
 }
@@ -350,8 +459,11 @@ pub fn UiRuntime::slider_delta(
 }
 
 ///|
-/// Hit-test focusables under (x,y); set focus and activate on hit.
-/// Returns `true` if a focusable was hit, `false` on miss.
+/// Hit-test focusables, then scrollbar, then ScrollView content.
+///
+/// Priority: focusable → thumb → track → content pan.
+/// Focusable hit clears drag and activates. Scroll hits set `scroll_drag`.
+/// Returns `true` if the event was consumed (so Engine does not Advance).
 pub fn UiRuntime::handle_pointer(
   self : UiRuntime,
   caps : &Capabilities,
@@ -359,15 +471,14 @@ pub fn UiRuntime::handle_pointer(
   y : Double,
 ) -> Bool {
   let items = self.current_focusables(self.bind)
-  if items.is_empty() {
-    return false
-  }
   let px = Float::from_double(x)
   let py = Float::from_double(y)
   let mut i = 0
   while i < items.length() {
     let f = items[i]
     if px >= f.x && px < f.x + f.w && py >= f.y && py < f.y + f.h {
+      // Focusable wins over pan / scrollbar.
+      self.scroll_drag = Idle
       self.set_focus_index(i)
       match f.target {
         UiFocusTarget::Button(action_id) => self.app.invoke(action_id, caps)
@@ -380,6 +491,48 @@ pub fn UiRuntime::handle_pointer(
       return true
     }
     i = i + 1
+  }
+  // No focusable: scrollbar thumb / track / content pan.
+  self.handle_pointer_scroll(x, y)
+}
+
+///|
+/// ScrollView-only pointer down after focusable miss.
+/// Thumb → Bar; track → jump + Bar; viewport content → Content drag.
+fn UiRuntime::handle_pointer_scroll(
+  self : UiRuntime,
+  x : Double,
+  y : Double,
+) -> Bool {
+  if self.stack.is_empty() {
+    return false
+  }
+  if self.scroll_overflows() {
+    let bar_w = self.scroll_bar_w.to_double()
+    let track_x = self.scroll_track_x().to_double()
+    let vy = self.scroll_vp_y.to_double()
+    let vh = self.scroll_vp_h.to_double()
+    let in_track = x >= track_x &&
+      x < track_x + bar_w &&
+      y >= vy &&
+      y < vy + vh
+    if in_track {
+      let thumb_y = self.scroll_thumb_y().to_double()
+      let thumb_h = self.scroll_thumb_h().to_double()
+      let on_thumb = y >= thumb_y && y < thumb_y + thumb_h
+      if on_thumb {
+        self.scroll_drag = Bar
+        return true
+      }
+      // Track (non-thumb): jump scroll from y ratio, then Bar for continued drag.
+      self.map_bar_y_to_scroll(y)
+      self.scroll_drag = Bar
+      return true
+    }
+  }
+  if point_in_scroll_viewport(self, x, y) {
+    self.scroll_drag = Content(y)
+    return true
   }
   false
 }
@@ -413,9 +566,10 @@ pub fn UiRuntime::pointer_hover(
 }
 
 ///|
-/// Clear hover state (pointer left the canvas / UI).
+/// Clear hover state (pointer left the canvas / UI) and end scroll drag.
 pub fn UiRuntime::pointer_leave(self : UiRuntime) -> Unit {
   self.hover = -1
+  self.scroll_drag = Idle
 }
 
 ///|
@@ -1097,7 +1251,7 @@ fn walk_ui_node(
       // Scrollbar track + thumb when content overflows the viewport.
       if st.paint && content_h > vh {
         let bar_w = rt.scroll_bar_w
-        let track_x = vx + vw - bar_w
+        let track_x = rt.scroll_track_x()
         st.ops.push(
           {
             kind: 0,
@@ -1114,21 +1268,8 @@ fn walk_ui_node(
             hovered: false,
           },
         )
-        let ratio = vh / content_h
-        let mut thumb_h = vh * ratio
-        if thumb_h < ui_scroll_thumb_min_h {
-          thumb_h = ui_scroll_thumb_min_h
-        }
-        if thumb_h > vh {
-          thumb_h = vh
-        }
-        let max_scroll = rt.scroll_max()
-        let travel = vh - thumb_h
-        let thumb_y = if max_scroll > 0.0 && travel > 0.0 {
-          vy + Float::from_double(rt.scroll_y / max_scroll) * travel
-        } else {
-          vy
-        }
+        let thumb_h = rt.scroll_thumb_h()
+        let thumb_y = rt.scroll_thumb_y()
         st.ops.push(
           {
             kind: 0,
