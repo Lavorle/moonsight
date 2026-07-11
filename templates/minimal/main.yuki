@@ -1,0 +1,17 @@
+- scene "entrypoint"
+@flow.jump "intro"
+
+- scene "intro"
+y:Welcome. This project was created with moonsightc new.
+y:Edit main.yuki and rebuild.
+@flow.choice "Continue" "Quit path" --result act
+@flow.jump_if act 0 "end_a"
+@flow.jump "end_b"
+
+- scene "end_a"
+y:You chose Continue. Thanks for playing.
+@flow.yield
+
+- scene "end_b"
+y:You chose the other path. Thanks for playing.
+@flow.yield

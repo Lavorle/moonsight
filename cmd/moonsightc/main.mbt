@@ -3,6 +3,7 @@
 ///
 /// ```
 /// moonsightc version
+/// moonsightc new <name> [-o <parent_dir>]
 /// moonsightc check <file.yuki|dir>
 /// moonsightc build <project_dir> -o <out_dir>
 /// ```
@@ -13,8 +14,9 @@ extern "C" fn process_exit(code : Int) -> Unit = "exit"
 ///|
 fn print_usage() -> Unit {
   let usage =
-    #|usage: moonsightc <check|build|version> ...
+    #|usage: moonsightc <new|check|build|version> ...
     #|  moonsightc version
+    #|  moonsightc new <name> [-o <parent_dir>]
     #|  moonsightc check <file.yuki|dir>
     #|  moonsightc build <project_dir> [-o <out_dir>]
     #|
@@ -57,6 +59,26 @@ fn out_dir_from(args : ArrayView[String]) -> String {
 }
 
 ///|
+/// Parse `-o <dir>` from remaining args for `new`; default `.`.
+fn parent_dir_from(args : ArrayView[String]) -> String {
+  let mut i = 0
+  while i < args.length() {
+    if args[i] == "-o" {
+      if i + 1 < args.length() {
+        return args[i + 1]
+      } else {
+        return "."
+      }
+    }
+    if args[i].has_prefix("-o=") {
+      return args[i][3:].to_owned()
+    }
+    i = i + 1
+  }
+  "."
+}
+
+///|
 fn main {
   let args = cli_args()
   let code = match args {
@@ -65,13 +87,19 @@ fn main {
       1
     }
     ["version", ..] | ["--version", ..] | ["-V", ..] => {
-      println("moonsightc 0.1.0")
+      println("moonsightc 0.9.0-candidate")
       0
     }
     ["help", ..] | ["--help", ..] | ["-h", ..] => {
       print_usage()
       0
     }
+    ["new"] => {
+      println("error: new requires <name>")
+      print_usage()
+      1
+    }
+    ["new", name, .. rest] => cmd_new(name, parent_dir_from(rest))
     ["check"] => {
       println("error: check requires <file.yuki|dir>")
       print_usage()

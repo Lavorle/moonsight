@@ -1,0 +1,7 @@
+{
+  "name": "my-moonsight-game",
+  "entry": "main.yuki",
+  "logical_width": 1920,
+  "logical_height": 1080,
+  "save_slots": 6
+}
