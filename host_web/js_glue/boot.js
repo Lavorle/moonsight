@@ -48,6 +48,11 @@ let exports_ = null;
 
 /** pending intent for next frame */
 let pendingIntent = 0;
+/**
+ * Set after successful export_pointer down so prefs/slots still sync even when
+ * pendingIntent is cleared to NONE (avoid same-frame double Advance).
+ */
+let pointerDirty = false;
 /** Ctrl held → skip_held flag each frame (not one-shot SkipTyping). */
 let ctrlHeld = false;
 let lastTs = 0;
@@ -577,12 +582,14 @@ function frame(ts) {
   lastTs = ts;
   const intent = pendingIntent;
   pendingIntent = 0;
+  const syncAfterAction = intent !== INTENT_NONE || pointerDirty;
+  pointerDirty = false;
   try {
     exports_.export_frame(intent, dt, ctrlHeld ? 1 : 0);
     flushPendingGlyphs(exports_);
     flushAudio(exports_);
-    // After UI actions: prefs + multi-slot may have changed in-engine.
-    if (intent !== INTENT_NONE) {
+    // After UI actions (keyboard intent or pointer down): prefs + multi-slot.
+    if (syncAfterAction) {
       savePrefsToStorage();
       syncSlotsToStorage();
     }
@@ -723,12 +730,16 @@ function bindInput(canvas) {
   };
 
   const onPointerDown = (ev) => {
+    // Pre-wasm / engine not ready: ignore (do not stash ADVANCE).
+    if (!exports_) return;
     const { x, y } = pointerToLogical(canvas, ev);
-    if (exports_ && typeof exports_.export_pointer === "function") {
+    if (typeof exports_.export_pointer === "function") {
       const kind = exports_.export_pointer(x, y, 1) | 0;
       applyCursor(canvas, kind);
       // Pointer already consumed the interaction; avoid same-frame double Advance.
       pendingIntent = INTENT_NONE;
+      // Still need prefs/slot sync after UI actions driven by pointer.
+      pointerDirty = true;
     } else {
       // Fallback for older wasm without export_pointer.
       pendingIntent = INTENT_ADVANCE;

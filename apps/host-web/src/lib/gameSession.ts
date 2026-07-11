@@ -231,6 +231,11 @@ function fitCanvas(canvas: HTMLCanvasElement): void {
 export class GameSession {
   exports_: HostExports | null = null;
   pendingIntent = 0;
+  /**
+   * Set after successful export_pointer down so prefs/slots still sync even when
+   * pendingIntent is cleared to NONE (avoid same-frame double Advance).
+   */
+  pointerDirty = false;
   /** Ctrl held → skip_held flag each frame (not one-shot SkipTyping). */
   ctrlHeld = false;
   lastTs = 0;
@@ -551,12 +556,16 @@ export class GameSession {
     };
 
     const onPointerDown = (ev: PointerEvent) => {
+      // Pre-wasm / engine not ready: ignore (do not stash ADVANCE).
+      if (!this.exports_) return;
       const { x, y } = pointerToLogical(canvas, ev);
-      if (this.exports_?.export_pointer) {
+      if (this.exports_.export_pointer) {
         const kind = this.exports_.export_pointer(x, y, 1) | 0;
         this.applyCursor(canvas, kind);
         // Pointer already consumed the interaction; avoid same-frame double Advance.
         this.pendingIntent = INTENT_NONE;
+        // Still need prefs/slot sync after UI actions driven by pointer.
+        this.pointerDirty = true;
       } else {
         // Fallback for older wasm without export_pointer.
         this.pendingIntent = INTENT_ADVANCE;
@@ -597,12 +606,14 @@ export class GameSession {
     this.lastTs = ts;
     const intent = this.pendingIntent;
     this.pendingIntent = 0;
+    const syncAfterAction = intent !== INTENT_NONE || this.pointerDirty;
+    this.pointerDirty = false;
     try {
       this.exports_.export_frame(intent, dt, this.ctrlHeld ? 1 : 0);
       flushPendingGlyphs(this.exports_);
       flushAudio(this.audio, this.exports_);
-      // After UI actions: prefs + multi-slot may have changed in-engine.
-      if (intent !== INTENT_NONE) {
+      // After UI actions (keyboard intent or pointer down): prefs + multi-slot.
+      if (syncAfterAction) {
         this.prefs = savePrefsToStorage(this.exports_, this.prefs);
         applyPrefsToAudio(this.audio);
         this.syncSlotsToStorage();
@@ -640,7 +651,7 @@ export class GameSession {
       try {
         this.setStatus("load theme…");
         await loadTheme(
-          "/themes/amber_soft",
+          "./themes/amber_soft",
           Gpu.registerSolid,
           Gpu.registerImage,
         );
