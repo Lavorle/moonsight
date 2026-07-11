@@ -238,7 +238,42 @@ confirm defaults No; dissolve + scale visible; Ctrl skip vs `@flow.wait`; blur
 clears skip; force error path message. **Deferred to human browser** (same
 honest pattern as Pointer Theme) — not claimed pass in CI/agent headless.
 
-### Out of scope / deferred to Q4+
+### Q4 / 1.0 candidate (publish) — automated joint gate green
+
+**In:** `moonsightc new <name> [-o parent]` from [`templates/minimal`](./templates/minimal);
+`moonsightc build` **hard-requires** [`apps/host-web/dist`](./apps/host-web)
+(Svelte shell; clear `npm run build` error if missing — **no** `js_glue`
+fallback; retired sources under [`archive/js_glue`](./archive/js_glue)); Host
+**SaveStore** (`WebSaveStore` = `localStorage` keys unchanged; `DesktopSaveStore`
+= Tauri appData `…/moonsight/prefs.json` + `saves/{n}.json`; Web slots ≠
+desktop); engine save JSON remains **v4**; demo sample chapter skeleton
+(~30–60 min arc) in [`demo/game`](./demo/game); `./scripts/publish-web.sh` +
+`./scripts/publish-desktop.sh`; author docs (repo + Fumadocs zh/en: new /
+publish / desktop); optional `check` unknown `@flow.jump` scene targets.
+
+**Automated gates (1.0 candidate):** `export CC=gcc` then `moon check`,
+`moon test`, `moon build --target wasm-gc --release host_web`,
+`apps/host-web` `npm run build`, `moonsightc new` + `check` + `build`,
+`moonsightc build demo/game -o dist/demo`, `apps/docs-site` `npm run build`,
+build **fails** without Svelte dist, `localStorage` only under
+`apps/host-web/src/lib/saveStore.ts` — all green. See
+[`.superpowers/sdd/q4-final-verify-report.md`](./.superpowers/sdd/q4-final-verify-report.md).
+
+**Manual W1 (WebGPU browser play + localStorage save/load):** Title → Start →
+advance → Esc save → reload → load. **Deferred** in agent CI: headless Chromium
+has `navigator.gpu` but `requestAdapter()` null (no WebGPU adapter). Dist serves
+200 for index/wasm/msb/manifest; error panel is honest. Human browser with
+WebGPU required for play claim.
+
+**Manual D1 (desktop appData save/load):** Tauri GUI save → quit → load from
+appData. **Deferred** when no interactive GUI session / same WebGPU limit —
+checklist in [`host_desktop/README.md`](./host_desktop/README.md). Do not
+fake-pass.
+
+Formal **1.0 release** (hardening, Host full closeout, rollback/i18n buffer)
+remains **Q5**.
+
+### Out of scope / deferred to Q5+
 
 Visual editor, full product i18n beyond docs-site locales, achievements,
 Live2D / 3D, particle/postprocess stack, full timeline / animation queues,
@@ -247,6 +282,6 @@ horizontal / nested ScrollView, list virtualization, fling/rubber-band, saving
 backlog into slots, rollback, DOM game menus, second native GPU backend, second
 wasm / dynamic UI load, runtime theme switcher / multi-theme store, transform
 animation stack, open host-string UI actions, official Yukimi bytecode
-compatibility, long-term Screen DSL lower compatibility, **`moonsight new` /
-project templates**, **desktop native save**, Host full consolidation,
-interactive WebGPU CI, committing wasm build artifacts to git.
+compatibility, long-term Screen DSL lower compatibility, Host adapter zero-JS /
+full consolidation, interactive WebGPU CI, committing wasm build artifacts to
+git, cloud save / Web↔desktop slot migration.
