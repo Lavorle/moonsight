@@ -1,0 +1,91 @@
+# Mid chapter — many short lines, same assets (bg_room / char_y / bgm_soft / se_click).
+# Merged by moonsightc with main.yuki + other scenes/*.yuki into game.msb.
+
+- scene "chapter2"
+@layer.show "bg" "bg_room" kind=background
+@layer.show "y" "char_y" kind=character z=10 x=200 y=0 opacity=1.0
+@trans.dissolve 0.8
+@flow.wait 0.5
+y:Chapter two. Still the same room art.
+y:Placeholder assets, real pacing skeleton.
+y:I can talk while you skim.
+y:MoonYuki is the script surface.
+y:Host commands drive layers, audio, flow.
+y:Choices write into variables.
+y:Jumps stitch scenes into a graph.
+y:You already saw branch A and branch B.
+y:They met at mid_common.
+y:Now we walk a longer corridor of lines.
+y:Line after line, nothing fancy.
+y:That's intentional — volume without new art.
+y:Feel free to hold Ctrl if you want speed.
+y:Or open history with H if you missed a beat.
+y:Esc still works. Save whenever you like.
+y:…A soft dissolve, then we continue.
+@trans.dissolve 0.6
+@flow.wait 0.5
+y:Still here. Good.
+y:Imagine this hall has windows.
+y:Afternoon light. Dust in the beams.
+y:A clock you cannot hear ticking.
+y:Somewhere, a kettle finishes boiling.
+y:None of that is drawn yet.
+y:Words hold the place until art arrives.
+y:That's how sample chapters often start.
+y:One more stretch, then chapter three.
+y:Any last look around?
+@flow.choice "Keep walking" "Linger a second" --result c2_act
+@audio.se "se_click"
+@flow.jump_if c2_act 0 "chapter2_walk"
+@flow.jump "chapter2_linger"
+
+- scene "chapter2_walk"
+y:Straight through. Efficient.
+@var.set "c2_pace" "walk"
+y:The hall narrows, then opens again.
+y:You pass a window that only exists in text.
+y:Footsteps echo a little longer than they should.
+@flow.jump "chapter2_close"
+
+- scene "chapter2_linger"
+y:You pause by the wall.
+@var.set "c2_pace" "linger"
+y:Paint peels in a soft curl.
+y:Someone penciled a tiny star near the trim.
+y:You smile without meaning to.
+y:Then you catch up.
+@flow.jump "chapter2_close"
+
+- scene "chapter2_close"
+y:Chapter two is almost done.
+y:One scale beat for presentation polish.
+@layer.set "y" scale=0.9 duration=0.25
+@flow.wait 0.3
+@layer.set "y" scale=1.0 duration=0.25
+@flow.wait 0.25
+y:There. Small, but it reads on screen.
+y:On to chapter three.
+@flow.jump "chapter3"
+
+- scene "chapter3"
+@layer.show "bg" "bg_room" kind=background
+@layer.show "y" "char_y" kind=character z=10 x=200 y=0 opacity=1.0
+@trans.fade 0.0 0.35 0.3
+@flow.wait 0.3
+@trans.fade 0.35 0.0 0.4
+@flow.wait 0.4
+y:Chapter three. Last stretch before the end.
+y:We've reused bg, character, BGM, and a click SE.
+y:That's the demo budget — and it's enough.
+y:A felt chapter is mostly structure and rhythm.
+y:Intro. Branch. Join. Mid. Late. Finale.
+y:You are near the finale now.
+y:I have two endings prepared.
+y:Neither is a novel. Both are distinct lines.
+y:Pick the tone you want to leave on.
+y:Warm and clear, or quiet and alternate.
+@flow.choice "Good ending" "Alternate ending" --result end_act
+@var.set "ending_choice" end_act
+@audio.se "se_click"
+@flow.jump_if end_act 0 "finale"
+@flow.jump "finale_alt"

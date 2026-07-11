@@ -1,6 +1,7 @@
 # MoonSight demo (host cold-starts title, then Start → entrypoint).
 # Builtins cover std host commands — no file-level - extern required.
-# scenes/intro.yuki adds multi-file scene "side_room" (merged into game.msb).
+# scenes/*.yuki merge into game.msb (side_room, chapter2, chapter3, finales).
+# Skeleton arc (~30–60 min felt chapter): many short lines, few assets.
 # Phase 2+: kind=, duration tweens, layer.set, real @flow.wait with trans.fade.
 # Phase 3: title / game_menu / save_load / settings via Screen DSL; named negatives ok.
 # Q2: trans.dissolve dual-phase veil + layer scale= presentation beat.
@@ -19,6 +20,7 @@
 y:Welcome to MoonSight.
 y:This demo uses MoonYuki.
 y:Tips: H opens history; hold Ctrl to skip.
+y:Esc opens the system menu.
 y:Watch a dissolve and scale beat.
 @trans.dissolve 0.8
 @flow.wait 0.4
@@ -26,27 +28,38 @@ y:Watch a dissolve and scale beat.
 @flow.wait 0.4
 @layer.set "y" scale=1.0 duration=0.3
 @flow.wait 0.3
-@sys.save_hint
-y:Shall we talk, or leave for the garden?
-@flow.choice "Talk" "Leave" --result act
+y:I'm Y. I'll walk you through a short chapter.
+y:Nothing heavy — just rooms, choices, and quiet beats.
+y:First fork: stay and talk, or step out for air?
+@flow.choice "Talk inside" "Leave for the garden" --result act
 @var.set "demo_choice" act
 @audio.se "se_click"
-@flow.jump_if act 0 "talk"
-@flow.jump "leave"
+@flow.jump_if act 0 "branch_a"
+@flow.jump "branch_b"
 
-- scene "talk"
-y:Nice to meet you. I'm Y.
+# --- Branch A: stay and talk ---
+- scene "branch_a"
+y:Nice to meet you. I'm glad you stayed.
 @var.set "met_y" true
+@var.set "path_a" true
 y:MoonSight compiles MoonYuki into a tiny VN runtime.
-y:Press Esc for the system menu (save, load, settings).
-y:You saw dissolve and scale just now — pair them with flow.wait.
-@flow.jump "ending"
+y:Scenes, layers, audio, choices — all host commands.
+y:You can press Esc anytime for save, load, settings.
+y:History keeps recent lines if you need a recap.
+y:I keep the script short on purpose.
+y:Short lines read faster. Volume comes from count.
+y:Want a little more about the engine?
+y:Or we can move on when you're ready.
+y:…Alright. Let's meet in the hall.
+@flow.jump "mid_common"
 
-- scene "leave"
+# --- Branch B: leave for the garden ---
+- scene "branch_b"
 @layer.hide "y" duration=0.3
 @flow.wait 0.3
 y:You step out toward the garden.
 @var.set "left_room" true
+@var.set "path_b" true
 @flow.jump "garden"
 
 - scene "garden"
@@ -55,23 +68,55 @@ y:You step out toward the garden.
 @flow.wait 0.8
 y:A quiet garden. Placeholder art; BGM still looping.
 @var.set "saw_garden" true
+y:The air is cooler here.
+y:Leaves shift, though you cannot see the wind.
 y:A path curves toward a low stone bench.
-@flow.jump "bench"
+y:Farther on, a side door sits half-open.
+y:You can sit first, or peek inside.
+@flow.choice "Sit on the bench" "Check the side door" --result garden_act
+@audio.se "se_click"
+@flow.jump_if garden_act 0 "bench"
+@flow.jump "side_peek"
 
 - scene "bench"
-# Extra short scene so play time is clearly longer than Q1.
 @layer.show "bg" "bg_room" kind=background
 y:You sit on the bench for a moment.
 y:The air is still. Birds somewhere beyond the wall.
 @var.set "sat_bench" true
+y:Stone holds the morning chill.
+y:You count a few breaths. Nothing rushes you.
 @trans.dissolve 0.6
 @flow.wait 0.6
-y:Time to head back.
-@flow.jump "ending"
+y:Time to head back toward the hall.
+@flow.jump "mid_common"
 
-- scene "ending"
-@trans.fade 0.0 1.0 0.5
+- scene "side_peek"
+# Soft link to multi-file side_room content without ending the chapter.
+@layer.show "bg" "bg_room" kind=background
+@trans.dissolve 0.5
+@flow.wait 0.4
+y:You ease the side door open.
+y:Dust, old shelves, a strip of light on the floor.
+@var.set "saw_side_peek" true
+y:Someone left a note: "side room — merge test."
+y:Cute. The project really does multi-file scenes.
+y:You close the door and walk on.
+@flow.jump "mid_common"
+
+# --- Both branches rejoin ---
+- scene "mid_common"
+@layer.show "bg" "bg_room" kind=background
+@layer.show "y" "char_y" kind=character z=10 x=200 y=0 opacity=1.0
+@trans.dissolve 0.7
 @flow.wait 0.5
-y:Thanks for playing the MoonSight demo.
-y:A save hint was set earlier for host snapshot tests.
-@flow.yield
+y:Back in the hall. Good timing.
+y:Whichever path you took, we land here.
+y:That's the branch → mid_common join.
+y:A real chapter would stretch this with more rooms.
+y:For the demo, we keep the spine clear.
+y:Next is chapter two — a little longer stretch.
+y:Before that: a quiet save hint for host tests.
+@sys.save_hint
+y:If the host supports snapshots, now is a fine moment.
+y:Ready? Chapter two is through that door.
+@flow.jump "chapter2"

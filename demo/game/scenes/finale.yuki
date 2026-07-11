@@ -1,0 +1,35 @@
+# Endings — two distinct finale paths. Merged multi-file sample.
+
+- scene "finale"
+@layer.show "bg" "bg_room" kind=background
+@layer.show "y" "char_y" kind=character z=10 x=200 y=0 opacity=1.0
+@trans.dissolve 0.7
+@flow.wait 0.5
+y:So this is the good ending.
+@var.set "ending" "good"
+y:You walked the full spine of the sample chapter.
+y:Intro, a real branch, mid_common, chapters two and three.
+y:Dissolve waits, a scale beat, a mid-game save hint.
+y:Thanks for playing the MoonSight demo.
+y:May your next project compile clean on the first check.
+@trans.fade 0.0 1.0 0.6
+@flow.wait 0.6
+@flow.yield
+
+- scene "finale_alt"
+@layer.show "bg" "bg_room" kind=background
+@layer.hide "y" duration=0.35
+@flow.wait 0.35
+@trans.dissolve 0.8
+@flow.wait 0.5
+y:Alternate ending — the room empties first.
+@var.set "ending" "alt"
+y:BGM keeps a soft loop under the last lines.
+y:You chose the quieter close.
+y:The sample chapter still counts as complete.
+y:Same graph, different last words.
+y:Thanks for trying the other door.
+y:MoonSight will be here when you return.
+@trans.fade 0.0 1.0 0.6
+@flow.wait 0.6
+@flow.yield
