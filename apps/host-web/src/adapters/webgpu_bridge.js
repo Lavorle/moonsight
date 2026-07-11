@@ -375,14 +375,19 @@ export async function init(canvas) {
   });
 
   makeWhiteTexture();
-  // UI placeholders (semi-transparent panels)
-  makePlaceholderSolid("ui.dialogue_box", [20, 24, 40, 200]);
-  makePlaceholderSolid("ui.nameplate", [40, 48, 80, 220]);
-  makePlaceholderSolid("ui.choice_row", [30, 60, 90, 180]);
+  // UI placeholders — Amber Soft solids (warm flash before theme load)
+  makePlaceholderSolid("ui.dialogue_box", [22, 16, 20, 220]);
+  makePlaceholderSolid("ui.nameplate", [48, 36, 40, 230]);
+  makePlaceholderSolid("ui.choice_row", [40, 30, 36, 200]);
+  makePlaceholderSolid("ui.choice_row_focus", [120, 72, 48, 240]);
+  makePlaceholderSolid("ui.choice_row_hover", [90, 56, 42, 230]);
   // System UI (HUD / modal) placeholders
-  makePlaceholderSolid("ui.menu_dim", [0, 0, 0, 140]);
-  makePlaceholderSolid("ui.button", [36, 48, 78, 210]);
-  makePlaceholderSolid("ui.button_focus", [70, 110, 180, 235]);
+  makePlaceholderSolid("ui.menu_dim", [8, 6, 10, 150]);
+  makePlaceholderSolid("ui.button", [48, 36, 40, 220]);
+  makePlaceholderSolid("ui.button_focus", [120, 72, 48, 240]);
+  makePlaceholderSolid("ui.button_hover", [90, 56, 42, 230]);
+  makePlaceholderSolid("ui.slider_track", [36, 28, 32, 200]);
+  makePlaceholderSolid("ui.slider_fill", [200, 140, 90, 240]);
   makePlaceholderSolid("bg/demo", [60, 90, 140, 255]);
   // Empty atlas placeholder (1x1) until glyphs upload
   makePlaceholderSolid("atlas", [255, 255, 255, 0]);
@@ -493,6 +498,27 @@ export async function uploadPngUrl(id, url) {
   });
   bitmap.close();
   return id;
+}
+
+/**
+ * Theme API: (re)register a 1x1 solid color texture by role id.
+ * @param {string} id
+ * @param {number[]} rgba  RGBA 0–255
+ */
+export function registerSolid(id, rgba) {
+  ensureGpu();
+  const prev = textures.get(id);
+  if (prev) prev.texture.destroy();
+  return makePlaceholderSolid(id, rgba);
+}
+
+/**
+ * Theme API: upload a PNG (or other image URL) as a role texture.
+ * @param {string} id
+ * @param {string} url
+ */
+export async function registerImage(id, url) {
+  return uploadPngUrl(id, url);
 }
 
 export function beginFrame() {
@@ -921,6 +947,8 @@ const api = {
   resize,
   uploadRgbaTexture,
   uploadPngUrl,
+  registerSolid,
+  registerImage,
   beginFrame,
   drawSprites,
   drawGlyphs,

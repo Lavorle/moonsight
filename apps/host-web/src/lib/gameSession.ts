@@ -34,6 +34,7 @@ import {
   savePrefsToStorage,
   type Prefs,
 } from "./prefs";
+import { loadTheme } from "./theme";
 import { bytesToBinaryString, loadManifest, loadWasm } from "./wasm";
 
 const PACK_HEADER = 4;
@@ -634,6 +635,18 @@ export class GameSession {
       window.addEventListener("resize", onResize);
       this.unbindResize = () => window.removeEventListener("resize", onResize);
       this.bindInput(canvas);
+
+      // Amber Soft theme: solids first, then optional role PNGs (before first frame).
+      try {
+        this.setStatus("load theme…");
+        await loadTheme(
+          "/themes/amber_soft",
+          Gpu.registerSolid,
+          Gpu.registerImage,
+        );
+      } catch (e) {
+        console.warn("[theme] load failed; cold placeholders remain", e);
+      }
 
       const params = new URLSearchParams(location.search);
       // Font + Slug GPU. Modes: ?glyph=slug (default path in boot was canvas) | canvas | cpu-outline

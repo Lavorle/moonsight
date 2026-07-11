@@ -1,0 +1,30 @@
+{
+  "id": "amber_soft",
+  "display_name": "Amber Soft",
+  "fallback_solids": {
+    "ui.dialogue_box": [22, 16, 20, 220],
+    "ui.nameplate": [48, 36, 40, 230],
+    "ui.choice_row": [40, 30, 36, 200],
+    "ui.choice_row_focus": [120, 72, 48, 240],
+    "ui.choice_row_hover": [90, 56, 42, 230],
+    "ui.button": [48, 36, 40, 220],
+    "ui.button_focus": [120, 72, 48, 240],
+    "ui.button_hover": [90, 56, 42, 230],
+    "ui.menu_dim": [8, 6, 10, 150],
+    "ui.slider_track": [36, 28, 32, 200],
+    "ui.slider_fill": [200, 140, 90, 240]
+  },
+  "roles": {
+    "ui.dialogue_box": { "file": "dialogue_box.png" },
+    "ui.nameplate": { "file": "nameplate.png" },
+    "ui.choice_row": { "file": "choice_row.png" },
+    "ui.choice_row_focus": { "file": "choice_row_focus.png" },
+    "ui.choice_row_hover": { "file": "choice_row_hover.png" },
+    "ui.button": { "file": "button.png" },
+    "ui.button_focus": { "file": "button_focus.png" },
+    "ui.button_hover": { "file": "button_hover.png" },
+    "ui.menu_dim": { "file": "menu_dim.png" },
+    "ui.slider_track": { "file": "slider_track.png" },
+    "ui.slider_fill": { "file": "slider_fill.png" }
+  }
+}
