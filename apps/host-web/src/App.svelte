@@ -6,6 +6,8 @@
   let canvasEl: HTMLCanvasElement | undefined = $state();
   let handle: GameSessionHandle | null = null;
 
+  const isRunning = $derived(status.startsWith("running"));
+
   onMount(() => {
     if (!canvasEl) {
       status = "no canvas";
@@ -39,10 +41,11 @@
   });
 </script>
 
-<div id="status">{status}</div>
+<div id="title-bar">MoonSight</div>
+<div id="status" class:running={isRunning}>{status}</div>
 <div id="hint">
-  Enter/Space: advance or confirm choice · ↑↓: choice focus · click row / 1–9: pick<br />
-  Esc: menu · A: auto · Ctrl+S save · Ctrl+L load
+  Click: advance / menus · click choices · Esc menu · Enter/Space confirm<br />
+  ↑↓ focus · 1–9 pick · A auto · Ctrl+S save · Ctrl+L load
 </div>
 <canvas
   id="game"

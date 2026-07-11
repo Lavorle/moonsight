@@ -11,13 +11,20 @@ pub fn register(app : @runtime.UiApp) -> Unit {
     "title",
     @runtime.UiNode::VBox(
       x=Some(760.0),
-      y=Some(360.0),
+      y=Some(340.0),
       children=[
         @runtime.UiNode::Text(
-          src=@runtime.TextBindSrc::Literal("MoonSight Demo"),
+          src=@runtime.TextBindSrc::Literal("MoonSight"),
           x=0.0,
           y=0.0,
-          font_size=36.0,
+          font_size=48.0,
+          visible=@runtime.VisiblePred::Always,
+        ),
+        @runtime.UiNode::Text(
+          src=@runtime.TextBindSrc::Literal("Demo"),
+          x=0.0,
+          y=0.0,
+          font_size=24.0,
           visible=@runtime.VisiblePred::Always,
         ),
         app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
