@@ -1,8 +1,11 @@
 /**
- * Player preferences — localStorage key moonsight/prefs (same shape as boot.js).
+ * Player preferences — key moonsight/prefs (same shape as boot.js).
+ * Persistence goes through SaveStore (WebSaveStore is the browser backend).
  */
 
-export const PREFS_KEY = "moonsight/prefs";
+import { PREFS_KEY, type SaveStore } from "./saveStore";
+
+export { PREFS_KEY };
 
 export type Prefs = {
   text_speed: number;
@@ -42,11 +45,11 @@ export function parsePrefsJson(raw: string, fallback: Prefs = DEFAULT_PREFS): Pr
 }
 
 /**
- * Read prefs from localStorage (JSON only; does not touch wasm).
+ * Read prefs from SaveStore (JSON only; does not touch wasm).
  */
-export function readPrefsFromStorage(): Prefs | null {
+export function readPrefsFromStorage(store: SaveStore): Prefs | null {
   try {
-    const raw = localStorage.getItem(PREFS_KEY);
+    const raw = store.loadPrefs();
     if (!raw) return null;
     return parsePrefsJson(raw);
   } catch {
@@ -56,12 +59,12 @@ export function readPrefsFromStorage(): Prefs | null {
 }
 
 /**
- * Write a prefs JSON string to localStorage.
+ * Write a prefs JSON string via SaveStore.
  */
-export function writePrefsToStorage(json: string): void {
+export function writePrefsToStorage(store: SaveStore, json: string): void {
   try {
     if (json && json.length) {
-      localStorage.setItem(PREFS_KEY, json);
+      store.savePrefs(json);
     }
   } catch {
     /* ignore */
@@ -74,37 +77,37 @@ export type PrefsWasmExports = {
 };
 
 /**
- * Load prefs from localStorage into JS + optional wasm engine (boot.js parity).
+ * Load prefs from SaveStore into JS + optional wasm engine (boot.js parity).
  * Returns the effective JS prefs object.
  */
 export function loadPrefsFromStorage(
+  store: SaveStore,
   exports_: PrefsWasmExports | null,
   current: Prefs,
 ): Prefs {
   let prefs = { ...current };
   try {
-    const raw = localStorage.getItem(PREFS_KEY);
+    const raw = store.loadPrefs();
     if (raw && typeof exports_?.set_prefs_json === "function") {
       const rc = exports_.set_prefs_json(raw);
       if (rc === 0 && typeof exports_.prefs_json === "function") {
         const applied = exports_.prefs_json();
-        if (applied) {
-          prefs = parsePrefsJson(applied, prefs);
-        }
+        if (applied) prefs = parsePrefsJson(applied, prefs);
       }
     } else if (raw) {
       prefs = parsePrefsJson(raw, prefs);
     }
   } catch {
-    /* private mode / blocked storage */
+    /* blocked storage */
   }
   return prefs;
 }
 
 /**
- * Persist engine prefs to localStorage when present; return updated JS prefs.
+ * Persist engine prefs via SaveStore when present; return updated JS prefs.
  */
 export function savePrefsToStorage(
+  store: SaveStore,
   exports_: PrefsWasmExports | null,
   current: Prefs,
 ): Prefs {
@@ -113,7 +116,7 @@ export function savePrefsToStorage(
     if (typeof exports_?.prefs_json === "function") {
       const json = exports_.prefs_json();
       if (json && json.length) {
-        writePrefsToStorage(json);
+        store.savePrefs(json);
         prefs = parsePrefsJson(json, prefs);
       }
     }

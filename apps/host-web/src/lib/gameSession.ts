@@ -34,6 +34,7 @@ import {
   savePrefsToStorage,
   type Prefs,
 } from "./prefs";
+import { SAVE_KEY, WebSaveStore, type SaveStore } from "./saveStore";
 import { loadTheme } from "./theme";
 import { bytesToBinaryString, loadManifest, loadWasm } from "./wasm";
 
@@ -41,8 +42,6 @@ const PACK_HEADER = 4;
 const SPRITE_STRIDE = 7;
 /** atlas_x,y,w,h, x,y, screen_w,screen_h, r,g,b,a */
 const GLYPH_STRIDE = 12;
-
-const SAVE_KEY = (slot: number) => `moonsight/save/${slot}`;
 
 /** Fixed logical resolution; MoonBit packs all draw coords in FHD pixels. */
 export const LOGICAL_W = 1920;
@@ -101,6 +100,8 @@ export type GameSessionOptions = {
   fontUrl?: string;
   glyphMode?: string;
   onStatus?: (msg: string) => void;
+  /** Persistence backend; defaults to WebSaveStore. */
+  store?: SaveStore;
 };
 
 export type GameSessionHandle = {
@@ -245,12 +246,18 @@ export class GameSession {
   saveSlot = 0;
   prefs: Prefs = { ...DEFAULT_PREFS };
   audio: AudioHost = createAudioHost();
+  /** Host persistence boundary (SaveStore). */
+  store: SaveStore;
 
   private onStatus: ((msg: string) => void) | null = null;
   private rafId = 0;
   private running = false;
   private unbindInput: (() => void) | null = null;
   private unbindResize: (() => void) | null = null;
+
+  constructor(store: SaveStore = new WebSaveStore()) {
+    this.store = store;
+  }
 
   setStatus(m: string): void {
     if (this.onStatus) this.onStatus(m);
@@ -276,7 +283,7 @@ export class GameSession {
   };
 
   /**
-   * Seed engine slot_blobs from localStorage multi-slot keys.
+   * Seed engine slot_blobs from SaveStore multi-slot keys.
    */
   private hydrateSlotsFromStorage(): void {
     const exports_ = this.exports_;
@@ -287,12 +294,10 @@ export class GameSession {
         : 6;
     for (let i = 0; i < Math.max(n, 1); i++) {
       try {
-        const json = localStorage.getItem(SAVE_KEY(i));
-        if (json && json.length) {
-          exports_.set_slot_json(i, json);
-        }
+        const json = this.store.loadSlot(i);
+        if (json && json.length) exports_.set_slot_json(i, json);
       } catch {
-        /* ignore */
+        /* skip bad slot */
       }
     }
   }
@@ -315,7 +320,7 @@ export class GameSession {
   }
 
   /**
-   * Mirror engine slot_blobs back to localStorage (menu save path).
+   * Mirror engine slot_blobs back to SaveStore (menu save path).
    * Stamps missing `saved_at` and writes the stamped blob back into the engine
    * so slot labels update immediately.
    */
@@ -334,7 +339,7 @@ export class GameSession {
           if (stamped !== json && typeof exports_.set_slot_json === "function") {
             exports_.set_slot_json(i, stamped);
           }
-          localStorage.setItem(SAVE_KEY(i), stamped);
+          this.store.saveSlot(i, stamped);
         }
       } catch {
         /* ignore */
@@ -359,7 +364,7 @@ export class GameSession {
   private afterEngineReady(manifest: Manifest | null | undefined): void {
     this.applySaveSlotsFromManifest(manifest);
     this.hydrateSlotsFromStorage();
-    this.prefs = loadPrefsFromStorage(this.exports_, this.prefs);
+    this.prefs = loadPrefsFromStorage(this.store, this.exports_, this.prefs);
     applyPrefsToAudio(this.audio);
     if (typeof this.exports_?.boot_title === "function") {
       const rc = this.exports_.boot_title();
@@ -448,7 +453,7 @@ export class GameSession {
     let json = this.exports_.save_json(this.saveSlot);
     if (json && json.length) {
       json = this.stampSavedAt(json);
-      localStorage.setItem(SAVE_KEY(this.saveSlot), json);
+      this.store.saveSlot(this.saveSlot, json);
       if (typeof this.exports_.set_slot_json === "function") {
         this.exports_.set_slot_json(this.saveSlot, json);
       }
@@ -458,7 +463,7 @@ export class GameSession {
 
   doLoad = (): void => {
     if (!this.exports_) return;
-    const json = localStorage.getItem(SAVE_KEY(this.saveSlot));
+    const json = this.store.loadSlot(this.saveSlot);
     if (!json) {
       console.warn("no save at", SAVE_KEY(this.saveSlot));
       return;
@@ -664,7 +669,7 @@ export class GameSession {
       flushAudio(this.audio, this.exports_);
       // After UI actions (keyboard intent or pointer down): prefs + multi-slot.
       if (syncAfterAction) {
-        this.prefs = savePrefsToStorage(this.exports_, this.prefs);
+        this.prefs = savePrefsToStorage(this.store, this.exports_, this.prefs);
         applyPrefsToAudio(this.audio);
         this.syncSlotsToStorage();
       }
@@ -684,6 +689,7 @@ export class GameSession {
     canvas: HTMLCanvasElement,
     options: GameSessionOptions = {},
   ): Promise<GameSessionHandle> {
+    if (options.store) this.store = options.store;
     this.onStatus = options.onStatus ?? null;
     this.audio.setStatus = (m) => this.setStatus(m);
     this.running = true;
@@ -830,6 +836,6 @@ export async function startGameSession(
   if (defaultSession) {
     defaultSession.stop();
   }
-  defaultSession = new GameSession();
+  defaultSession = new GameSession(options.store ?? new WebSaveStore());
   return defaultSession.start(canvas, options);
 }
