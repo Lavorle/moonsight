@@ -25,7 +25,7 @@
     return msg.startsWith("error:") ? msg : `error: ${msg}`;
   }
 
-  /** Web → localStorage; desktop Tauri → appData via DesktopSaveStore. */
+  /** Web → WebSaveStore; desktop Tauri → DesktopSaveStore (appData). */
   async function createSaveStore(): Promise<SaveStore> {
     if (isTauriRuntime()) {
       const invoke = getTauriInvoke();
