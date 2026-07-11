@@ -85,6 +85,14 @@ pub(all) enum UiNode {
     line_h~ : Double,
     visible~ : VisiblePred,
   )
+  /// Vertical scroll viewport. Children laid out from top; runtime owns scroll_y.
+  ScrollView(
+    x~ : Double,
+    y~ : Double,
+    w~ : Double,
+    h~ : Double,
+    children~ : Array[UiNode],
+  )
 } derive(Debug)
 
 ///|

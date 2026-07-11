@@ -48,6 +48,18 @@ let ui_res_slider_fill : String = "ui.slider_fill"
 let ui_res_dim : String = "ui.menu_dim"
 
 ///|
+let ui_scroll_bar_w : Float = 16.0
+
+///|
+let ui_scroll_thumb_min_h : Float = 24.0
+
+///|
+let ui_res_scroll_track : String = "ui.scroll_track"
+
+///|
+let ui_res_scroll_thumb : String = "ui.scroll_thumb"
+
+///|
 /// Laid-out focusable with hit rect.
 struct LaidFocus {
   target : UiFocusTarget
@@ -68,6 +80,12 @@ struct UiWalkState {
   hover_index : Int
   mut focus_counter : Int
   paint : Bool
+  /// When true, drop ops/focusables that do not intersect the clip rect.
+  mut clip_active : Bool
+  mut clip_x : Float
+  mut clip_y : Float
+  mut clip_w : Float
+  mut clip_h : Float
 } derive(Debug)
 
 ///|
@@ -84,6 +102,15 @@ pub(all) struct UiRuntime {
   mut hud_focus : Int
   /// Hovered focusable index (-1 = none).
   mut hover : Int
+  /// Vertical scroll offset for the active ScrollView (not saved).
+  mut scroll_y : Double
+  /// Measured content height of the active ScrollView.
+  mut scroll_content_h : Double
+  mut scroll_vp_x : Float
+  mut scroll_vp_y : Float
+  mut scroll_vp_w : Float
+  mut scroll_vp_h : Float
+  mut scroll_bar_w : Float
 }
 
 ///|
@@ -105,6 +132,35 @@ pub fn UiRuntime::from_app(app : UiApp, save_slots~ : Int) -> UiRuntime {
     bind: UiBindCtx::empty(),
     hud_focus: 0,
     hover: -1,
+    scroll_y: 0.0,
+    scroll_content_h: 0.0,
+    scroll_vp_x: 0.0,
+    scroll_vp_y: 0.0,
+    scroll_vp_w: 0.0,
+    scroll_vp_h: 0.0,
+    scroll_bar_w: ui_scroll_bar_w,
+  }
+}
+
+///|
+/// Maximum scroll_y for the last measured ScrollView (`max(0, content_h - vp_h)`).
+pub fn UiRuntime::scroll_max(self : UiRuntime) -> Double {
+  let m = self.scroll_content_h - self.scroll_vp_h.to_double()
+  if m > 0.0 {
+    m
+  } else {
+    0.0
+  }
+}
+
+///|
+fn UiRuntime::clamp_scroll(self : UiRuntime) -> Unit {
+  let max = self.scroll_max()
+  if self.scroll_y < 0.0 {
+    self.scroll_y = 0.0
+  }
+  if self.scroll_y > max {
+    self.scroll_y = max
   }
 }
 
@@ -385,8 +441,13 @@ pub fn UiRuntime::paint_modal(
         hover_index: self.hover,
         focus_counter: 0,
         paint: true,
+        clip_active: false,
+        clip_x: 0.0,
+        clip_y: 0.0,
+        clip_w: 0.0,
+        clip_h: 0.0,
       }
-      ignore(walk_ui_node(root, 0.0, 0.0, st))
+      ignore(walk_ui_node(root, 0.0, 0.0, st, self))
       // Clamp stored focus if list shrank.
       let n = st.focusables.length()
       if n > 0 {
@@ -425,8 +486,13 @@ pub fn UiRuntime::paint_hud(
         hover_index: self.hover,
         focus_counter: 0,
         paint: true,
+        clip_active: false,
+        clip_x: 0.0,
+        clip_y: 0.0,
+        clip_w: 0.0,
+        clip_h: 0.0,
       }
-      ignore(walk_ui_node(root, 0.0, 0.0, st))
+      ignore(walk_ui_node(root, 0.0, 0.0, st, self))
       let n = st.focusables.length()
       if n > 0 {
         self.hud_focus = ui_wrap_index(self.hud_focus, n)
@@ -489,8 +555,13 @@ fn UiRuntime::collect_modal_focusables(
         hover_index: self.hover,
         focus_counter: 0,
         paint: false,
+        clip_active: false,
+        clip_x: 0.0,
+        clip_y: 0.0,
+        clip_w: 0.0,
+        clip_h: 0.0,
       }
-      ignore(walk_ui_node(root, 0.0, 0.0, st))
+      ignore(walk_ui_node(root, 0.0, 0.0, st, self))
       st.focusables
     }
   }
@@ -512,8 +583,13 @@ fn UiRuntime::collect_hud_focusables(
         hover_index: self.hover,
         focus_counter: 0,
         paint: false,
+        clip_active: false,
+        clip_x: 0.0,
+        clip_y: 0.0,
+        clip_w: 0.0,
+        clip_h: 0.0,
       }
-      ignore(walk_ui_node(root, 0.0, 0.0, st))
+      ignore(walk_ui_node(root, 0.0, 0.0, st, self))
       st.focusables
     }
   }
@@ -541,12 +617,35 @@ fn UiRuntime::set_focus_index(self : UiRuntime, idx : Int) -> Unit {
 }
 
 ///|
+/// True when `(x,y,w,h)` intersects the active clip rect (or clip is off).
+fn rect_intersects_clip(
+  st : UiWalkState,
+  x : Float,
+  y : Float,
+  w : Float,
+  h : Float,
+) -> Bool {
+  if !st.clip_active {
+    return true
+  }
+  // Reject when fully above/below or left/right of the viewport.
+  if y + h <= st.clip_y || y >= st.clip_y + st.clip_h {
+    return false
+  }
+  if x + w <= st.clip_x || x >= st.clip_x + st.clip_w {
+    return false
+  }
+  true
+}
+
+///|
 /// Walk a node tree: optionally paint, always collect focusables when visible.
 fn walk_ui_node(
   node : UiNode,
   origin_x : Float,
   origin_y : Float,
   st : UiWalkState,
+  rt : UiRuntime,
 ) -> (Float, Float) {
   match node {
     UiNode::VBox(x~, y~, children~) => {
@@ -555,7 +654,7 @@ fn walk_ui_node(
       let mut cy = oy
       let mut max_w : Float = 0.0
       for c in children {
-        let (w, h) = walk_ui_node(c, ox, cy, st)
+        let (w, h) = walk_ui_node(c, ox, cy, st, rt)
         if w > max_w {
           max_w = w
         }
@@ -571,7 +670,7 @@ fn walk_ui_node(
       let mut cx = ox
       let mut max_h : Float = 0.0
       for c in children {
-        let (w, h) = walk_ui_node(c, cx, oy, st)
+        let (w, h) = walk_ui_node(c, cx, oy, st, rt)
         if h > max_h {
           max_h = h
         }
@@ -586,21 +685,27 @@ fn walk_ui_node(
       let ox = Float::from_double(x)
       let oy = Float::from_double(y)
       for c in children {
-        ignore(walk_ui_node(c, ox, oy, st))
+        ignore(walk_ui_node(c, ox, oy, st, rt))
       }
       (0.0, 0.0)
     }
     UiNode::Spacer(w~, h~) => (Float::from_double(w), Float::from_double(h))
     UiNode::Panel(resource~, x~, y~, w~, h~, visible~) => {
-      if visible.eval(st.bind) && st.paint {
+      let px = Float::from_double(x)
+      let py = Float::from_double(y)
+      let pw = Float::from_double(w)
+      let ph = Float::from_double(h)
+      if visible.eval(st.bind) &&
+        st.paint &&
+        rect_intersects_clip(st, px, py, pw, ph) {
         st.ops.push(
           {
             kind: 0,
             resource: resource,
-            x: Float::from_double(x),
-            y: Float::from_double(y),
-            w: Float::from_double(w),
-            h: Float::from_double(h),
+            x: px,
+            y: py,
+            w: pw,
+            h: ph,
             opacity: 1.0,
             z: ui_z_widget,
             text: None,
@@ -619,7 +724,7 @@ fn walk_ui_node(
       // node x/y are offsets from the parent flow origin (0 for modal titles).
       let px = origin_x + Float::from_double(x)
       let py = origin_y + Float::from_double(y)
-      if st.paint {
+      if st.paint && rect_intersects_clip(st, px, py, ui_btn_w, ui_line_h) {
         let label = src.resolve(st.bind)
         st.ops.push(
           {
@@ -642,15 +747,21 @@ fn walk_ui_node(
       (ui_btn_w, ui_line_h)
     }
     UiNode::Image(resource~, x~, y~, w~, h~, visible~) => {
-      if visible.eval(st.bind) && st.paint {
+      let px = Float::from_double(x)
+      let py = Float::from_double(y)
+      let pw = Float::from_double(w)
+      let ph = Float::from_double(h)
+      if visible.eval(st.bind) &&
+        st.paint &&
+        rect_intersects_clip(st, px, py, pw, ph) {
         st.ops.push(
           {
             kind: 0,
             resource: resource,
-            x: Float::from_double(x),
-            y: Float::from_double(y),
-            w: Float::from_double(w),
-            h: Float::from_double(h),
+            x: px,
+            y: py,
+            w: pw,
+            h: ph,
             opacity: 1.0,
             z: ui_z_widget,
             text: None,
@@ -665,6 +776,10 @@ fn walk_ui_node(
     UiNode::Button(label~, action_id~, visible~) => {
       if !visible.eval(st.bind) {
         return (0.0, 0.0)
+      }
+      // Off-viewport focusables are dropped so indices match clipped hit list.
+      if !rect_intersects_clip(st, origin_x, origin_y, ui_btn_w, ui_btn_h) {
+        return (ui_btn_w, ui_line_h)
       }
       let idx = st.focus_counter
       st.focus_counter = idx + 1
@@ -721,6 +836,10 @@ fn walk_ui_node(
       let py = origin_y + Float::from_double(y)
       let bw = Float::from_double(w)
       let bh = Float::from_double(h)
+      let flow_h = if bh > ui_line_h { bh } else { ui_line_h }
+      if !rect_intersects_clip(st, px, py, bw, bh) {
+        return (bw, flow_h)
+      }
       let idx = st.focus_counter
       st.focus_counter = idx + 1
       let focused = idx == st.focus_index
@@ -787,7 +906,6 @@ fn walk_ui_node(
         }
       }
       // Flow size: at least one button line so VBox advances past the control.
-      let flow_h = if bh > ui_line_h { bh } else { ui_line_h }
       (bw, flow_h)
     }
     UiNode::ChoiceList(x~, y~, w~, line_h~, visible~) => {
@@ -802,54 +920,172 @@ fn walk_ui_node(
       let mut i = 0
       while i < labels.length() {
         let row_y = by + Float::from_int(i) * lh
-        let idx = st.focus_counter
-        st.focus_counter = idx + 1
-        let focused = idx == st.focus_index
-        let hovered = (!focused) && (idx == st.hover_index)
-        st.focusables.push(
-          {
-            target: UiFocusTarget::Choice(i),
-            x: bx,
-            y: row_y,
-            w: bw,
-            h: lh - 8.0,
-          },
-        )
-        if st.paint {
-          let res = if focused {
-            ui_res_choice_focus
-          } else if hovered {
-            ui_res_choice_hover
-          } else {
-            ui_res_choice
-          }
-          let opacity : Float = if focused {
-            1.0
-          } else if hovered {
-            0.9
-          } else {
-            0.75
-          }
-          let btn_h = if lh > 8.0 { lh - 8.0 } else { lh }
-          st.ops.push(
+        let btn_h = if lh > 8.0 { lh - 8.0 } else { lh }
+        if rect_intersects_clip(st, bx, row_y, bw, btn_h) {
+          let idx = st.focus_counter
+          st.focus_counter = idx + 1
+          let focused = idx == st.focus_index
+          let hovered = (!focused) && (idx == st.hover_index)
+          st.focusables.push(
             {
-              kind: 0,
-              resource: res,
+              target: UiFocusTarget::Choice(i),
               x: bx,
               y: row_y,
               w: bw,
               h: btn_h,
-              opacity,
-              z: ui_z_widget,
-              text: Some(labels[i]),
-              font_size: ui_font_size,
-              focused,
-              hovered,
             },
           )
+          if st.paint {
+            let res = if focused {
+              ui_res_choice_focus
+            } else if hovered {
+              ui_res_choice_hover
+            } else {
+              ui_res_choice
+            }
+            let opacity : Float = if focused {
+              1.0
+            } else if hovered {
+              0.9
+            } else {
+              0.75
+            }
+            st.ops.push(
+              {
+                kind: 0,
+                resource: res,
+                x: bx,
+                y: row_y,
+                w: bw,
+                h: btn_h,
+                opacity,
+                z: ui_z_widget,
+                text: Some(labels[i]),
+                font_size: ui_font_size,
+                focused,
+                hovered,
+              },
+            )
+          }
         }
         i = i + 1
       }
+      (0.0, 0.0)
+    }
+    UiNode::ScrollView(x~, y~, w~, h~, children~) => {
+      let vx = Float::from_double(x)
+      let vy = Float::from_double(y)
+      let vw = Float::from_double(w)
+      let vh = Float::from_double(h)
+      rt.scroll_vp_x = vx
+      rt.scroll_vp_y = vy
+      rt.scroll_vp_w = vw
+      rt.scroll_vp_h = vh
+      rt.scroll_bar_w = ui_scroll_bar_w
+      // Measure pass: content height without painting or collecting focusables.
+      let measure_st : UiWalkState = {
+        ops: [],
+        focusables: [],
+        bind: st.bind,
+        focus_index: -1,
+        hover_index: -1,
+        focus_counter: 0,
+        paint: false,
+        clip_active: false,
+        clip_x: 0.0,
+        clip_y: 0.0,
+        clip_w: 0.0,
+        clip_h: 0.0,
+      }
+      let mut content_h : Float = 0.0
+      let mut content_w : Float = 0.0
+      let mut my = vy
+      for c in children {
+        let (cw, ch) = walk_ui_node(c, vx, my, measure_st, rt)
+        if cw > content_w {
+          content_w = cw
+        }
+        my = my + ch
+        content_h = content_h + ch
+      }
+      // VBox-like empty fallback is already handled by children; store measured h.
+      rt.scroll_content_h = content_h.to_double()
+      rt.clamp_scroll()
+      // Paint/hit pass: children shifted by -scroll_y; CPU-clip to viewport.
+      let prev_clip = st.clip_active
+      let prev_cx = st.clip_x
+      let prev_cy = st.clip_y
+      let prev_cw = st.clip_w
+      let prev_ch = st.clip_h
+      st.clip_active = true
+      st.clip_x = vx
+      st.clip_y = vy
+      st.clip_w = vw
+      st.clip_h = vh
+      let origin_scrolled = vy - Float::from_double(rt.scroll_y)
+      let mut py = origin_scrolled
+      for c in children {
+        let (_, ch) = walk_ui_node(c, vx, py, st, rt)
+        py = py + ch
+      }
+      st.clip_active = prev_clip
+      st.clip_x = prev_cx
+      st.clip_y = prev_cy
+      st.clip_w = prev_cw
+      st.clip_h = prev_ch
+      // Scrollbar track + thumb when content overflows the viewport.
+      if st.paint && content_h > vh {
+        let bar_w = rt.scroll_bar_w
+        let track_x = vx + vw - bar_w
+        st.ops.push(
+          {
+            kind: 0,
+            resource: ui_res_scroll_track,
+            x: track_x,
+            y: vy,
+            w: bar_w,
+            h: vh,
+            opacity: 0.45,
+            z: ui_z_widget,
+            text: None,
+            font_size: 0.0,
+            focused: false,
+            hovered: false,
+          },
+        )
+        let ratio = vh / content_h
+        let mut thumb_h = vh * ratio
+        if thumb_h < ui_scroll_thumb_min_h {
+          thumb_h = ui_scroll_thumb_min_h
+        }
+        if thumb_h > vh {
+          thumb_h = vh
+        }
+        let max_scroll = rt.scroll_max()
+        let travel = vh - thumb_h
+        let thumb_y = if max_scroll > 0.0 && travel > 0.0 {
+          vy + Float::from_double(rt.scroll_y / max_scroll) * travel
+        } else {
+          vy
+        }
+        st.ops.push(
+          {
+            kind: 0,
+            resource: ui_res_scroll_thumb,
+            x: track_x,
+            y: thumb_y,
+            w: bar_w,
+            h: thumb_h,
+            opacity: 0.85,
+            z: ui_z_widget,
+            text: None,
+            font_size: 0.0,
+            focused: false,
+            hovered: false,
+          },
+        )
+      }
+      // Absolute viewport like Panel: no flow size contribution.
       (0.0, 0.0)
     }
   }

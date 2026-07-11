@@ -721,3 +721,77 @@ test "pointer_hover sets hover and paint uses button_hover" {
     assert_false(op.resource == "ui.button_hover")
   }
 }
+
+///|
+test "ScrollView paints only content inside viewport" {
+  let app = UiApp::new()
+  // 3 text lines × ui_line_h; viewport only 1.5 lines tall
+  let lines : Array[UiNode] = []
+  for i in 0..<3 {
+    lines.push(
+      UiNode::Text(
+        src=TextBindSrc::Literal("L\{i}"),
+        x=0.0,
+        y=0.0,
+        font_size=22.0,
+        visible=VisiblePred::Always,
+      ),
+    )
+  }
+  app.register_modal(
+    "sv",
+    UiNode::ScrollView(
+      x=100.0,
+      y=100.0,
+      w=400.0,
+      h=96.0, // ~1.5 * 64
+      children=[UiNode::VBox(x=None, y=None, children=lines)],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("sv")
+  rt.sync_bind(UiBindCtx::empty())
+  let ops = rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty())
+  // At scroll_y=0, only top lines intersect viewport; ops with text must have y in [100, 196)
+  for op in ops {
+    match op.text {
+      Some(_) => {
+        assert_true(op.y.to_double() >= 100.0 - 0.1)
+        assert_true(op.y.to_double() < 196.0)
+      }
+      None => ()
+    }
+  }
+}
+
+///|
+test "ScrollView content_h exceeds viewport when many children" {
+  let app = UiApp::new()
+  let lines : Array[UiNode] = []
+  for _i in 0..<5 {
+    lines.push(
+      UiNode::Text(
+        src=TextBindSrc::Literal("x"),
+        x=0.0,
+        y=0.0,
+        font_size=22.0,
+        visible=VisiblePred::Always,
+      ),
+    )
+  }
+  app.register_modal(
+    "sv",
+    UiNode::ScrollView(
+      x=0.0,
+      y=0.0,
+      w=400.0,
+      h=64.0,
+      children=[UiNode::VBox(x=None, y=None, children=lines)],
+    ),
+  )
+  let rt = UiRuntime::from_app(app, save_slots=6)
+  rt.show_modal("sv")
+  rt.sync_bind(UiBindCtx::empty())
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
+  assert_true(rt.scroll_max() > 0.0)
+}
