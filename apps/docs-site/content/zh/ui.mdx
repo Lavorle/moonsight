@@ -1,0 +1,137 @@
+---
+title: MoonBit UI
+description: ScrollView、主题角色、Capabilities 与保留式 UI 编写
+---
+
+# MoonBit UI 编写（Phase 4 + Q3）
+
+> **权威说明：** 引擎行为在迁移完成前仍须与仓库文档一致；核心页面在所列主题上为权威说明。
+>
+> 自 `docs/ui-moonbit.md` 迁入并翻译。完整 Capabilities 表、`ui_package` 构建步骤
+> 以及从 `- screen` 的迁移仍见仓库文档。
+
+面向作者的 **保留式 MoonBit UI 内核**：系统菜单与叙事 HUD 均为注册在 `UiApp`
+上的 `UiNode` 树，经 `UiDrawOp` 绘制，由闭合的 **Capabilities** 回调驱动。
+
+另见：[游玩输入](./play-input)（按键、指针、滚轮、跳过、历史）、仓库
+`docs/host-commands.md`（`@ui.*`、意图、prefs）、`docs/project-layout.md`
+（`ui_package`、构建）。
+
+## 双表面模型
+
+| 表面 | 角色 |
+|------|------|
+| **HUD**（`set_hud`） | Playing 底栏：对话框、名牌、正文、选项 |
+| **模态栈**（`register_modal`） | 标题、游戏菜单、存/读、设置、确认、历史、自定义模态 |
+
+| `UiMode` | 含义 |
+|----------|------|
+| `Title` | 冷启动 / 退出后；通常有 title 模态 |
+| `Playing` | 叙事 VM 运行；无模态时 HUD 绑定 Stage |
+| `Menu` | 模态栈非空；叙事 Advance 忽略 |
+
+**输入门控：** 模态非空 → 仅栈顶；Playing 且栈空时 Esc 打开 `game_menu`。
+UI 栈与焦点**不**写入存档槽。
+
+## 注册（摘要）
+
+```text
+let app = UiApp::new()
+@std_ui.register(app)       // 默认 HUD + 六个模态
+@project_ui.register(app)   // 可选工程包（在 std 之后）
+// Engine::from_ir(..., app~)
+```
+
+默认模态：`title`、`game_menu`、`save_load`、`settings`、`confirm`、`backlog`。
+工程 `register` 在 `std_ui` **之后**运行，按名替换。
+
+处理器**仅**调用 Capabilities（`start_game`、`show_modal`、`save_slot`、
+`return_modal`、`confirm_yes` / `confirm_no`、prefs …）。树上无开放 Host 字符串动作。
+
+## 控件 MVP
+
+| 节点 | 角色 |
+|------|------|
+| `VBox` / `HBox` | 流式布局；可选绝对原点 |
+| `Fixed` | 绝对区域，可选 `w` / `h` |
+| `Spacer` | 流中空位 |
+| `Panel` | 精灵 / 边框资源矩形 + `visible` |
+| `Text` | `TextBindSrc` 标签 + `visible` |
+| `Image` | 资源精灵 + `visible` |
+| `Button` | 可聚焦；`action_id` → 处理器 |
+| `ChoiceList` | 将 Stage 选项展开为可聚焦行 |
+| `Slider` | 水平 pref 控件；`MenuLeft`/`MenuRight` 步进 |
+| `ScrollView` | 垂直视口 + 裁剪；运行时持有 `scroll_y` |
+
+逻辑画布默认：**1920×1080**，原点左上，+y 向下。
+
+### `UiNode::ScrollView`
+
+垂直滚动视口。子节点从内容区顶部布局；绘制与命中测试**裁剪**到视口。
+
+| 字段 / 规则 | 细节 |
+|-------------|------|
+| 几何 | `x`, `y`, `w`, `h` — 逻辑像素视口 |
+| `scroll_y` | 内容偏移；**不入存档** |
+| 钳制 | `[0, max(0, content_h - vp_h)]` |
+| 滚动条 | 右缘（`ui.scroll_track` / `ui.scroll_thumb`），内容溢出时 |
+| 滚轮 | 视口上：`dy > 0` → `scroll_y` 减小（更旧） |
+| 拖拽 | 内容拖拽；拇指/轨道将 y 映射到 scroll |
+| 键盘 | 历史置顶时 MenuUp/Down → ±64 逻辑像素 |
+
+**Q3 消费者：** 仅 `std_ui` 历史模态（最多 100 行 `BacklogLine`；Close 在
+ScrollView **外**）。打开 `"backlog"` 时滚动钉到最新（底部）。
+
+**未实现：** 横向 / 嵌套 ScrollView、惯性、橡皮筋、多指、运行时主题切换、槽位
+真实截图（仅图标）、历史写入存档。
+
+## 主题 — 逻辑角色
+
+UI 绘制发出**稳定逻辑角色** id。Host 解析为纯色与可选 PNG
+（`themes/amber_soft/theme.json`）。
+
+| 角色 | 用途 |
+|------|------|
+| `ui.dialogue_box` | 对话框边框 |
+| `ui.nameplate` | 说话人名牌 |
+| `ui.choice_row` / `_focus` / `_hover` | 选项行 |
+| `ui.button` / `_focus` / `_hover` | 按钮 |
+| `ui.menu_dim` | 模态全屏遮罩 |
+| `ui.slider_track` / `ui.slider_fill` | 设置滑块 |
+| `ui.scroll_track` / `ui.scroll_thumb` | ScrollView 滚动条 |
+| `ui.slot_empty` / `ui.slot_filled` | 存/读槽图标 |
+
+聚焦绘制优先于悬停。Host 光标用 `export_pointer` 的 `hover_kind`
+（1 按钮、2 选项 → `pointer`；3 滑块 → `ew-resize`）。
+
+## TextBind / VisibleIf（要点）
+
+| `TextBindSrc` | 解析为 |
+|---------------|--------|
+| `Literal` / `DialogueName` / `DialogueBody` | 固定或 Stage 对白 |
+| `Pref(key)` / `SlotLabel(i)` / `Var(name)` | prefs、槽、叙事变量 |
+| `BacklogLine(i)` | 预格式化历史行（绑定窗口最旧在前；空 → `""`） |
+
+| `VisiblePred` | 为真当 |
+|---------------|--------|
+| `Always` / `Never` / `HasText` / `HasChoices` | 常量 / Stage |
+| `PrefBool` / `SlotOccupied` / `ModeIs` | prefs / 槽 / 模态 mode |
+| `And(a, b)` / `Not(p)` | 组合（如空槽图标 = `Not(SlotOccupied)`） |
+
+## 叙事桥接
+
+```text
+@ui.show "game_menu"
+@ui.show "save_load" mode=load
+@ui.hide
+@ui.hide "settings"
+```
+
+脚本只排队栈操作；**不**定义控件树。
+
+## 相关
+
+- 完整指南：仓库 `docs/ui-moonbit.md`
+- [游玩输入](./play-input) — 指针 phase 2、滚轮符号、失焦清 skip
+- [MoonYuki 子集](./moon-yuki) — 脚本语法
+- [快速开始](./getting-started) — 构建与游玩

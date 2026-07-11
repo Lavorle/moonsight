@@ -168,13 +168,48 @@ No open host-string actions and no general expression language on the tree.
 | `Button` | Focusable; `action_id` → handler |
 | `ChoiceList` | Expands Stage choices into focusable rows |
 | `Slider` | Horizontal pref control; `MenuLeft`/`MenuRight` step value |
+| `ScrollView` | Vertical viewport + clip; runtime owns `scroll_y` |
 
 Logical canvas default: **1920×1080**, origin top-left, +y down.
 
-**Out of scope (Phase 4 + Q1 non-goals):** scroll views, runtime theme switcher /
-multi-theme store, transform animation stack, DOM / HTML menus, slot screenshots,
-saving backlog into slots. Default **Amber Soft** theme pack is in (see Themes).
-Play-input / pointer / backlog / confirm: [`play-input.md`](./play-input.md).
+### `UiNode::ScrollView`
+
+Vertical scroll viewport. Children are laid out from the top of the content
+area; paint and hit-test **clip** to the viewport. Scroll state lives on
+`UiRuntime` (one active ScrollView metrics set for the top modal):
+
+| Field / rule | Detail |
+|--------------|--------|
+| Geometry | `x`, `y`, `w`, `h` — viewport in logical px |
+| `scroll_y` | Offset into content; **not saved** (cleared with modal stack) |
+| Clamp | `[0, max(0, content_h - vp_h)]` |
+| Scrollbar | Right edge strip (`ui.scroll_track` / `ui.scroll_thumb`) when content overflows |
+| Wheel | Over viewport: `dy > 0` → `scroll_y` decreases (older content) |
+| Drag | Content pan (pointer y↑ → older); thumb/track drag maps y → scroll |
+| Keyboard | Engine maps MenuUp/Down to ±`ui_scroll_line_h` (64) when backlog is top |
+
+```mbt
+@runtime.UiNode::ScrollView(
+  x=360.0,
+  y=150.0,
+  w=1200.0,
+  h=780.0,
+  children=[
+    @runtime.UiNode::VBox(x=None, y=None, children=line_nodes),
+  ],
+)
+```
+
+**Q3 consumer:** `std_ui` backlog modal only (up to 100 `BacklogLine` rows;
+Close sits **outside** the ScrollView so it stays focusable). Opening
+`"backlog"` pins scroll to the newest line (bottom).
+
+**Out of scope (not implemented):** horizontal / nested ScrollView, inertia
+fling, rubber-band overscroll, multi-touch, runtime theme switcher /
+multi-theme store, transform animation stack, DOM / HTML menus, real slot
+screenshots (icons only), saving backlog into slots. Default **Amber Soft**
+theme pack is in (see Themes). Play-input / pointer / wheel / backlog /
+confirm: [`play-input.md`](./play-input.md).
 
 ## Themes
 
@@ -197,6 +232,10 @@ to a solid color and optional PNG; authors do not hard-code file paths in
 | `ui.menu_dim` | Modal full-screen dim |
 | `ui.slider_track` | Settings slider track |
 | `ui.slider_fill` | Settings slider fill |
+| `ui.scroll_track` | ScrollView scrollbar track |
+| `ui.scroll_thumb` | ScrollView scrollbar thumb |
+| `ui.slot_empty` | Save/load empty-slot icon |
+| `ui.slot_filled` | Save/load occupied-slot icon |
 
 ### Focused / hovered paint
 
@@ -229,6 +268,10 @@ themes/amber_soft/
   menu_dim.png
   slider_track.png
   slider_fill.png
+  scroll_track.png
+  scroll_thumb.png
+  slot_empty.png
+  slot_filled.png
 ```
 
 Authoritative sources:
@@ -255,7 +298,7 @@ loads `/themes/amber_soft` by default.
 | `Pref(key)` | Live prefs display (`text_speed`, `auto_mode`, volumes, …) |
 | `SlotLabel(i)` | Slot label (empty vs occupied styling) |
 | `Var(name)` | Stringified narrative var (missing → `""`) |
-| `BacklogLine(i)` | Preformatted backlog line; `i` = 0..11 (oldest of last 12) |
+| `BacklogLine(i)` | Preformatted backlog line; `i` = 0..capacity−1 of the bound window (oldest first; empty → `""`) |
 
 ```mbt
 @runtime.UiNode::Text(
@@ -278,9 +321,11 @@ loads `/themes/amber_soft` by default.
 | `SlotOccupied(i)` | Save slot `i` has data |
 | `ModeIs(m)` | Current modal instance `mode` equals `m` |
 | `And(a, b)` | Short-circuit conjunction |
+| `Not(p)` | Negation (e.g. empty-slot icons with `Not(SlotOccupied(i))`) |
 
 Load-mode slots typically use **`And(ModeIs("load"), SlotOccupied(i))`** so empty
-slots are not focusable; save mode uses `ModeIs("save")` alone.
+slots are not focusable; save mode uses `ModeIs("save")` alone. Slot icons use
+`ui.slot_empty` / `ui.slot_filled` with `Not(SlotOccupied)` / `SlotOccupied`.
 
 ```mbt
 @runtime.UiNode::Button(
@@ -420,13 +465,14 @@ not define widget trees.
 | Esc | `OpenMenu` — Playing empty stack → `game_menu`; modal open → pop |
 | Enter / Space / Z | `Advance` — activate focused button on modals/HUD |
 | Click (canvas) | `export_pointer` hit-test; empty Playing → Advance (not a frame intent) |
-| Move / leave | Hover paint + cursor; leave clears hover |
-| ↑ / W · ↓ / S | Menu focus up / down |
+| Move / up / leave | Hover + drag update; phase **2** up ends scroll drag; leave clears hover |
+| Wheel | `export_wheel` — scroll top-modal ScrollView when over viewport |
+| ↑ / W · ↓ / S | Menu focus up / down; **backlog top** → scroll ± one line step |
 | 1–9 | `Select(n)` choices while Playing |
 | A | Toggle auto (prefs.`auto_mode`) |
 | Ctrl/Cmd+S / L | Quick save / load **slot 0** |
 
-Pointer details and same-frame `export_frame(0, …)` rule:
+Pointer / wheel details and same-frame `export_frame(0, …)` rule:
 [`play-input.md`](./play-input.md#pointer).
 
 ## Author checklist

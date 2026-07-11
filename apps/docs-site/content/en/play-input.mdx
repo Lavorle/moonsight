@@ -1,20 +1,20 @@
 ---
 title: Play input
-description: Intent codes, skip hold, wait gate, confirm, and backlog semantics
+description: Intent codes, pointer/wheel, skip hold, wait gate, confirm, and backlog scroll
 ---
 
-# Play input semantics (Q1 / 0.5)
+# Play input semantics (Q1 / 0.5 + Q3 scroll)
 
 > **Source of truth:** Engine behavior must match repo docs until migration
-> completes; Q2 core pages are authoritative for listed topics.
+> completes; core pages are authoritative for listed topics.
 >
 > Adapted from `docs/play-input.md`. Host-command tables and draw-list wiring
-> remain in the repository `docs/` tree.
+> remain in the repository `docs/` tree. UI node trees: [MoonBit UI](./ui).
 
 Host devices map to **intent codes** each frame; the engine applies them in
 `Engine::tick(intent, dt~, skip_held~)`. Full host-command tables live in
 repo `docs/host-commands.md`; pack/export wiring in `docs/draw-list-pack.md`;
-UI trees in `docs/ui-moonbit.md`.
+UI trees in [MoonBit UI](./ui) / repo `docs/ui-moonbit.md`.
 
 ## Intent table + codes
 
@@ -28,21 +28,23 @@ Defined in `render.intent_from_code` / `intent_to_code`, wired by
 | 2 | `SkipTyping` | One-shot complete typing / advance (compat); host prefers hold skip |
 | 3 | `OpenMenu` | Playing + empty stack → `game_menu`; modal open → pop one layer |
 | 4 | `ToggleAuto` | Toggle auto-advance (+ prefs `auto_mode`) |
-| 5 | `MenuUp` | Previous focusable (menus / choices) |
-| 6 | `MenuDown` | Next focusable |
+| 5 | `MenuUp` | Previous focusable; **backlog top** → scroll up one line step |
+| 6 | `MenuDown` | Next focusable; **backlog top** → scroll down |
 | 7 | `MenuLeft` | Focused slider step down (or left focus where used) |
 | 8 | `MenuRight` | Focused slider step up |
 | 9 | `OpenBacklog` | Playing + empty stack → show `"backlog"` modal |
 | 10+n | `Select(n)` | Commit choice index `n` (keys **1**–**9** → n = 0..8) |
 
-**Not an intent code:** `skip_held` is a separate `export_frame` argument (0/1)
-set every frame while **Control** is held.
+**Not intent codes:** `skip_held` (per-frame `export_frame` flag while **Control**
+held); `export_pointer` / `export_wheel` (separate wasm exports).
 
 ## Default keys (browser host)
 
 | Input | Effect |
 |-------|--------|
-| Click / Enter / Space / Z | `Advance` (on menus = activate focused button) |
+| Enter / Space / Z | `Advance` (on menus = activate focused button) |
+| Click (canvas) | `export_pointer` hit-test (see [Pointer](#pointer)); not a frame intent |
+| Wheel (canvas) | `export_wheel` when over a ScrollView (see [Wheel](#wheel)) |
 | Esc | `OpenMenu` (open `game_menu` or pop modal) |
 | ↑ / W | `MenuUp` |
 | ↓ / S | `MenuDown` (plain **S**; **Ctrl/Cmd+S** = quick-save slot 0) |
@@ -56,6 +58,57 @@ set every frame while **Control** is held.
 Cold start is **Title** (`title` modal). Narrative Advance is frozen while any
 modal is open; only the stack top receives UI intents.
 
+## Pointer
+
+Engine-owned hit-test (not host layout constants). Host maps canvas events to
+logical 1920×1080 coords and calls `export_pointer(x, y, phase)`:
+
+| `phase` | Event | Engine effect |
+|--------:|-------|---------------|
+| 0 | `pointermove` | Hover update; while content/bar drag active, pan or map scrollbar |
+| 1 | `pointerdown` | Hit-test activate, start ScrollView drag, or miss→Advance when Playing |
+| 2 | `pointerup` | End ScrollView drag; **never** Advance |
+| 3 | `pointerleave` | Clear hover and end scroll drag |
+
+Return value `hover_kind`: **0** none, **1** button, **2** choice, **3** slider.
+Host maps that to CSS cursor (`pointer` / `ew-resize` / `default`).
+
+| Input | Effect |
+|-------|--------|
+| Click empty (Playing) | Advance (engine; typewriter complete-first, same as keyboard) |
+| Click button / choice / slider | Hit-test activate |
+| Down on ScrollView content | Begin content pan (pointer y up → reveal older) |
+| Down on scrollbar thumb / track | Bar drag; track click jumps then continues as Bar |
+| Move | Hover + cursor; active drag updates `scroll_y` |
+| Up | End drag only |
+| Leave canvas | Clear hover + end drag |
+
+**Down priority** (modal / Title): focusable → scrollbar thumb → track → content
+pan. Focusable wins and clears any drag.
+
+**Same-frame rule:** call `export_pointer` / `export_wheel` then
+`export_frame(0, dt, skip_held)` in the same frame. Pointer down already
+consumed the interaction — host must set pending intent to `None` (code **0**)
+so the frame tick does **not** double `Advance`. Pointer / wheel do **not**
+advance `wait_remaining` / tweens. While `wait_remaining > 0`, pointer down does
+not Advance or Select. On Title / modal stack, empty-canvas click does not
+Advance narrative. Wheel / scroll never Advance.
+
+## Wheel
+
+Host maps canvas `wheel` to logical coords and calls `export_wheel(x, y, dy)`:
+
+| Item | Rule |
+|------|------|
+| Sign | Engine: **`dy > 0` decreases `scroll_y`** (reveal **older** lines) |
+| Browser map | Host passes `dy = -event.deltaY` so wheel-up reveals older |
+| Hit | Modal open **and** `(x,y)` inside the active ScrollView viewport |
+| Outside / no modal | No-op; never Advance |
+| Step | `scroll_y -= k * dy` with `k = 1`; clamp to `[0, scroll_max]` |
+
+Opening `"backlog"` pins scroll to the newest content (bottom). Scroll state is
+on `UiRuntime` (not saved). Node + theme roles: [MoonBit UI](./ui).
+
 ## `skip_held` vs `SkipTyping`
 
 | | `SkipTyping` (code 2) | `skip_held` (tick flag) |
@@ -66,10 +119,14 @@ modal is open; only the stack top receives UI intents.
 | Timed `@flow.wait` | **Ignored** (gate) | **Ignored** (gate) |
 | `Choose` waiting | Does not auto-pick | **Does not** auto-select options |
 | Modal / Title active | UI path only | Flag ignored for narrative |
-| Overlay fade mid-flight | Not forced-snap | Same as Advance (no extra fade gate in Q1) |
+| Overlay fade mid-flight | Not forced-snap | Same as Advance (no extra fade gate) |
 
 Host maps **Ctrl hold** → `skip_held`, not one-shot `SkipTyping`. Auto mode
 synthesizes `Advance` when idle; hold skip is the faster path when both apply.
+
+**Blur / tab hide clear sticky skip:** hosts set `ctrlHeld = false` on window
+**blur** and when `document.visibilityState === "hidden"`. Both `js_glue/boot.js`
+and `apps/host-web` `gameSession.ts` implement this.
 
 ## `wait_remaining` gate
 
@@ -95,6 +152,11 @@ are open — same presentation tick). Hold-skip and Advance remain blocked by
 wait ends, any remaining presentation time continues on the wall clock until
 complete.
 
+**Mid-dissolve save/load:** dual-phase dissolve is not part of the save format;
+after load the dissolve clock is hard-cleared (`dissolve_phase=0`). Authors
+should not rely on resuming an in-flight dissolve — see repo
+`docs/host-commands.md` (trans / save format).
+
 ## Confirm behavior
 
 Dangerous UI actions go through modal `"confirm"` and `ConfirmKind`:
@@ -115,16 +177,25 @@ Dangerous UI actions go through modal `"confirm"` and `ConfirmKind`:
 |------|------|
 | Source | Completed dialogue lines (`speaker` + full text) after typewriter complete |
 | Capacity | Ring buffer **100**; oldest dropped |
-| Persist | **Session only** — not in save v3; cleared on `start_game`, `quit_to_title`, load |
+| Persist | **Session only** — not persisted in saves; cleared on `start_game`, `quit_to_title`, load |
 | Open | **H** / `OpenBacklog`, or game menu **History** → `"backlog"` |
 | Close | Esc / Close → `return_modal` |
-| UI | Read-only list (last **12** lines via `BacklogLine`); no free scroll (Q3) |
+| UI | Read-only `ScrollView` with up to **100** `BacklogLine(i)` rows; free scroll |
+| Open pin | Scroll pins to **newest** (bottom) when the modal opens |
+| Scroll inputs | Wheel over viewport; content pan; scrollbar; **↑/↓** line steps (64 logical px) while backlog is top |
+| Focus | Close is the only focusable; ↑/↓ always scroll |
 | Non-recorded | Choice labels, system modal copy |
+
+Wheel / drag on backlog never Advance narrative (modal gate). ScrollView node
+and theme roles: [MoonBit UI](./ui).
 
 ## Related
 
-- Engine: `runtime/engine.mbt` (`tick`, `tick_skip_burst`, backlog append)
-- Host: `host_web/main.mbt` `export_frame`, `js_glue/boot.js`
+- Engine: `runtime/engine.mbt` (`tick`, `tick_skip_burst`, `pointer_event`,
+  `wheel_event`, backlog)
+- Host: `host_web/main.mbt` `export_pointer` / `export_wheel` / `export_frame`;
+  `js_glue/boot.js`; Svelte `apps/host-web/src/lib/gameSession.ts`
 - UI: `std_ui` modals `"backlog"`, `"confirm"`, settings `Slider`
 - [Getting Started](./getting-started) — build and play
 - [MoonYuki subset](./moon-yuki) — `@flow.wait` authoring
+- [MoonBit UI](./ui) — ScrollView, themes, Capabilities

@@ -1,0 +1,142 @@
+---
+title: MoonBit UI
+description: ScrollView, theme roles, Capabilities, and retained UI authoring
+---
+
+# MoonBit UI authoring (Phase 4 + Q3)
+
+> **Source of truth:** Engine behavior must match repo docs until migration
+> completes; core pages are authoritative for listed topics.
+>
+> Adapted from `docs/ui-moonbit.md`. Full Capabilities table, `ui_package`
+> build steps, and migration from `- screen` remain in the repository doc.
+
+Author-facing guide for the **retained MoonBit UI kernel**: system menus and
+narrative HUD are both `UiNode` trees registered on a `UiApp`, painted via
+`UiDrawOp`, and driven by closed **Capabilities** callbacks.
+
+See also: [Play input](./play-input) (keys, pointer, wheel, skip, backlog),
+repo `docs/host-commands.md` (`@ui.*`, intents, prefs),
+`docs/project-layout.md` (`ui_package`, build).
+
+## Dual surface model
+
+| Surface | Role |
+|---------|------|
+| **HUD** (`set_hud`) | Base chrome while Playing: dialogue box, nameplate, body, choices |
+| **Modal stack** (`register_modal`) | Title, game menu, save/load, settings, confirm, backlog, custom modals |
+
+| `UiMode` | Meaning |
+|----------|---------|
+| `Title` | Cold start / after quit; title modal typically on stack |
+| `Playing` | Narrative VM runs; HUD binds to Stage when no modal |
+| `Menu` | Modal stack non-empty; narrative Advance ignored |
+
+**Input gate:** modal non-empty → only stack top; Esc while Playing empty stack
+opens `game_menu`. UI stack and focus are **not** serialized into save slots.
+
+## Registration (summary)
+
+```text
+let app = UiApp::new()
+@std_ui.register(app)       // default HUD + six modals
+@project_ui.register(app)   // optional game package (after std)
+// Engine::from_ir(..., app~)
+```
+
+Default modals: `title`, `game_menu`, `save_load`, `settings`, `confirm`,
+`backlog`. Project `register` runs **after** `std_ui` and replaces by name.
+
+Handlers call **Capabilities only** (`start_game`, `show_modal`, `save_slot`,
+`return_modal`, `confirm_yes` / `confirm_no`, prefs, …). No open host-string
+actions on the tree.
+
+## Widget MVP
+
+| Node | Role |
+|------|------|
+| `VBox` / `HBox` | Flow layout; optional absolute origin |
+| `Fixed` | Absolute region with optional `w` / `h` |
+| `Spacer` | Empty space in flow |
+| `Panel` | Sprite / chrome resource rect + `visible` |
+| `Text` | Label from `TextBindSrc` + `visible` |
+| `Image` | Resource sprite + `visible` |
+| `Button` | Focusable; `action_id` → handler |
+| `ChoiceList` | Expands Stage choices into focusable rows |
+| `Slider` | Horizontal pref control; `MenuLeft`/`MenuRight` step |
+| `ScrollView` | Vertical viewport + clip; runtime owns `scroll_y` |
+
+Logical canvas default: **1920×1080**, origin top-left, +y down.
+
+### `UiNode::ScrollView`
+
+Vertical scroll viewport. Children layout from the top of the content area;
+paint and hit-test **clip** to the viewport.
+
+| Field / rule | Detail |
+|--------------|--------|
+| Geometry | `x`, `y`, `w`, `h` — viewport in logical px |
+| `scroll_y` | Offset into content; **not saved** |
+| Clamp | `[0, max(0, content_h - vp_h)]` |
+| Scrollbar | Right edge (`ui.scroll_track` / `ui.scroll_thumb`) when overflow |
+| Wheel | Over viewport: `dy > 0` → `scroll_y` decreases (older) |
+| Drag | Content pan; thumb/track drag maps y → scroll |
+| Keyboard | MenuUp/Down → ±64 logical px when backlog is top |
+
+**Q3 consumer:** `std_ui` backlog only (up to 100 `BacklogLine` rows; Close
+outside the ScrollView). Opening `"backlog"` pins scroll to newest (bottom).
+
+**Not implemented:** horizontal / nested ScrollView, inertia, rubber-band,
+multi-touch, runtime theme switcher, slot screenshots (icons only), saving
+backlog into slots.
+
+## Themes — logical roles
+
+UI paint emits **stable logical role** ids. Host resolves each to a solid and
+optional PNG (`themes/amber_soft/theme.json`).
+
+| Role | Use |
+|------|-----|
+| `ui.dialogue_box` | Dialogue panel chrome |
+| `ui.nameplate` | Speaker nameplate |
+| `ui.choice_row` / `_focus` / `_hover` | Choice rows |
+| `ui.button` / `_focus` / `_hover` | Buttons |
+| `ui.menu_dim` | Modal full-screen dim |
+| `ui.slider_track` / `ui.slider_fill` | Settings sliders |
+| `ui.scroll_track` / `ui.scroll_thumb` | ScrollView scrollbar |
+| `ui.slot_empty` / `ui.slot_filled` | Save/load slot icons |
+
+Focused paint wins over hover. Host cursor uses `export_pointer` `hover_kind`
+(1 button, 2 choice → `pointer`; 3 slider → `ew-resize`).
+
+## TextBind / VisibleIf (key variants)
+
+| `TextBindSrc` | Resolves to |
+|---------------|-------------|
+| `Literal` / `DialogueName` / `DialogueBody` | Fixed or Stage dialogue |
+| `Pref(key)` / `SlotLabel(i)` / `Var(name)` | Prefs, slots, narrative vars |
+| `BacklogLine(i)` | Preformatted backlog line (oldest-first bound window; empty → `""`) |
+
+| `VisiblePred` | True when |
+|---------------|-----------|
+| `Always` / `Never` / `HasText` / `HasChoices` | Constants / Stage |
+| `PrefBool` / `SlotOccupied` / `ModeIs` | Prefs / slots / modal mode |
+| `And(a, b)` / `Not(p)` | Composition (e.g. empty-slot icon = `Not(SlotOccupied)`) |
+
+## Narrative bridge
+
+```text
+@ui.show "game_menu"
+@ui.show "save_load" mode=load
+@ui.hide
+@ui.hide "settings"
+```
+
+Scripts queue stack ops only; they do **not** define widget trees.
+
+## Related
+
+- Full guide: repo `docs/ui-moonbit.md`
+- [Play input](./play-input) — pointer phase 2, wheel sign, blur clears skip
+- [MoonYuki subset](./moon-yuki) — script grammar
+- [Getting Started](./getting-started) — build and play

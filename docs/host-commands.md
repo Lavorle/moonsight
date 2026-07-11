@@ -460,8 +460,8 @@ Canonical play semantics (skip vs `SkipTyping`, backlog, confirm):
 | 2 | `SkipTyping` | reserved one-shot; host uses Ctrl **hold** → `skip_held` instead |
 | 3 | `OpenMenu` | **Esc** — Playing + empty stack → `game_menu`; modal open → pop one layer |
 | 4 | `ToggleAuto` | **A** (also writes prefs.`auto_mode`) |
-| 5 | `MenuUp` | **↑** / **W** — previous focusable on modal/HUD |
-| 6 | `MenuDown` | **↓** / **S** — next focusable (plain S; Ctrl+S is quick-save) |
+| 5 | `MenuUp` | **↑** / **W** — previous focusable; **backlog** → scroll up one line |
+| 6 | `MenuDown` | **↓** / **S** — next focusable (plain S; Ctrl+S is quick-save); **backlog** → scroll down |
 | 7 | `MenuLeft` | **←** — focused slider step down |
 | 8 | `MenuRight` | **→** — focused slider step up |
 | 9 | `OpenBacklog` | **H** — Playing + empty stack → backlog modal |
@@ -469,7 +469,13 @@ Canonical play semantics (skip vs `SkipTyping`, backlog, confirm):
 
 **Ctrl hold** (not an intent code): each frame passes `skip_held=1` into
 `export_frame` for burst advance while held (does not skip timed waits or
-auto-select choices).
+auto-select choices). Host clears hold on **window blur** / tab
+**visibility hidden** so skip does not stick after focus loss.
+
+**Pointer / wheel** (not intent codes): `export_pointer(x, y, phase)` with
+phases **0** move, **1** down, **2** up, **3** leave; `export_wheel(x, y, dy)`
+with **`dy > 0` → older** (`scroll_y` decreases). See
+[`play-input.md`](./play-input.md).
 
 Save/load (not intents): **Ctrl/Cmd+S** save, **Ctrl/Cmd+L** load **slot 0**.
 
