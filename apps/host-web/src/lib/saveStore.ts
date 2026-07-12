@@ -33,6 +33,15 @@ export class SaveStoreError extends Error {
 
 export type StorageLike = Pick<Storage, "getItem" | "setItem">;
 
+export type SaveWriteEvent = {
+  operation: "save-prefs" | "save-slot";
+  slot?: number;
+  state: "pending" | "committed" | "failed";
+  error?: unknown;
+};
+
+export type SaveWriteObserver = (event: SaveWriteEvent) => void;
+
 export const PREFS_KEY = "moonsight/prefs";
 export const SAVE_KEY = (slot: number) => `moonsight/save/${slot}`;
 
@@ -56,6 +65,74 @@ export class MemorySaveStore implements SaveStore {
   async flush(): Promise<void> {}
 }
 
+/** Serialize writes and expose their pending/committed/failed lifecycle. */
+export class TrackedSaveStore implements SaveStore {
+  private readonly inner: SaveStore;
+  private readonly observe: SaveWriteObserver;
+  private tail: Promise<void> = Promise.resolve();
+  private failures = new Map<string, unknown>();
+
+  constructor(inner: SaveStore, observe: SaveWriteObserver = () => {}) {
+    this.inner = inner;
+    this.observe = observe;
+  }
+
+  loadPrefs(): string | null {
+    return this.inner.loadPrefs();
+  }
+
+  savePrefs(json: string): Promise<void> {
+    return this.enqueue("save-prefs", undefined, () =>
+      this.inner.savePrefs(json),
+    );
+  }
+
+  loadSlot(slot: number): string | null {
+    return this.inner.loadSlot(slot);
+  }
+
+  saveSlot(slot: number, json: string): Promise<void> {
+    return this.enqueue("save-slot", slot, () =>
+      this.inner.saveSlot(slot, json),
+    );
+  }
+
+  async flush(): Promise<void> {
+    await this.tail;
+    await this.inner.flush();
+    if (this.failures.size > 0) {
+      throw new AggregateError(
+        Array.from(this.failures.values()),
+        "One or more save writes failed",
+      );
+    }
+  }
+
+  private enqueue(
+    operation: "save-prefs" | "save-slot",
+    slot: number | undefined,
+    write: () => Promise<void>,
+  ): Promise<void> {
+    const eventBase = slot == null ? { operation } : { operation, slot };
+    const key = `${operation}:${slot ?? "prefs"}`;
+    this.observe({ ...eventBase, state: "pending" });
+    const run = this.tail.then(write, write);
+    const observed = run.then(
+      () => {
+        this.failures.delete(key);
+        this.observe({ ...eventBase, state: "committed" });
+      },
+      (error: unknown) => {
+        this.failures.set(key, error);
+        this.observe({ ...eventBase, state: "failed", error });
+        throw error;
+      },
+    );
+    this.tail = observed.catch(() => {});
+    return observed;
+  }
+}
+
 export class WebSaveStore implements SaveStore {
   private readonly storage: StorageLike;
 
@@ -76,8 +153,10 @@ export class WebSaveStore implements SaveStore {
   async savePrefs(json: string): Promise<void> {
     try {
       if (json && json.length) this.storage.setItem(PREFS_KEY, json);
-    } catch {
-      console.error("[moonsight] savePrefs failed");
+    } catch (cause) {
+      throw new SaveStoreError("save-prefs", "Unable to save preferences", {
+        cause,
+      });
     }
   }
 

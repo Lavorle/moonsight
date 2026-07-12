@@ -4,10 +4,10 @@ import test from "node:test";
 import { SaveStoreError, WebSaveStore } from "./saveStore.ts";
 
 test("WebSaveStore exposes an awaitable durable write completion point", async () => {
-  const writes: Array<[string, string]> = [];
+  const writes = [];
   const storage = {
     getItem: () => null,
-    setItem: (key: string, value: string) => {
+    setItem: (key, value) => {
       writes.push([key, value]);
     },
   };
@@ -33,7 +33,7 @@ test("WebSaveStore rejects a failed slot write with typed context", async () => 
   };
   const store = new WebSaveStore(storage);
 
-  await assert.rejects(store.saveSlot(2, "{}"), (error: unknown) => {
+  await assert.rejects(store.saveSlot(2, "{}"), (error) => {
     assert.ok(error instanceof SaveStoreError);
     assert.equal(error.operation, "save-slot");
     assert.equal(error.slot, 2);
@@ -45,9 +45,9 @@ test("WebSaveStore rejects a failed slot write with typed context", async () => 
 test("TrackedSaveStore reports pending until write and flush complete", async () => {
   const stores = await import("./saveStore.ts");
   assert.equal(typeof stores.TrackedSaveStore, "function");
-  let releaseWrite: (() => void) | null = null;
-  const calls: string[] = [];
-  const events: unknown[] = [];
+  let releaseWrite = null;
+  const calls = [];
+  const events = [];
   const inner = {
     loadPrefs: () => null,
     savePrefs: async () => {},
