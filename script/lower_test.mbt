@@ -163,12 +163,14 @@ test "localized compilation rejects dialogue without author ID" {
     #|- scene "s"
     #|y:Hello
     #|
-  try @script.compile_localized_to_identified_ir(
-    src,
-    file="missing.yuki",
-    locale="ja",
-    require_explicit_ids=true,
-  ) catch {
+  try
+    @script.compile_localized_to_identified_ir(
+      src,
+      file="missing.yuki",
+      locale="ja",
+      require_explicit_ids=true,
+    )
+  catch {
     @script.AuthorId(@script.MissingAuthorId(span~, locale~, kind~)) => {
       assert_eq(span.file, "missing.yuki")
       assert_eq(locale, "ja")
