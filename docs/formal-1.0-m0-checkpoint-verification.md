@@ -122,8 +122,10 @@ Toolchains used:
 - Node.js `v24.13.1`, npm `11.8.0`
 - Rust `1.97.0`, Cargo `1.97.0`
 
+<!-- markdownlint-disable MD013 -->
+
 | Surface | Command | Result |
-|---|---|---|
+| --- | --- | --- |
 | Format | `moon fmt --check` | PASS |
 | MoonBit | `moon check --target all` | PASS |
 | MoonBit | `moon test` | PASS — 244/244 |
@@ -135,6 +137,8 @@ Toolchains used:
 | Package | demo build plus `scripts/verify-package.sh` | PASS |
 | Negative package | missing, empty, and corrupt `game.msb` | PASS — all rejected |
 | Negative CLI | build without `apps/host-web/dist` from an isolated `git archive` | PASS — failed with the documented `npm run build` guidance and left no output |
+
+<!-- markdownlint-enable MD013 -->
 
 The missing-host negative was rerun from an isolated `git archive`. A linked
 worktree run can discover the main checkout's ignored `apps/host-web/dist`
@@ -148,4 +152,3 @@ The isolated archive removes that harness-only false positive.
 - The automated closure matrix is green on `d92cdbf`.
 - The worktree returned clean after the matrix.
 - W1, D1, and C1 remain truthfully blocked/not run.
-
