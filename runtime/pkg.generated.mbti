@@ -338,6 +338,7 @@ pub(all) struct SaveGame {
   audio : AudioLogicState
   wait : WaitKind
   choices : Array[String]?
+  choice_ids : Array[String]
   choose_result_var : String?
   auto : Bool
   fade_to : Double
