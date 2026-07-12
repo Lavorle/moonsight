@@ -41,3 +41,50 @@ test("WebSaveStore rejects a failed slot write with typed context", async () => 
     return true;
   });
 });
+
+test("TrackedSaveStore reports pending until write and flush complete", async () => {
+  const stores = await import("./saveStore.ts");
+  assert.equal(typeof stores.TrackedSaveStore, "function");
+  let releaseWrite: (() => void) | null = null;
+  const calls: string[] = [];
+  const events: unknown[] = [];
+  const inner = {
+    loadPrefs: () => null,
+    savePrefs: async () => {},
+    loadSlot: () => null,
+    saveSlot: async () => {
+      calls.push("write");
+      await new Promise<void>((resolve) => {
+        releaseWrite = resolve;
+      });
+    },
+    flush: async () => {
+      calls.push("flush");
+    },
+  };
+  const store = new stores.TrackedSaveStore(inner, (event) => {
+    events.push(event);
+  });
+
+  const write = store.saveSlot(4, "{}");
+  assert.deepEqual(events, [
+    { operation: "save-slot", slot: 4, state: "pending" },
+  ]);
+  let flushed = false;
+  const flush = store.flush().then(() => {
+    flushed = true;
+  });
+  await Promise.resolve();
+  assert.equal(flushed, false);
+
+  assert.ok(releaseWrite);
+  releaseWrite();
+  await write;
+  await flush;
+
+  assert.deepEqual(calls, ["write", "flush"]);
+  assert.deepEqual(events, [
+    { operation: "save-slot", slot: 4, state: "pending" },
+    { operation: "save-slot", slot: 4, state: "committed" },
+  ]);
+});

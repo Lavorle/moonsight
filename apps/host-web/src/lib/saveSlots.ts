@@ -1,5 +1,13 @@
 export const MIN_SAVE_FORMAT_VERSION = 2;
 export const MAX_SAVE_FORMAT_VERSION = 4;
+export const DEFAULT_SAVE_SLOT_COUNT = 6;
+export const MAX_SAVE_SLOT_COUNT = 20;
+
+export function clampSaveSlotCount(value: unknown): number {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return DEFAULT_SAVE_SLOT_COUNT;
+  return Math.max(1, Math.min(MAX_SAVE_SLOT_COUNT, Math.trunc(number)));
+}
 
 export type SaveSlotState =
   | { slot: number; state: "empty" }
@@ -69,7 +77,8 @@ export function hydrateStoredSlots(
   seed: (slot: number, json: string) => void,
 ): SaveSlotState[] {
   const states: SaveSlotState[] = [];
-  for (let slot = 0; slot < slotCount; slot++) {
+  const count = clampSaveSlotCount(slotCount);
+  for (let slot = 0; slot < count; slot++) {
     let state: SaveSlotState;
     try {
       state = classifyStoredSlot(slot, store.loadSlot(slot));
