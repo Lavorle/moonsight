@@ -305,7 +305,7 @@ Blank lines are ignored. Keep one statement per line (line-oriented lexer).
       → Macro expand
       → Resolve (externs, scenes, commands)
       → Lower → IR (Host / Yield / Choose / …; named args as #: markers)
-      → Bytecode encode (MSB1, magic "MSB1")
+      → Bytecode encode (MSB2, magic "MSB2", embedded locale catalogs)
 ```
 
 UI trees are **not** produced by this pipeline; they are registered at host
