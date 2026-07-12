@@ -131,7 +131,10 @@ pub fn encode_msb2(bundle : Msb2Bundle) -> Bytes {
     write_string(buf, op.operation_id.value)
     write_string(
       buf,
-      match op.presentation_id { Some(id) => id.value; None => "" },
+      match op.presentation_id {
+        Some(id) => id.value
+        None => ""
+      },
     )
     write_u32(buf, op.choice_ids.length())
     for choice in op.choice_ids {

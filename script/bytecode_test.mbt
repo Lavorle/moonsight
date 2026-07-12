@@ -10,7 +10,6 @@ fn minimal_src() -> String {
 ///|
 test "bytecode roundtrip" {
   let ir = @script.compile_to_ir(minimal_src(), file="t.yuki")
-  let identified : IdentifiedIrModule = { ir, stable_operations: [] }
   let bytes = @script.encode_module(ir)
   // magic MSB1
   assert_true(bytes.length() >= 4)
@@ -66,6 +65,7 @@ test "MSB1 encoding is deterministic across scene insertion order" {
 ///|
 test "MSB2 catalog encoding is deterministic across map and locale order" {
   let ir = @script.compile_to_ir(minimal_src(), file="t.yuki")
+  let identified : IdentifiedIrModule = { ir, stable_operations: [] }
   let en1 : Map[String, String] = {}
   en1["line.z"] = "Z"
   en1["line.a"] = "A"
