@@ -85,3 +85,24 @@ test "MSB2 catalog encoding is deterministic across map and locale order" {
   assert_eq(first[0], b'M')
   assert_eq(first[3], b'2')
 }
+
+///|
+test "MSB2 round trips executable, stable IDs, and embedded catalogs" {
+  let source =
+    #|- scene "s"
+    #|@meta.id "s.line" presentation="s.text"
+    #|Alice:Hello
+    #|
+  let identified = compile_to_identified_ir(source, file="roundtrip.yuki")
+  let bundle : Msb2Bundle = {
+    identified,
+    catalogs: [{ locale: "en", entries: { "s.text": "Hello" } }],
+  }
+  let decoded = decode_msb2(encode_msb2(bundle))
+  assert_eq(decoded.identified.ir.entry, "s")
+  assert_eq(
+    decoded.identified.stable_operations[0].operation_id.value,
+    "s.line",
+  )
+  assert_eq(decoded.catalogs[0].entries["s.text"], "Hello")
+}

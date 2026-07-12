@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   loadGameBundle,
   loadGameContent,
+  upgradeLegacySave,
   validateContentManifest,
 } from "./wasm.ts";
 
@@ -30,6 +31,47 @@ test("production requires a valid manifest while demo mode permits its absence",
     { name: "game" },
   );
   assert.equal(validateContentManifest(null, "demo", "custom.json"), null);
+});
+
+test("legacy dialogue and choices upgrade to v5 stable IDs before mutation", () => {
+  const raw = JSON.stringify({
+    format_version: 4,
+    scene: "intro",
+    ip: 7,
+    text: { speaker: "Alice", full_text: "Hello" },
+    choices: ["Yes", "No"],
+  });
+  const result = upgradeLegacySave(raw, {
+    legacy_save_compatibility: {
+      schema_version: 1,
+      entries: [{
+        scene: "intro",
+        legacy_ip: 7,
+        operation_id: "intro.pick",
+        presentation_id: "intro.text",
+        legacy_speaker: "Alice",
+        legacy_text: "Hello",
+        legacy_choices: ["Yes", "No"],
+        choice_ids: ["intro.yes", "intro.no"],
+      }],
+    },
+  });
+  assert.equal(result.ok, true);
+  const upgraded = JSON.parse(result.json);
+  assert.equal(upgraded.format_version, 5);
+  assert.equal(upgraded.text.text_id, "intro.text");
+  assert.deepEqual(upgraded.choice_ids, ["intro.yes", "intro.no"]);
+});
+
+test("legacy mismatch is explicitly incompatible without producing replacement JSON", () => {
+  const result = upgradeLegacySave(
+    JSON.stringify({ format_version: 3, scene: "intro", ip: 7, text: { full_text: "Changed" } }),
+    { legacy_save_compatibility: { schema_version: 1, entries: [] } },
+  );
+  assert.deepEqual(result, {
+    ok: false,
+    message: "Legacy save location 'intro#7' is not compatible",
+  });
 });
 
 test("whole-bundle digest mismatch is rejected before runtime mutation", async () => {
