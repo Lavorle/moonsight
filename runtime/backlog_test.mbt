@@ -44,8 +44,8 @@ test "backlog stable references relocalize atomically" {
 ///|
 test "backlog relocalize failure leaves all resolved strings unchanged" {
   let b = BacklogStore::new(capacity=10)
-  b.push(speaker=None, text="Legacy")
   b.push(text="Hello", speaker=None, text_id="dialogue.greeting")
+  b.push(text="Missing", speaker=None, text_id="dialogue.missing")
   let catalogs = LocaleCatalogs::new(
     default_locale="en",
     catalogs={
@@ -54,8 +54,10 @@ test "backlog relocalize failure leaves all resolved strings unchanged" {
     },
   )
   try b.relocalize(catalogs, "zh-CN") catch {
-    _ => fail("complete catalogs should relocalize")
+    _ => ()
+  } noraise {
+    _ => fail("expected missing stable key error")
   }
-  assert_eq(b.get(0).text, "Legacy")
-  assert_eq(b.get(1).text, "你好")
+  assert_eq(b.get(0).text, "Hello")
+  assert_eq(b.get(1).text, "Missing")
 }
