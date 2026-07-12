@@ -115,21 +115,29 @@ export class TrackedSaveStore implements SaveStore {
   ): Promise<void> {
     const eventBase = slot == null ? { operation } : { operation, slot };
     const key = `${operation}:${slot ?? "prefs"}`;
-    this.observe({ ...eventBase, state: "pending" });
+    this.emit({ ...eventBase, state: "pending" });
     const run = this.tail.then(write, write);
     const observed = run.then(
       () => {
         this.failures.delete(key);
-        this.observe({ ...eventBase, state: "committed" });
+        this.emit({ ...eventBase, state: "committed" });
       },
       (error: unknown) => {
         this.failures.set(key, error);
-        this.observe({ ...eventBase, state: "failed", error });
+        this.emit({ ...eventBase, state: "failed", error });
         throw error;
       },
     );
     this.tail = observed.catch(() => {});
     return observed;
+  }
+
+  private emit(event: SaveWriteEvent): void {
+    try {
+      this.observe(event);
+    } catch (error) {
+      console.error("[moonsight] save observer failed", error);
+    }
   }
 }
 

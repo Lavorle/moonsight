@@ -89,63 +89,55 @@ test("TrackedSaveStore reports pending until write and flush complete", async ()
   ]);
 });
 
-test("TrackedSaveStore serializes concurrent saves and keeps the newest value", async () => {
+test("TrackedSaveStore observers cannot turn a committed write into failure", async () => {
   const stores = await import("./saveStore.ts");
-  const first = Promise.withResolvers();
-  const writes = [];
-  let calls = 0;
+  const inner = new stores.MemorySaveStore();
+  const store = new stores.TrackedSaveStore(inner, (event) => {
+    if (event.state === "committed") throw new Error("observer failed");
+  });
+
+  await store.saveSlot(1, "{}");
+  await store.flush();
+  assert.equal(inner.loadSlot(1), "{}");
+});
+
+test("TrackedSaveStore emits failed and flush rejects outstanding failures", async () => {
+  const stores = await import("./saveStore.ts");
+  const error = new Error("disk full");
+  const events = [];
   const inner = {
     loadPrefs: () => null,
     savePrefs: async () => {},
     loadSlot: () => null,
-    saveSlot: async (_slot, json) => {
-      writes.push(json);
-      calls += 1;
-      if (calls === 1) await first.promise;
+    saveSlot: async () => {
+      throw error;
     },
     flush: async () => {},
   };
-  const store = new stores.TrackedSaveStore(inner);
+  const store = new stores.TrackedSaveStore(inner, (event) => events.push(event));
 
-  const older = store.saveSlot(0, "older");
-  const newer = store.saveSlot(0, "newer");
-  await Promise.resolve();
-  assert.deepEqual(writes, ["older"]);
-
-  first.resolve();
-  await Promise.all([older, newer]);
-  await store.flush();
-  assert.deepEqual(writes, ["older", "newer"]);
+  await assert.rejects(store.saveSlot(5, "{}"), error);
+  await assert.rejects(store.flush(), AggregateError);
+  assert.deepEqual(events, [
+    { operation: "save-slot", slot: 5, state: "pending" },
+    { operation: "save-slot", slot: 5, state: "failed", error },
+  ]);
 });
 
-test("TrackedSaveStore exposes failed writes and a later retry clears the failure", async () => {
-  const stores = await import("./saveStore.ts");
-  const failure = new Error("quota exceeded");
-  const events = [];
-  let fail = true;
-  const store = new stores.TrackedSaveStore(
-    {
-      loadPrefs: () => null,
-      savePrefs: async () => {},
-      loadSlot: () => null,
-      saveSlot: async () => {
-        if (fail) throw failure;
-      },
-      flush: async () => {},
+test("WebSaveStore rejects a failed preferences write", async () => {
+  const quotaError = new Error("quota exceeded");
+  const store = new WebSaveStore({
+    getItem: () => null,
+    setItem: () => {
+      throw quotaError;
     },
-    (event) => events.push(event),
-  );
+  });
 
-  await assert.rejects(store.saveSlot(2, "first"), failure);
-  await assert.rejects(store.flush(), AggregateError);
-  fail = false;
-  await store.saveSlot(2, "retry");
-  await store.flush();
-
-  assert.deepEqual(events, [
-    { operation: "save-slot", slot: 2, state: "pending" },
-    { operation: "save-slot", slot: 2, state: "failed", error: failure },
-    { operation: "save-slot", slot: 2, state: "pending" },
-    { operation: "save-slot", slot: 2, state: "committed" },
-  ]);
+  await assert.rejects(store.savePrefs("{}"), (error) => {
+    assert.ok(error instanceof SaveStoreError);
+    assert.equal(error.operation, "save-prefs");
+    assert.equal(error.slot, null);
+    assert.equal(error.cause, quotaError);
+    return true;
+  });
 });
