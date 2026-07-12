@@ -57,13 +57,31 @@ pub let ui_button : String
 
 pub let ui_button_focus : String
 
+pub let ui_button_hover : String
+
 pub let ui_choice_row : String
+
+pub let ui_choice_row_focus : String
+
+pub let ui_choice_row_hover : String
 
 pub let ui_dialogue_box : String
 
 pub let ui_menu_dim : String
 
 pub let ui_nameplate : String
+
+pub let ui_scroll_thumb : String
+
+pub let ui_scroll_track : String
+
+pub let ui_slider_fill : String
+
+pub let ui_slider_track : String
+
+pub let ui_slot_empty : String
+
+pub let ui_slot_filled : String
 
 pub fn visible_prefix(String, Int) -> String
 

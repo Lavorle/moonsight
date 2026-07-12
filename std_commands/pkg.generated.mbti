@@ -26,6 +26,8 @@ pub fn cmd_layer_hide(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostRes
 
 pub fn cmd_layer_move(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
 
+pub fn cmd_layer_set(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
 pub fn cmd_layer_show(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
 
 pub fn cmd_sys_save_hint(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
@@ -36,7 +38,13 @@ pub fn cmd_text_end(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResul
 
 pub fn cmd_text_type(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
 
+pub fn cmd_trans_dissolve(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
 pub fn cmd_trans_fade(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_ui_hide(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
+
+pub fn cmd_ui_show(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
 
 pub fn cmd_var_set(@runtime.Stage, Array[@runtime.Value]) -> @runtime.HostResult
 

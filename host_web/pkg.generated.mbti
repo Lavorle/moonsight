@@ -24,7 +24,11 @@ pub fn boot_title() -> Int
 
 pub fn clear_pending_glyphs() -> Int
 
-pub fn export_frame(Int, Float) -> Int
+pub fn export_frame(Int, Float, Int) -> Int
+
+pub fn export_pointer(Float, Float, Int) -> Int
+
+pub fn export_wheel(Float, Float, Float) -> Int
 
 pub fn frame_at(Int) -> Float
 

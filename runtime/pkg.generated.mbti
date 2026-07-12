@@ -22,9 +22,11 @@ pub fn runtime_package_name() -> String
 
 pub let save_format_version : Int
 
-pub fn slot_label(SaveGame?) -> String
+pub fn slot_label(Int, SaveGame?) -> String
 
 pub fn split_host_args(Array[Value]) -> (Array[Value], Map[String, Value])
+
+pub let ui_scroll_line_h : Double
 
 pub fn value_as_double(Value) -> Double?
 
@@ -48,6 +50,21 @@ pub(all) struct AudioLogicState {
   bgm_fade_stop : Bool?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
+pub(all) struct BacklogEntry {
+  speaker : String?
+  text : String
+} derive(Eq, @debug.Debug)
+
+pub(all) struct BacklogStore {
+  mut entries : Array[BacklogEntry]
+  capacity : Int
+}
+pub fn BacklogStore::clear(Self) -> Unit
+pub fn BacklogStore::get(Self, Int) -> BacklogEntry
+pub fn BacklogStore::len(Self) -> Int
+pub fn BacklogStore::new(capacity? : Int) -> Self
+pub fn BacklogStore::push(Self, speaker~ : String?, text~ : String) -> Unit
+
 pub(all) enum BuiltinHost {
   TextBegin
   TextType
@@ -63,6 +80,11 @@ pub(all) struct ChoiceState {
   options : Array[String]
   selected : Int?
 } derive(@debug.Debug)
+
+pub(all) enum ConfirmKind {
+  OverwriteSave(Int)
+  QuitToTitle
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Director {
   handlers : Map[String, HostHandler]
@@ -82,6 +104,9 @@ pub(all) struct Engine {
   mut ui : UiRuntime
   ir_entry : String
   mut slot_blobs : Array[String?]
+  mut backlog : BacklogStore
+  mut backlog_last_key : String
+  mut pending_confirm : ConfirmKind?
 }
 pub fn Engine::boot_title(Self) -> Unit
 pub fn Engine::clear_screens_to_playing(Self) -> Unit
@@ -89,6 +114,7 @@ pub fn Engine::from_ir(@script.IrModule, entry~ : String, director? : Director, 
 pub fn Engine::get_slot_blob(Self, Int) -> String?
 pub fn Engine::load(Self, String) -> Unit raise SaveError
 pub fn Engine::occupied_slots(Self) -> Array[Bool]
+pub fn Engine::pointer_event(Self, Double, Double, phase~ : Int) -> Int
 pub fn Engine::prefs_json(Self) -> String
 pub fn Engine::quit_to_title(Self) -> Unit
 pub fn Engine::save(Self, slot? : Int) -> String
@@ -97,8 +123,10 @@ pub fn Engine::set_save_slots(Self, Int) -> Unit
 pub fn Engine::set_slot_blob(Self, Int, String) -> Unit
 pub fn Engine::start_game(Self) -> Unit
 pub fn Engine::sync_ui_bind(Self) -> Unit
-pub fn Engine::tick(Self, Intent, dt? : Double) -> Unit
+pub fn Engine::tick(Self, Intent, dt? : Double, skip_held? : Bool) -> Unit
 pub fn Engine::view(Self) -> StageView
+pub fn Engine::wheel_event(Self, Double, Double, Double) -> Int
+pub impl Capabilities for Engine
 
 pub(all) struct HostCall {
   name : String
@@ -126,6 +154,9 @@ pub(all) enum Intent {
   ToggleAuto
   MenuUp
   MenuDown
+  MenuLeft
+  MenuRight
+  OpenBacklog
 } derive(Eq, @debug.Debug)
 
 type LaidFocus derive(@debug.Debug)
@@ -146,6 +177,7 @@ pub(all) struct LayerState {
   x : Double
   y : Double
   opacity : Double
+  scale : Double
   visible : Bool
   tweens : Array[LayerTween]
   pending_hide : Bool
@@ -202,6 +234,8 @@ pub(all) struct SaveGame {
 
 type SaveGameV2 derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
+type ScrollDrag derive(@debug.Debug)
+
 pub(all) struct StackFrame {
   scene : String
   ip : Int
@@ -217,6 +251,8 @@ pub(all) struct Stage {
   mut fade_to : Double
   mut wait_remaining : Double
   mut fade_remaining : Double
+  mut dissolve_phase : Int
+  mut dissolve_total : Double
   mut bgm : String?
   mut se : String?
   mut save_hint : Bool
@@ -261,6 +297,7 @@ pub(all) enum TextBindSrc {
   Pref(String)
   SlotLabel(Int)
   Var(String)
+  BacklogLine(Int)
 } derive(Eq, @debug.Debug)
 pub fn TextBindSrc::resolve(Self, UiBindCtx) -> String
 
@@ -275,6 +312,7 @@ pub(all) enum TweenProp {
   X
   Y
   Opacity
+  Scale
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 pub(all) struct UiApp {
@@ -300,6 +338,8 @@ pub(all) struct UiBindCtx {
   choice_labels : Array[String]
   dialogue_name : String
   dialogue_body : String
+  backlog_lines : Array[String]
+  slot_labels : Array[String]
 } derive(@debug.Debug)
 pub fn UiBindCtx::empty() -> Self
 
@@ -315,11 +355,13 @@ pub(all) struct UiDrawOp {
   text : String?
   font_size : Float
   focused : Bool
+  hovered : Bool
 } derive(@debug.Debug)
 
 pub(all) enum UiFocusTarget {
   Button(Int)
   Choice(Int)
+  Slider(String)
 } derive(Eq, @debug.Debug)
 
 pub(all) enum UiHostOp {
@@ -342,7 +384,9 @@ pub(all) enum UiNode {
   Text(src~ : TextBindSrc, x~ : Double, y~ : Double, font_size~ : Double, visible~ : VisiblePred)
   Image(resource~ : String, x~ : Double, y~ : Double, w~ : Double, h~ : Double, visible~ : VisiblePred)
   Button(label~ : String, action_id~ : Int, visible~ : VisiblePred)
+  Slider(key~ : String, x~ : Double, y~ : Double, w~ : Double, h~ : Double, visible~ : VisiblePred)
   ChoiceList(x~ : Double, y~ : Double, w~ : Double, line_h~ : Double, visible~ : VisiblePred)
+  ScrollView(x~ : Double, y~ : Double, w~ : Double, h~ : Double, children~ : Array[UiNode])
 } derive(@debug.Debug)
 
 pub(all) struct UiRuntime {
@@ -353,17 +397,39 @@ pub(all) struct UiRuntime {
   mut prefs : Prefs
   mut bind : UiBindCtx
   mut hud_focus : Int
+  mut hover : Int
+  mut scroll_y : Double
+  mut scroll_content_h : Double
+  mut scroll_vp_x : Float
+  mut scroll_vp_y : Float
+  mut scroll_vp_w : Float
+  mut scroll_vp_h : Float
+  mut scroll_bar_w : Float
+  mut pin_on_next_layout : Bool
+  mut scroll_drag : ScrollDrag
 }
 pub fn UiRuntime::activate(Self, &Capabilities) -> Unit
+pub fn UiRuntime::begin_scroll_drag_content(Self, y~ : Double) -> Unit
+pub fn UiRuntime::end_scroll_drag(Self) -> Unit
+pub fn UiRuntime::ensure_scroll_metrics(Self, UiBindCtx) -> Unit
 pub fn UiRuntime::focus_delta(Self, &Capabilities, Int) -> Unit
 pub fn UiRuntime::focusables_top(Self, UiBindCtx) -> Array[UiFocusTarget]
 pub fn UiRuntime::from_app(UiApp, save_slots~ : Int) -> Self
-pub fn UiRuntime::handle_pointer(Self, &Capabilities, Double, Double) -> Unit
+pub fn UiRuntime::handle_pointer(Self, &Capabilities, Double, Double) -> Bool
+pub fn UiRuntime::handle_wheel(Self, Double, Double, Double) -> Bool
 pub fn UiRuntime::hide_modal(Self, name? : String) -> Unit
+pub fn UiRuntime::hover_kind(Self) -> Int
 pub fn UiRuntime::paint_hud(Self, canvas_w~ : Double, canvas_h~ : Double, bind~ : UiBindCtx) -> Array[UiDrawOp]
 pub fn UiRuntime::paint_modal(Self, canvas_w~ : Double, canvas_h~ : Double, bind~ : UiBindCtx) -> Array[UiDrawOp]
+pub fn UiRuntime::pin_scroll_end(Self) -> Unit
+pub fn UiRuntime::pointer_hover(Self, Double, Double) -> Bool
+pub fn UiRuntime::pointer_leave(Self) -> Unit
+pub fn UiRuntime::pointer_scroll_move(Self, y~ : Double) -> Unit
 pub fn UiRuntime::return_modal(Self) -> Unit
+pub fn UiRuntime::scroll_by(Self, Double) -> Unit
+pub fn UiRuntime::scroll_max(Self) -> Double
 pub fn UiRuntime::show_modal(Self, String, mode? : String) -> Unit
+pub fn UiRuntime::slider_delta(Self, &Capabilities, Int) -> Unit
 pub fn UiRuntime::stack_depth(Self) -> Int
 pub fn UiRuntime::sync_bind(Self, UiBindCtx) -> Unit
 
@@ -383,10 +449,12 @@ pub(all) enum VisiblePred {
   Never
   HasText
   HasChoices
+  HasBacklog
   PrefBool(String)
   SlotOccupied(Int)
   ModeIs(String)
   And(VisiblePred, VisiblePred)
+  Not(VisiblePred)
 } derive(Eq, @debug.Debug)
 pub fn VisiblePred::eval(Self, UiBindCtx) -> Bool
 
@@ -431,5 +499,8 @@ pub(open) trait Capabilities {
   fn confirm_choice(Self, Int) -> Unit
   fn advance(Self) -> Unit
   fn prefs(Self) -> Prefs
+  fn confirm_yes(Self) -> Unit
+  fn confirm_no(Self) -> Unit
+  fn request_quit_to_title(Self) -> Unit
 }
 
