@@ -58,7 +58,10 @@ test "package manifest emits the frozen locale and schema fields" {
   let json = @json.parse(manifest)
   guard json is Object(fields) else { fail("expected manifest object") }
   assert_eq(fields["package_schema_version"], Json::number(2.0))
-  assert_eq(fields["default_locale"], Json::string("zh-Hans-CN"))
+  guard fields["default_locale"] is String(default_locale) else {
+    fail("expected default_locale string")
+  }
+  assert_eq(default_locale, "zh-Hans-CN")
   guard fields["supported_locales"] is Array(locales) else {
     fail("expected supported_locales array")
   }
