@@ -37,9 +37,7 @@ test "blocked rollback has zero logical or UI mutation" {
   eng.tick(Rollback)
 
   assert_logical_state_eq(EngineLogicalState::capture(eng), before)
-  assert_true(
-    eng.rollback_status() == Unavailable("rollback.unavailable.empty"),
-  )
+  assert_eq(eng.rollback_unavailable(), "rollback.unavailable.empty")
 }
 
 ///|

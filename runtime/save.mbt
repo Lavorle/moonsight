@@ -224,6 +224,8 @@ pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
   // Session backlog is not part of save; drop lines from the prior playthrough.
   self.backlog.clear()
   self.backlog_last_key = ""
+  self.rollback.clear()
+  self.rollback_unavailable_reason = ""
 }
 
 ///|

@@ -267,6 +267,51 @@ fn EngineLogicalState::capture(eng : Engine) -> EngineLogicalState {
 }
 
 ///|
+/// Conservative in-memory payload estimate used by the frozen rollback budget.
+/// It intentionally counts fixed subsystem overhead plus retained string data;
+/// backend handles and derived caches are excluded from the logical snapshot.
+fn EngineLogicalState::estimated_rollback_bytes(
+  self : EngineLogicalState,
+) -> Int {
+  let mut bytes = 512
+  bytes += self.module_id.length() * 2
+  bytes += self.vm.scene.length() * 2
+  bytes += self.stage.scene.length() * 2
+  for layer in self.stage.layers {
+    bytes += 128 + (layer.id.length() + layer.resource.length()) * 2
+    bytes += layer.tweens.length() * 32
+  }
+  match self.stage.text {
+    Some(text) => {
+      bytes += 64 + text.full_text.length() * 2
+      match text.speaker {
+        Some(speaker) => bytes += speaker.length() * 2
+        None => ()
+      }
+    }
+    None => ()
+  }
+  match self.stage.choices {
+    Some(choices) =>
+      for option in choices.options {
+        bytes += 32 + option.length() * 2
+      }
+    None => ()
+  }
+  for modal in self.ui.stack {
+    bytes += 96 + modal.name.length() * 2
+  }
+  for entry in self.backlog.entries {
+    bytes += 64 + entry.text.length() * 2
+    match entry.speaker {
+      Some(speaker) => bytes += speaker.length() * 2
+      None => ()
+    }
+  }
+  bytes
+}
+
+///|
 fn Engine::prepare_logical_state(
   self : Engine,
   state : EngineLogicalState,

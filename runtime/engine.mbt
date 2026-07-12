@@ -42,6 +42,10 @@ pub(all) struct Engine {
   mut pending_confirm : ConfirmKind?
   /// Committed audio state awaiting idempotent backend reconciliation.
   mut pending_backend_audio : AudioLogicState?
+  /// Reachable aggregate logical checkpoints for in-session rollback.
+  rollback : RollbackRing[EngineLogicalState]
+  /// Stable diagnostic for the most recent blocked rollback attempt.
+  mut rollback_unavailable_reason : String
 }
 
 ///|
@@ -89,6 +93,8 @@ pub fn Engine::from_ir(
     backlog_last_key: "",
     pending_confirm: None,
     pending_backend_audio: None,
+    rollback: RollbackRing::new(),
+    rollback_unavailable_reason: "",
   }
   eng.sync_mixer_prefs()
   eng
@@ -130,6 +136,8 @@ pub fn Engine::boot_title(self : Engine) -> Unit {
 ///|
 /// Start (or restart) narrative at `ir_entry`: clear stack, `Playing`, fresh stage/VM.
 pub fn Engine::start_game(self : Engine) -> Unit {
+  self.rollback.clear()
+  self.rollback_unavailable_reason = ""
   self.ui.stack = []
   self.ui.mode = Playing
   self.pending_confirm = None
@@ -145,6 +153,8 @@ pub fn Engine::start_game(self : Engine) -> Unit {
 ///|
 /// Tear down narrative, clear stack, enter Title and show `title` when defined.
 pub fn Engine::quit_to_title(self : Engine) -> Unit {
+  self.rollback.clear()
+  self.rollback_unavailable_reason = ""
   self.ui.stack = []
   self.ui.mode = Title
   self.pending_confirm = None
@@ -482,6 +492,10 @@ pub fn Engine::tick(
   dt? : Double = 1.0 / 60.0,
   skip_held? : Bool = false,
 ) -> Unit {
+  if intent is Rollback {
+    self.rollback_latest()
+    return
+  }
   let ui_active = self.ui.stack_depth() > 0 || self.ui.mode is Title
   if ui_active {
     self.tick_ui(intent)
@@ -515,6 +529,10 @@ pub fn Engine::tick(
   } else {
     effective
   }
+  match gated {
+    Advance | Select(_) | SkipTyping => self.capture_rollback_checkpoint()
+    _ => ()
+  }
   self.apply_intent(gated)
   self.tick_wait(dt)
   if self.vm.wait is Running {
@@ -538,6 +556,46 @@ pub fn Engine::tick(
     self.tick_typewriter(dt)
   }
   @audio.global_mixer().tick(dt)
+}
+
+///|
+/// Return the stable reason from the most recent blocked rollback attempt.
+pub fn Engine::rollback_unavailable(self : Engine) -> String {
+  self.rollback_unavailable_reason
+}
+
+///|
+/// Capture through the sole aggregate logical-state facade.
+fn Engine::capture_rollback_checkpoint(self : Engine) -> Unit {
+  let state = EngineLogicalState::capture(self)
+  match self.rollback.push(
+    state,
+    estimated_bytes=state.estimated_rollback_bytes(),
+  ) {
+    Accepted(_) => self.rollback_unavailable_reason = ""
+    RejectedOversize(_) =>
+      self.rollback_unavailable_reason = "rollback.unavailable.checkpoint-oversize"
+    RejectedInvalidSize(_) =>
+      self.rollback_unavailable_reason = "rollback.unavailable.invalid-size"
+  }
+}
+
+///|
+/// Restore only through EngineLogicalState validation/publication/reconciliation.
+/// Empty/barrier-blocked attempts do not touch logical, UI, or backend state.
+fn Engine::rollback_latest(self : Engine) -> Unit {
+  match self.rollback.take_latest() {
+    Checkpoint(state) => {
+      self.restore_logical_state(state) catch {
+        err => {
+          self.rollback_unavailable_reason = "rollback.unavailable.restore: {err}"
+          return
+        }
+      }
+      self.rollback_unavailable_reason = ""
+    }
+    Unavailable(reason) => self.rollback_unavailable_reason = reason
+  }
 }
 
 ///|
