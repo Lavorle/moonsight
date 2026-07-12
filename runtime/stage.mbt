@@ -66,7 +66,7 @@ pub(all) struct TextBlock {
 pub(all) struct ChoiceState {
   options : Array[String]
   selected : Int?
-} derive(Debug)
+} derive(Debug, Eq)
 
 ///|
 /// Pending `@ui.show` / `@ui.hide` host ops (drained by Engine onto `UiRuntime`).

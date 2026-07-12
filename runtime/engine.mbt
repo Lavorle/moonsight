@@ -40,6 +40,8 @@ pub(all) struct Engine {
   mut backlog_last_key : String
   /// Pending overwrite / quit confirm (None when no dialog active).
   mut pending_confirm : ConfirmKind?
+  /// Committed audio state awaiting idempotent backend reconciliation.
+  mut pending_backend_audio : AudioLogicState?
 }
 
 ///|
@@ -86,6 +88,7 @@ pub fn Engine::from_ir(
     backlog: BacklogStore::new(),
     backlog_last_key: "",
     pending_confirm: None,
+    pending_backend_audio: None,
   }
   eng.sync_mixer_prefs()
   eng
