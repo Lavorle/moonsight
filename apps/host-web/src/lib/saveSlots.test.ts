@@ -59,3 +59,15 @@ test("hydration enumerates the configured slot count without seeding bad data", 
   assert.equal(states[1].state, "occupied-corrupt");
   assert.equal(states[19].state, "occupied-incompatible");
 });
+
+test("manifest slot counts share the 1..20 clamp contract", async () => {
+  const slots = await import("./saveSlots.ts");
+  assert.equal(typeof slots.clampSaveSlotCount, "function");
+
+  assert.equal(slots.clampSaveSlotCount(0), 1);
+  assert.equal(slots.clampSaveSlotCount(1), 1);
+  assert.equal(slots.clampSaveSlotCount(6), 6);
+  assert.equal(slots.clampSaveSlotCount(20), 20);
+  assert.equal(slots.clampSaveSlotCount(21), 20);
+  assert.equal(slots.clampSaveSlotCount("not-a-number"), 6);
+});
