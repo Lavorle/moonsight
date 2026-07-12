@@ -21,6 +21,7 @@ options(
         "set_prefs_json",
         "save_slot_count",
         "set_save_slots",
+        "set_module_id",
         "get_slot_json",
         "set_slot_json",
         "last_error",

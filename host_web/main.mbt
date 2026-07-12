@@ -207,6 +207,19 @@ pub fn set_save_slots(n : Int) -> Int {
 }
 
 ///|
+/// Apply the stable project/module identity from the host manifest.
+/// Returns 0 ok, 1 if no engine is installed.
+pub fn set_module_id(module_id : String) -> Int {
+  match session.val.engine {
+    None => 1
+    Some(eng) => {
+      eng.set_module_id(module_id)
+      0
+    }
+  }
+}
+
+///|
 /// In-memory slot blob (empty string if empty/missing).
 pub fn get_slot_json(slot : Int) -> String {
   match session.val.engine {
