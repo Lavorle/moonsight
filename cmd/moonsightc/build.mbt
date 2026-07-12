@@ -37,7 +37,12 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     if !path_exists(entry_path) {
       println("warning: entry file missing: \{entry_path}")
     }
-    let identified = compile_yuki_paths_with_ids(yuki[:], entry_file=entry_path)
+    let identified = compile_yuki_paths_with_ids(
+      yuki[:],
+      entry_file=entry_path,
+      locale=cfg.default_locale,
+      require_explicit_ids=cfg.supported_locales.length() > 1,
+    )
     let ir = identified.ir
     let bytecode = @script.encode_msb2({ identified, catalogs: [] })
 

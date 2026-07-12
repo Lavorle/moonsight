@@ -121,6 +121,8 @@ fn compile_yuki_paths(
 fn compile_yuki_paths_with_ids(
   paths : ArrayView[String],
   entry_file? : String,
+  locale? : String,
+  require_explicit_ids? : Bool = false,
 ) -> @script.IdentifiedIrModule raise IoError {
   guard paths.length() > 0 else { raise IoError("no .yuki sources found") }
   let scenes : Map[String, @script.IrScene] = {}
@@ -133,7 +135,16 @@ fn compile_yuki_paths_with_ids(
   }
   for path in paths {
     let src = read_file_to_string(path)
-    let identified = @script.compile_to_identified_ir(src, file=path) catch {
+    let identified = if require_explicit_ids {
+      @script.compile_localized_to_identified_ir(
+        src,
+        file=path,
+        locale=locale.or("und"),
+        require_explicit_ids=true,
+      )
+    } else {
+      @script.compile_to_identified_ir(src, file=path)
+    } catch {
       e => raise IoError(format_compile_error(e))
     }
     for name, scene in identified.ir.scenes {
