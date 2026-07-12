@@ -391,6 +391,7 @@ test "save writes configured module identity without requiring format v5" {
 
 ///|
 test "load rejects a save from another module before mutating runtime state" {
+  @audio.reset_global_mixer()
   let source = load_min_demo_engine_for("project-a")
   source.tick(None_)
   let blob = source.save()
@@ -399,10 +400,26 @@ test "load rejects a save from another module before mutating runtime state" {
   target.stage.set_var("keep", Int(7))
   target.stage.overlay_opacity = 0.37
   target.auto = true
+  target.ui.mode = Title
+  ignore(
+    target.set_prefs_json(
+      #|{"text_speed":1.5,"auto_mode":true,"master_volume":0.25,"bgm_volume":0.5,"se_volume":0.75}
+      ,
+    ),
+  )
+  target.stage.bgm = Some("keep-bgm")
+  @audio.global_mixer().play_bgm("keep-bgm", volume=0.6)
   let scene_before = target.vm.scene
   let ip_before = target.vm.ip
   let wait_before = target.vm.wait
   let layer_count_before = target.stage.layers.length()
+  let ui_mode_before = target.ui.mode
+  let prefs_before = target.ui.prefs
+  let mixer_bgm_before = @audio.global_mixer().bgm
+  let mixer_volume_before = @audio.global_mixer().bgm_volume
+  let mixer_pref_master_before = @audio.global_mixer().pref_master
+  let mixer_pref_bgm_before = @audio.global_mixer().pref_bgm
+  let mixer_pref_se_before = @audio.global_mixer().pref_se
   try target.load(blob) catch {
     SaveError::ModuleMismatch(expected~, found~) => {
       assert_eq(expected, "project-b")
@@ -419,6 +436,14 @@ test "load rejects a save from another module before mutating runtime state" {
   assert_eq(target.stage.layers.length(), layer_count_before)
   assert_eq(target.stage.overlay_opacity, 0.37)
   assert_true(target.auto)
+  assert_true(target.ui.mode == ui_mode_before)
+  assert_true(target.ui.prefs == prefs_before)
+  assert_true(@audio.global_mixer().bgm == mixer_bgm_before)
+  assert_eq(@audio.global_mixer().bgm_volume, mixer_volume_before)
+  assert_eq(@audio.global_mixer().pref_master, mixer_pref_master_before)
+  assert_eq(@audio.global_mixer().pref_bgm, mixer_pref_bgm_before)
+  assert_eq(@audio.global_mixer().pref_se, mixer_pref_se_before)
+  @audio.reset_global_mixer()
 }
 
 ///|
