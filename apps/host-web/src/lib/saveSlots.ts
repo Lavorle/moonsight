@@ -62,3 +62,29 @@ export function classifyStoredSlot(
     json: raw,
   };
 }
+
+export function hydrateStoredSlots(
+  store: SaveStore,
+  slotCount: number,
+  seed: (slot: number, json: string) => void,
+): SaveSlotState[] {
+  const states: SaveSlotState[] = [];
+  for (let slot = 0; slot < slotCount; slot++) {
+    let state: SaveSlotState;
+    try {
+      state = classifyStoredSlot(slot, store.loadSlot(slot));
+    } catch (error) {
+      state = {
+        slot,
+        state: "read-failed",
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+    states.push(state);
+    if (state.state === "occupied-valid") {
+      seed(slot, state.json);
+    }
+  }
+  return states;
+}
+import type { SaveStore } from "./saveStore";
