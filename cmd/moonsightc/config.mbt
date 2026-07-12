@@ -7,6 +7,10 @@ struct ProjectConfig {
   logical_height : Int
   /// Multi-slot save capacity (default 6, clamp 1..20).
   save_slots : Int
+  /// Locale used when no persisted/user preference is available.
+  default_locale : String
+  /// Complete locale set shipped by the project package.
+  supported_locales : Array[String]
   /// Optional MoonBit UI package path relative to the project root.
   /// When set, moonsightc copies its `*.mbt` into `host_web/project_ui` before
   /// rebuilding the host wasm (restored to the no-op stub after build).
@@ -21,7 +25,99 @@ fn default_config() -> ProjectConfig {
     logical_width: 1920,
     logical_height: 1080,
     save_slots: 6,
+    default_locale: "en",
+    supported_locales: ["en"],
     ui_package: None,
+  }
+}
+
+///|
+fn chars_all(s : String, pred : (Char) -> Bool) -> Bool {
+  for c in s {
+    if !pred(c) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn is_ascii_lower(c : Char) -> Bool {
+  c >= 'a' && c <= 'z'
+}
+
+///|
+fn is_ascii_upper(c : Char) -> Bool {
+  c >= 'A' && c <= 'Z'
+}
+
+///|
+fn is_formal_locale_tag(tag : String) -> Bool {
+  let parts = tag.split("-").to_array()
+  if parts.length() < 1 || parts.length() > 3 {
+    return false
+  }
+  let language = parts[0]
+  if (language.length() != 2 && language.length() != 3) ||
+    !chars_all(language, is_ascii_lower) {
+    return false
+  }
+  let mut index = 1
+  if index < parts.length() && parts[index].length() == 4 {
+    let script = parts[index]
+    if !is_ascii_upper(script[0]) {
+      return false
+    }
+    for i in 1..<script.length() {
+      if !is_ascii_lower(script[i]) {
+        return false
+      }
+    }
+    index = index + 1
+  }
+  if index < parts.length() {
+    let region = parts[index]
+    let valid_region =
+      (region.length() == 2 && chars_all(region, is_ascii_upper)) ||
+      (region.length() == 3 && chars_all(region, fn(c) { c.is_ascii_digit() }))
+    if !valid_region {
+      return false
+    }
+    index = index + 1
+  }
+  index == parts.length()
+}
+
+///|
+fn validate_project_locales(cfg : ProjectConfig) -> Unit raise {
+  if cfg.supported_locales.length() == 0 {
+    fail("moonsight.json: supported_locales must not be empty")
+  }
+  let seen : Map[String, Bool] = {}
+  let mut contains_default = false
+  for locale in cfg.supported_locales {
+    if !is_formal_locale_tag(locale) {
+      fail(
+        "moonsight.json: invalid locale tag '\{locale}' (expected Formal 1.0 BCP-47 core profile)",
+      )
+    }
+    if seen.contains(locale) {
+      fail("moonsight.json: duplicate supported locale '\{locale}'")
+    }
+    seen[locale] = true
+    if locale == cfg.default_locale {
+      contains_default = true
+    }
+  }
+  if !is_formal_locale_tag(cfg.default_locale) {
+    fail(
+      "moonsight.json: invalid default_locale '\{cfg.default_locale}' (expected Formal 1.0 BCP-47 core profile)",
+    )
+  }
+  if !contains_default {
+    fail(
+      "moonsight.json: default_locale '\{cfg.default_locale}' must appear in supported_locales",
+    )
   }
 }
 
@@ -68,6 +164,25 @@ fn parse_project_config(text : String) -> ProjectConfig raise {
     Some(_) => fail("moonsight.json: save_slots must be a number")
     None => ()
   }
+  match map.get("default_locale") {
+    Some(Json::String(s)) => cfg = { ..cfg, default_locale: s }
+    Some(_) => fail("moonsight.json: default_locale must be a string")
+    None => ()
+  }
+  match map.get("supported_locales") {
+    Some(Json::Array(items)) => {
+      let locales : Array[String] = []
+      for item in items {
+        match item {
+          Json::String(s) => locales.push(s)
+          _ => fail("moonsight.json: supported_locales must contain strings")
+        }
+      }
+      cfg = { ..cfg, supported_locales: locales }
+    }
+    Some(_) => fail("moonsight.json: supported_locales must be an array")
+    None => ()
+  }
   match map.get("ui_package") {
     Some(Json::String(s)) => {
       let t = s.trim().to_owned()
@@ -81,6 +196,7 @@ fn parse_project_config(text : String) -> ProjectConfig raise {
     Some(_) => fail("moonsight.json: ui_package must be a string")
     None => ()
   }
+  validate_project_locales(cfg)
   cfg
 }
 
