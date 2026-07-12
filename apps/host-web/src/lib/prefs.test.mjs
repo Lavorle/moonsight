@@ -20,6 +20,7 @@ test("formal locale validation and resolution match the runtime contract", () =>
   assert.equal(isFormalLocale("EN-us"), false);
   assert.equal(resolveLocale("zh-CN", ["en", "zh-CN"], "en"), "zh-CN");
   assert.equal(resolveLocale("fr", ["en", "zh-CN"], "en"), "en");
+  assert.throws(() => resolveLocale("en", ["en", "bad_tag"], "en"), RangeError);
 });
 
 test("invalid persisted locale falls back without corrupting other prefs", () => {

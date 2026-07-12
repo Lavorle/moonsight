@@ -130,6 +130,11 @@ test "formal locale profile and resolver are deterministic" {
   assert_true(!is_formal_locale("zh_cn"))
   assert_eq(resolve_locale("zh-CN", ["en", "zh-CN"], "en"), "zh-CN")
   assert_eq(resolve_locale("fr", ["en", "zh-CN"], "en"), "en")
+  try ignore(resolve_locale("en", ["en", "bad_tag"], "en")) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected invalid supported locale error")
+  }
 }
 
 ///|
