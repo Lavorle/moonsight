@@ -8,11 +8,7 @@ test "project config defaults to a single en locale" {
 ///|
 test "project config accepts the frozen Formal 1.0 locale profile" {
   let cfg = parse_project_config(
-    #|{
-    #|  "default_locale": "zh-Hans-CN",
-    #|  "supported_locales": ["en", "zh-Hans-CN", "es-419"]
-    #|}
-    #|,
+    "{\"default_locale\":\"zh-Hans-CN\",\"supported_locales\":[\"en\",\"zh-Hans-CN\",\"es-419\"]}",
   )
   assert_eq(cfg.default_locale, "zh-Hans-CN")
   assert_eq(cfg.supported_locales, ["en", "zh-Hans-CN", "es-419"])
@@ -35,9 +31,9 @@ test "project config rejects locale tags outside the frozen profile" {
 ///|
 test "project config requires a unique supported locale set containing the default" {
   for text in [
-    #|{"default_locale":"fr","supported_locales":["en"]}|,
-    #|{"default_locale":"en","supported_locales":[]}|,
-    #|{"default_locale":"en","supported_locales":["en","en"]}|,
+    "{\"default_locale\":\"fr\",\"supported_locales\":[\"en\"]}",
+    "{\"default_locale\":\"en\",\"supported_locales\":[]}",
+    "{\"default_locale\":\"en\",\"supported_locales\":[\"en\",\"en\"]}",
   ] {
     try parse_project_config(text) catch {
       _ => ()
