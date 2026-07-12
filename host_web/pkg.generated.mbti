@@ -72,6 +72,8 @@ pub fn save_json(Int) -> String
 
 pub fn save_slot_count() -> Int
 
+pub fn set_module_id(String) -> Int
+
 pub fn set_prefs_json(String) -> Int
 
 pub fn set_save_slots(Int) -> Int
