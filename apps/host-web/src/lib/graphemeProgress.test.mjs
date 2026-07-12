@@ -22,3 +22,16 @@ test("warm grapheme handoff p95 stays within the 16ms locale-switch gate", async
   const p95 = samples[Math.floor(samples.length * 0.95)];
   assert.ok(p95 <= 16, `warm grapheme handoff p95 ${p95}ms exceeds 16ms`);
 });
+
+test("cold grapheme segmenter p95 stays within the 100ms locale-switch gate", () => {
+  const samples = [];
+  for (let i = 0; i < 100; i += 1) {
+    const start = performance.now();
+    const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+    Array.from(segmenter.segment("A👨‍👩‍👧‍👦é好Z"));
+    samples.push(performance.now() - start);
+  }
+  samples.sort((a, b) => a - b);
+  const p95 = samples[Math.floor(samples.length * 0.95)];
+  assert.ok(p95 <= 100, `cold grapheme segmenter p95 ${p95}ms exceeds 100ms`);
+});
