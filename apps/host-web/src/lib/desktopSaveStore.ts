@@ -64,9 +64,10 @@ export class DesktopSaveStore implements SaveStore {
   }
 
   savePrefs(json: string): Promise<void> {
-    this.prefs = json;
-    return this.enqueue(() =>
-      this.invoke("write_prefs", { body: json }),
+    return this.enqueue(() => this.invoke("write_prefs", { body: json })).then(
+      () => {
+        this.prefs = json;
+      },
     );
   }
 
@@ -75,10 +76,11 @@ export class DesktopSaveStore implements SaveStore {
   }
 
   saveSlot(slot: number, json: string): Promise<void> {
-    this.slots.set(slot, json);
     return this.enqueue(() =>
       this.invoke("write_save_slot", { slot, body: json }),
-    );
+    ).then(() => {
+      this.slots.set(slot, json);
+    });
   }
 
   /**
