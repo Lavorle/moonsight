@@ -127,7 +127,7 @@ pub(all) struct ModalInstance {
   mode : String?
   /// Index into the current focusable list.
   focus : Int
-} derive(Debug, Eq)
+} derive(Debug)
 
 ///|
 /// Focusable target collected during layout (button, choice row, or slider key).

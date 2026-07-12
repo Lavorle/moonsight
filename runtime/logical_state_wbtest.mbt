@@ -25,7 +25,14 @@ fn assert_logical_state_eq(
   assert_true(actual.stage.vars == expected.stage.vars)
   assert_true(actual.stage.layers == expected.stage.layers)
   assert_true(actual.stage.text == expected.stage.text)
-  assert_true(actual.stage.choices == expected.stage.choices)
+  match (actual.stage.choices, expected.stage.choices) {
+    (None, None) => ()
+    (Some(actual), Some(expected)) => {
+      assert_true(actual.options == expected.options)
+      assert_true(actual.selected == expected.selected)
+    }
+    _ => fail("logical choice snapshots differ")
+  }
   assert_eq(actual.stage.overlay_opacity, expected.stage.overlay_opacity)
   assert_eq(actual.stage.fade_to, expected.stage.fade_to)
   assert_eq(actual.stage.fade_remaining, expected.stage.fade_remaining)
@@ -35,7 +42,12 @@ fn assert_logical_state_eq(
   assert_true(actual.stage.bgm == expected.stage.bgm)
   assert_true(actual.stage.se == expected.stage.se)
   assert_true(actual.ui.mode == expected.ui.mode)
-  assert_true(actual.ui.stack == expected.ui.stack)
+  assert_eq(actual.ui.stack.length(), expected.ui.stack.length())
+  for i in 0..<actual.ui.stack.length() {
+    assert_eq(actual.ui.stack[i].name, expected.ui.stack[i].name)
+    assert_true(actual.ui.stack[i].mode == expected.ui.stack[i].mode)
+    assert_eq(actual.ui.stack[i].focus, expected.ui.stack[i].focus)
+  }
   assert_eq(actual.ui.hud_focus, expected.ui.hud_focus)
   assert_eq(actual.ui.scroll_y, expected.ui.scroll_y)
   assert_true(actual.backlog.entries == expected.backlog.entries)

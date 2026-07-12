@@ -66,7 +66,7 @@ pub(all) struct TextBlock {
 pub(all) struct ChoiceState {
   options : Array[String]
   selected : Int?
-} derive(Debug, Eq)
+} derive(Debug)
 
 ///|
 /// Pending `@ui.show` / `@ui.hide` host ops (drained by Engine onto `UiRuntime`).
@@ -94,10 +94,11 @@ pub(all) struct Stage {
   ///
   /// During dissolve, this is **total** remaining wall time for Out+In.
   mut fade_remaining : Double
-  /// Dissolve dual-phase veil: 0=none, 1=Out (→1), 2=In (→0). Not saved.
+  /// Dissolve dual-phase veil: 0=none, 1=Out (→1), 2=In (→0).
+  /// Persisted by save format v5; legacy saves default to 0.
   mut dissolve_phase : Int
   /// Full dissolve duration (Out+In); used with `fade_remaining` to locate half.
-  /// Zero when no dissolve active. Not saved.
+  /// Zero when no dissolve is active. Persisted by save format v5.
   mut dissolve_total : Double
   /// Current BGM resource id (logical; Task 13 wires audio backend).
   mut bgm : String?
