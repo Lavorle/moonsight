@@ -109,6 +109,11 @@ pub(all) suberror SaveError {
   UnsupportedVersion(version~ : Int)
   InvalidJson(message~ : String)
   DecodeFailed(message~ : String)
+  ModuleMismatch(expected~ : String, found~ : String)
+  UnknownScene(scene~ : String)
+  InvalidInstructionPointer(scene~ : String, ip~ : Int, max_ip~ : Int)
+  UnsupportedCallStack(depth~ : Int)
+  InvalidContinuation(message~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -122,11 +127,27 @@ pub impl Show for SaveError with fn output(self : SaveError, logger : &Logger) -
       logger.write_string("invalid save JSON: \{message}")
     DecodeFailed(message~) =>
       logger.write_string("failed to decode save game: \{message}")
+    ModuleMismatch(expected~, found~) =>
+      logger.write_string(
+        "save module_id mismatch: expected \{expected}, found \{found}",
+      )
+    UnknownScene(scene~) =>
+      logger.write_string("save references unknown scene: \{scene}")
+    InvalidInstructionPointer(scene~, ip~, max_ip~) =>
+      logger.write_string(
+        "save instruction pointer \{ip} is invalid for scene \{scene} (expected 0..\{max_ip})",
+      )
+    UnsupportedCallStack(depth~) =>
+      logger.write_string(
+        "save call_stack depth \{depth} is unsupported by this runtime",
+      )
+    InvalidContinuation(message~) =>
+      logger.write_string("invalid save continuation: \{message}")
   }
 }
 
 ///|
-fn supported_save_version(version : Int) -> Bool {
+pub fn is_supported_save_version(version : Int) -> Bool {
   version == 2 || version == 3 || version == 4
 }
 
@@ -149,7 +170,7 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
   }
   let game : SaveGame = {
     format_version: save_format_version,
-    module_id: "",
+    module_id: self.module_id,
     scene: self.vm.scene,
     ip: self.vm.ip,
     call_stack: [],
@@ -179,7 +200,9 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
 /// wait, choices, and v3 fade/wait remaining fields. v3 layers without `scale`
 /// default to 1.0; v4 is the native scale-aware shape.
 pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
-  apply_save_game(self, parse_save_game(blob))
+  let game = parse_save_game(blob)
+  let ops = validate_save_game(self, game)
+  apply_save_game(self, game, ops)
   // Spec: load returns to narrative play with no residual modal stack.
   self.clear_screens_to_playing()
   // Session backlog is not part of save; drop lines from the prior playthrough.
@@ -187,6 +210,16 @@ pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
   self.backlog_last_key = ""
   // Prefs are not in the save blob; re-apply current gains after mixer restore.
   self.sync_mixer_prefs()
+}
+
+///|
+/// Parse and validate a save against this engine without mutating runtime state.
+///
+/// Hosts should use this for slot classification so version, identity, scene,
+/// instruction-position, and continuation rules remain runtime-authoritative.
+pub fn Engine::validate_save(self : Engine, blob : String) -> Unit raise SaveError {
+  let game = parse_save_game(blob)
+  ignore(validate_save_game(self, game))
 }
 
 ///|
@@ -214,7 +247,7 @@ pub fn parse_save_game(blob : String) -> SaveGame raise SaveError {
   let game : SaveGame = @json.from_json(json) catch {
     err => raise SaveError::DecodeFailed(message=err.to_string())
   }
-  if !supported_save_version(game.format_version) {
+  if !is_supported_save_version(game.format_version) {
     raise SaveError::UnsupportedVersion(version=game.format_version)
   }
   game
@@ -285,7 +318,7 @@ fn reject_unsupported_version(json : Json) -> Int raise SaveError {
       match map.get("format_version") {
         Some(Number(n, ..)) => {
           let version = n.to_int()
-          if !supported_save_version(version) {
+          if !is_supported_save_version(version) {
             raise SaveError::UnsupportedVersion(version~)
           }
           version
