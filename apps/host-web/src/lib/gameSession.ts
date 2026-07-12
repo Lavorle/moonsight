@@ -32,7 +32,9 @@ import {
 import {
   DEFAULT_PREFS,
   loadPrefsFromStorage,
+  parsePrefsJson,
   savePrefsToStorage,
+  withLocalePreference,
   type Prefs,
 } from "./prefs";
 import {
@@ -292,6 +294,22 @@ export class GameSession {
 
   constructor(store: SaveStore = new WebSaveStore()) {
     this.store = this.trackStore(store);
+  }
+
+  /** Persist a validated locale through the shared Web/desktop SaveStore. */
+  async setLocalePreference(locale: string): Promise<void> {
+    const requested = withLocalePreference(this.prefs, locale);
+    const json = JSON.stringify(requested);
+    if (typeof this.exports_?.set_prefs_json === "function") {
+      const rc = this.exports_.set_prefs_json(json);
+      if (rc !== 0) throw new Error(`runtime rejected locale preference: ${rc}`);
+      const applied = this.exports_.prefs_json?.();
+      this.prefs = applied ? parsePrefsJson(applied, requested) : requested;
+    } else {
+      this.prefs = requested;
+    }
+    await this.store.savePrefs(JSON.stringify(this.prefs));
+    applyPrefsToAudio(this.audio);
   }
 
   private trackStore(store: SaveStore): SaveStore {
