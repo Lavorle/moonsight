@@ -123,7 +123,7 @@ fn durable_write(path: &Path, body: &str) -> io::Result<()> {
     durable_write_with_fault(path, body, WriteFault::None)
 }
 
-fn durable_write_with_fault(path: &Path, body: &str, fault: WriteFault) -> io::Result<()> {
+fn durable_write_with_fault(path: &Path, body: &str, _fault: WriteFault) -> io::Result<()> {
     let _guard = WRITE_LOCK
         .lock()
         .map_err(|_| io::Error::other("persistence write lock poisoned"))?;
@@ -150,13 +150,13 @@ fn durable_write_with_fault(path: &Path, body: &str, fault: WriteFault) -> io::R
         }
 
         #[cfg(test)]
-        if fault == WriteFault::AfterBackup {
+        if _fault == WriteFault::AfterBackup {
             return Err(io::Error::other("injected interruption after backup"));
         }
     }
 
     #[cfg(test)]
-    let install_result = if fault == WriteFault::InstallRename {
+    let install_result = if _fault == WriteFault::InstallRename {
         Err(io::Error::other("injected install rename failure"))
     } else {
         fs::rename(&tmp, path)
