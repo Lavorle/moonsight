@@ -29,7 +29,6 @@ pub fn builtin_externs() -> Array[ExternDecl] {
     stub_extern("flow.jump_if_not", span~, params=[]),
     stub_extern("flow.yield", span~, params=[]),
     stub_extern("flow.choice", span~, params=[]),
-    stub_extern("meta.id", span~, params=[]),
     stub_extern("flow.wait", span~, params=[param("time")]),
     stub_extern("layer.show", span~, params=[param("id")]),
     stub_extern("layer.hide", span~, params=[param("id")]),
@@ -119,6 +118,9 @@ fn resolve_command_name(
   externs : Map[String, ExternDecl],
   macros : Map[String, MacroDecl],
 ) -> Unit raise ResolveError {
+  if name == "meta.id" {
+    return
+  }
   if externs.contains(name) || macros.contains(name) {
     return
   }
