@@ -29,7 +29,6 @@ for (let cp = 32; cp <= 126; cp++) {
 lines.push("    _ => 0.55");
 lines.push("  }");
 lines.push("}");
-lines.push("");
 
 const out = "render/noto_advances.mbt";
 fs.writeFileSync(out, lines.join("\n") + "\n");
