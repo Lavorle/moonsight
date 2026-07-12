@@ -47,10 +47,14 @@ pub fn compile_to_identified_ir(
   src : String,
   file~ : String,
 ) -> IdentifiedIrModule raise CompileError {
-  let unit = parse_source(src, file~) catch { e => raise CompileError::Parse(e) }
+  let unit = parse_source(src, file~) catch {
+    e => raise CompileError::Parse(e)
+  }
   let expanded = expand_macros(unit) catch { e => raise CompileError::Macro(e) }
   let resolved = resolve_unit(expanded, builtin_externs()) catch {
     e => raise CompileError::Resolve(e)
   }
-  lower_unit_with_ids(resolved) catch { e => raise CompileError::AuthorId(e) }
+  lower_unit_with_ids(resolved) catch {
+    e => raise CompileError::AuthorId(e)
+  }
 }
