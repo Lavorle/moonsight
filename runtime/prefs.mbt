@@ -93,7 +93,7 @@ pub fn Prefs::from_json_string(s : String) -> Prefs raise {
   match map.get("locale") {
     Some(String(locale)) =>
       if locale == "" || is_formal_locale(locale) {
-        p = { ..p, locale, }
+        p = { ..p, locale }
       } else {
         fail("invalid prefs locale: \{locale}")
       }
@@ -135,8 +135,7 @@ pub fn Prefs::set(self : Prefs, key : String, value : Value) -> Prefs {
     ("bgm_volume", Int(v)) => { ..self, bgm_volume: v.to_double() }
     ("se_volume", Float(v)) => { ..self, se_volume: v }
     ("se_volume", Int(v)) => { ..self, se_volume: v.to_double() }
-    ("locale", Str(v)) if v == "" || is_formal_locale(v) =>
-      { ..self, locale: v }
+    ("locale", Str(v)) if v == "" || is_formal_locale(v) => { ..self, locale: v }
     _ => self
   }
   updated.clamp()
