@@ -38,7 +38,7 @@ Cold start → Title modal (`title`)
 intents + HUD (e.g. choice focus). Esc while Playing with empty stack ≡
 `show_modal("game_menu")`; Esc while a modal is open pops one layer.
 
-**Save:** narrative save **v3** + separate prefs. UI stack and focus are **not**
+**Save:** narrative save **v4** + separate prefs. UI stack and focus are **not**
 serialized into slots.
 
 ## Registration API

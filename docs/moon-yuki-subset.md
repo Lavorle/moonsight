@@ -355,6 +355,6 @@ Cold start uses the std `title` modal (Start → `start_game` → entry). Press
 See also:
 
 - [`ui-moonbit.md`](./ui-moonbit.md) — MoonBit UI (HUD + modals, Capabilities)
-- [`host-commands.md`](./host-commands.md) — standard host table, intents, save v3
+- [`host-commands.md`](./host-commands.md) — standard host table, intents, save v4
 - [`project-layout.md`](./project-layout.md) — repo + `moonsight.json`
 - [`draw-list-pack.md`](./draw-list-pack.md) — frame pack + intent codes
