@@ -84,6 +84,14 @@ type ContentResponse = Pick<
 >;
 
 type FetchContent = (url: string) => Promise<ContentResponse>;
+type DigestContent = (bytes: Uint8Array) => Promise<string>;
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
 
 export function validateContentManifest(
   manifest: unknown,
@@ -156,6 +164,68 @@ async function loadMsb(
       `MoonSight: runtime rejected production content '${url}' with return code ${rc}`,
     );
   }
+}
+
+/** Validate every declared package artifact before mutating the runtime. */
+export async function loadGameBundle(
+  exports_: ContentLoaderExports,
+  manifest: Record<string, unknown> | null,
+  contentMode: ContentMode = "production",
+  fetchContent: FetchContent = fetch,
+  digestContent: DigestContent = sha256Hex,
+): Promise<"game.msb" | "demo.yuki" | "init_demo"> {
+  const rawDigests = manifest?.digests;
+  if (
+    typeof rawDigests !== "object" ||
+    rawDigests === null ||
+    Array.isArray(rawDigests)
+  ) {
+    if (contentMode === "production") {
+      throw new Error("MoonSight: production manifest digests are missing or invalid");
+    }
+    return loadGameContent(exports_, contentMode, fetchContent);
+  }
+  const digests = rawDigests as Record<string, unknown>;
+  if (typeof digests["game.msb"] !== "string") {
+    throw new Error("MoonSight: production manifest digest for game.msb is missing");
+  }
+  const paths = [
+    "game.msb",
+    ...Object.keys(digests).filter((path) => path !== "game.msb").sort(),
+  ];
+  let gameBytes: Uint8Array | null = null;
+  for (const path of paths) {
+    const expected = digests[path];
+    if (typeof expected !== "string" || !/^[0-9a-f]{64}$/.test(expected)) {
+      throw new Error(`MoonSight: invalid SHA-256 digest for '${path}'`);
+    }
+    const url = `./${path}`;
+    let response: ContentResponse;
+    try {
+      response = await fetchContent(url);
+    } catch (error) {
+      throw new Error(`MoonSight: failed to fetch bundle artifact '${path}': ${errorMessage(error)}`);
+    }
+    if (!response.ok) {
+      throw new Error(`MoonSight: bundle artifact '${path}' failed with HTTP ${response.status}`);
+    }
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.length === 0) throw new Error(`MoonSight: bundle artifact '${path}' is empty`);
+    const actual = await digestContent(bytes);
+    if (actual !== expected) {
+      throw new Error(`MoonSight: digest mismatch for bundle artifact '${path}'`);
+    }
+    if (path === "game.msb") gameBytes = bytes;
+  }
+  if (!gameBytes) throw new Error("MoonSight: validated bundle omitted game.msb");
+  if (typeof exports_.load_msb !== "function") {
+    throw new Error("MoonSight: runtime load_msb export is unavailable for './game.msb'");
+  }
+  const rc = exports_.load_msb(bytesToBinaryString(gameBytes));
+  if (rc !== 0) {
+    throw new Error(`MoonSight: runtime rejected production content './game.msb' with return code ${rc}`);
+  }
+  return "game.msb";
 }
 
 async function loadDemoFallback(
