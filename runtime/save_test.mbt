@@ -44,7 +44,7 @@ test "save rejects unsupported format_version" {
     err =>
       inspect(
         err.to_string(),
-        content="unsupported save format_version 99 (expected 2, 3, or 4)",
+        content="unsupported save format_version 99 (expected 2, 3, 4, or 5)",
       )
   } noraise {
     _ => fail("expected UnsupportedVersion")
@@ -60,12 +60,12 @@ test "save consumes save_hint flag" {
 }
 
 ///|
-test "save blob is format_version 4" {
+test "save blob is format_version 5" {
   let eng = load_min_demo_engine()
   eng.tick(None_)
   let blob = eng.save()
   let game = @runtime.parse_save_game(blob)
-  assert_eq(game.format_version, 4)
+  assert_eq(game.format_version, 5)
   assert_eq(game.scene, eng.vm.scene)
   assert_eq(game.ip, eng.vm.ip)
   assert_true(game.wait == Yield)
@@ -166,7 +166,7 @@ test "save roundtrip restores tweens and wait_remaining" {
   eng.stage.overlay_opacity = 0.3
   let blob = eng.save()
   let game = @runtime.parse_save_game(blob)
-  assert_eq(game.format_version, 4)
+  assert_eq(game.format_version, 5)
   assert_eq(game.wait_remaining, 0.8)
   assert_eq(game.fade_to, 1.0)
   assert_eq(game.fade_remaining, 0.5)
@@ -285,6 +285,8 @@ test "slot_label empty and filled" {
     fade_to: 0.0,
     fade_remaining: 0.0,
     wait_remaining: 0.0,
+    dissolve_phase: 0,
+    dissolve_total: 0.0,
     saved_at: "",
   }
   assert_eq(slot_label(1, Some(bare)), "Slot 1 · saved")
@@ -359,11 +361,11 @@ test "save roundtrip preserves layer scale" {
   eng2.load(blob)
   assert_eq(eng2.stage.layers[0].scale, 0.5)
   let game = @runtime.parse_save_game(blob)
-  assert_eq(game.format_version, 4)
+  assert_eq(game.format_version, 5)
 }
 
 ///|
-test "save rejects unsupported format_version message lists 2-4" {
+test "save rejects unsupported format_version message lists 2-5" {
   let eng = load_min_demo_engine()
   let bad =
     #|{"format_version":99,"module_id":"","scene":"s","ip":0,"call_stack":[],"vars":{},"layers":[],"overlay_opacity":0,"audio":{},"wait":{"$tag":"Running"},"auto":false}
@@ -395,7 +397,7 @@ test "load v3 save without layer scale defaults to 1.0" {
 test "save writes configured module identity without requiring format v5" {
   let eng = load_min_demo_engine_for("demo-project")
   let game = @runtime.parse_save_game(eng.save())
-  assert_eq(game.format_version, 4)
+  assert_eq(game.format_version, 5)
   assert_eq(game.module_id, "demo-project")
 }
 
@@ -531,12 +533,13 @@ test "load rejects unsupported stack and inconsistent choice continuation" {
 }
 
 ///|
-test "supported save versions are authoritative and remain exactly v2 through v4" {
+test "supported save versions are authoritative and remain exactly v2 through v5" {
   assert_true(@runtime.is_supported_save_version(2))
   assert_true(@runtime.is_supported_save_version(3))
   assert_true(@runtime.is_supported_save_version(4))
+  assert_true(@runtime.is_supported_save_version(5))
   assert_true(!@runtime.is_supported_save_version(1))
-  assert_true(!@runtime.is_supported_save_version(5))
+  assert_true(!@runtime.is_supported_save_version(6))
 }
 
 ///|
