@@ -135,15 +135,17 @@ fn compile_yuki_paths_with_ids(
   }
   for path in paths {
     let src = read_file_to_string(path)
-    let identified = if require_explicit_ids {
-      @script.compile_localized_to_identified_ir(
-        src,
-        file=path,
-        locale=locale.or("und"),
-        require_explicit_ids=true,
-      )
-    } else {
-      @script.compile_to_identified_ir(src, file=path)
+    let identified = try {
+      if require_explicit_ids {
+        @script.compile_localized_to_identified_ir(
+          src,
+          file=path,
+          locale=locale.unwrap_or("und"),
+          require_explicit_ids=true,
+        )
+      } else {
+        @script.compile_to_identified_ir(src, file=path)
+      }
     } catch {
       e => raise IoError(format_compile_error(e))
     }
