@@ -377,19 +377,60 @@ fn save_game_from_v2(v2 : SaveGameV2) -> SaveGame {
 }
 
 ///|
-fn apply_save_game(eng : Engine, game : SaveGame) -> Unit {
-  match load_scene_ops(eng.vm.ir, game.scene) {
-    Some(ops) => {
-      eng.vm.ops = ops
-      eng.vm.halted = game.wait is Halted
-      eng.vm.last_error = None
-    }
-    None => {
-      eng.vm.ops = []
-      eng.vm.halted = true
-      eng.vm.last_error = Some("unknown scene: \{game.scene}")
-    }
+fn validate_save_game(
+  eng : Engine,
+  game : SaveGame,
+) -> Array[@script.IrOp] raise SaveError {
+  // Empty module_id is the legacy v2-v4 compatibility case. Once a save is
+  // scoped, it must match the runtime identity exactly; an unconfigured runtime
+  // therefore cannot silently load another project's scoped save.
+  if game.module_id != "" && game.module_id != eng.module_id {
+    raise SaveError::ModuleMismatch(
+      expected=eng.module_id,
+      found=game.module_id,
+    )
   }
+  if !game.call_stack.is_empty() {
+    raise SaveError::UnsupportedCallStack(depth=game.call_stack.length())
+  }
+  let ops = match load_scene_ops(eng.vm.ir, game.scene) {
+    Some(ops) => ops
+    None => raise SaveError::UnknownScene(scene=game.scene)
+  }
+  let max_ip = ops.length()
+  if game.ip < 0 || game.ip > max_ip {
+    raise SaveError::InvalidInstructionPointer(
+      scene=game.scene,
+      ip=game.ip,
+      max_ip~,
+    )
+  }
+  match game.wait {
+    Choose =>
+      if game.choices is None || game.choose_result_var is None {
+        raise SaveError::InvalidContinuation(
+          message="Choose requires choices and choose_result_var",
+        )
+      }
+    _ =>
+      if game.choices is Some(_) || game.choose_result_var is Some(_) {
+        raise SaveError::InvalidContinuation(
+          message="non-Choose wait cannot carry choice state",
+        )
+      }
+  }
+  ops
+}
+
+///|
+fn apply_save_game(
+  eng : Engine,
+  game : SaveGame,
+  ops : Array[@script.IrOp],
+) -> Unit {
+  eng.vm.ops = ops
+  eng.vm.halted = game.wait is Halted
+  eng.vm.last_error = None
   eng.vm.scene = game.scene
   eng.vm.ip = game.ip
   eng.vm.stack = []
