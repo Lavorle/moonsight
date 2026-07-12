@@ -65,6 +65,8 @@ pub(all) struct AudioLogicState {
 pub(all) struct BacklogEntry {
   speaker : String?
   text : String
+  speaker_id : String?
+  text_id : String?
 } derive(Eq, @debug.Debug)
 
 pub(all) struct BacklogStore {
@@ -75,7 +77,8 @@ pub fn BacklogStore::clear(Self) -> Unit
 pub fn BacklogStore::get(Self, Int) -> BacklogEntry
 pub fn BacklogStore::len(Self) -> Int
 pub fn BacklogStore::new(capacity? : Int) -> Self
-pub fn BacklogStore::push(Self, speaker~ : String?, text~ : String) -> Unit
+pub fn BacklogStore::push(Self, speaker~ : String?, text~ : String, speaker_id? : String, text_id? : String) -> Unit
+pub fn BacklogStore::relocalize(Self, LocaleCatalogs, String) -> Unit raise
 
 pub(all) enum BuiltinHost {
   TextBegin

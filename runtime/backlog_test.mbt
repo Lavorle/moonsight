@@ -27,13 +27,10 @@ test "backlog stable references relocalize atomically" {
     speaker_id="speaker.alice",
     text_id="dialogue.greeting",
   )
-  let catalogs = LocaleCatalogs::new(
-    default_locale="en",
-    catalogs={
-      "en": { "speaker.alice": "Alice", "dialogue.greeting": "Hello" },
-      "zh-CN": { "speaker.alice": "爱丽丝", "dialogue.greeting": "你好" },
-    },
-  )
+  let catalogs = LocaleCatalogs::new(default_locale="en", catalogs={
+    "en": { "speaker.alice": "Alice", "dialogue.greeting": "Hello" },
+    "zh-CN": { "speaker.alice": "爱丽丝", "dialogue.greeting": "你好" },
+  })
   b.relocalize(catalogs, "zh-CN")
   assert_eq(b.get(0).speaker, Some("爱丽丝"))
   assert_eq(b.get(0).text, "你好")
@@ -46,13 +43,10 @@ test "backlog relocalize failure leaves all resolved strings unchanged" {
   let b = BacklogStore::new(capacity=10)
   b.push(text="Hello", speaker=None, text_id="dialogue.greeting")
   b.push(text="Missing", speaker=None, text_id="dialogue.missing")
-  let catalogs = LocaleCatalogs::new(
-    default_locale="en",
-    catalogs={
-      "en": { "dialogue.greeting": "Hello" },
-      "zh-CN": { "dialogue.greeting": "你好" },
-    },
-  )
+  let catalogs = LocaleCatalogs::new(default_locale="en", catalogs={
+    "en": { "dialogue.greeting": "Hello" },
+    "zh-CN": { "dialogue.greeting": "你好" },
+  })
   try b.relocalize(catalogs, "zh-CN") catch {
     _ => ()
   } noraise {

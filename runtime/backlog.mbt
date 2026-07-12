@@ -36,8 +36,16 @@ pub fn BacklogStore::push(
   self.entries.push({
     speaker,
     text,
-    speaker_id: if speaker_id == "" { None } else { Some(speaker_id) },
-    text_id: if text_id == "" { None } else { Some(text_id) },
+    speaker_id: if speaker_id == "" {
+      None
+    } else {
+      Some(speaker_id)
+    },
+    text_id: if text_id == "" {
+      None
+    } else {
+      Some(text_id)
+    },
   })
   while self.entries.length() > self.capacity {
     ignore(self.entries.remove(0))
