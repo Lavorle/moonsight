@@ -18,6 +18,11 @@ CORE_GLOBS = (
     "manifest.json", "**/manifest.json", "*.wasm", "**/*.wasm",
     "*.exe", "**/*.exe", "*.dll", "**/*.dll", "*.so", "**/*.so",
     "*.dylib", "**/*.dylib",
+    "*.png", "**/*.png", "*.jpg", "**/*.jpg", "*.jpeg", "**/*.jpeg",
+    "*.webp", "**/*.webp", "*.svg", "**/*.svg", "*.ogg", "**/*.ogg",
+    "*.mp3", "**/*.mp3", "*.wav", "**/*.wav", "*.flac", "**/*.flac",
+    "*.ttf", "**/*.ttf", "*.otf", "**/*.otf", "*.woff", "**/*.woff",
+    "*.woff2", "**/*.woff2",
 )
 
 
