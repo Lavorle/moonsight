@@ -14,10 +14,11 @@ extern "C" fn process_exit(code : Int) -> Unit = "exit"
 ///|
 fn print_usage() -> Unit {
   let usage =
-    #|usage: moonsightc <new|check|build|version> ...
+    #|usage: moonsightc <new|check|freeze-ids|build|version> ...
     #|  moonsightc version
     #|  moonsightc new <name> [-o <parent_dir>]
     #|  moonsightc check <file.yuki|dir>
+    #|  moonsightc freeze-ids <file.yuki> [-o <output.yuki>]
     #|  moonsightc build <project_dir> [-o <out_dir>]
     #|
   println(usage)
@@ -106,6 +107,18 @@ fn main {
       1
     }
     ["check", path, ..] => cmd_check(path)
+    ["freeze-ids"] => {
+      println("error: freeze-ids requires <file.yuki>")
+      1
+    }
+    ["freeze-ids", path, .. rest] => {
+      let out = if rest.length() > 0 {
+        out_dir_from(rest)
+      } else {
+        path + ".ids.yuki"
+      }
+      cmd_freeze_ids(path, out)
+    }
     ["build"] => {
       println("error: build requires <project_dir>")
       print_usage()
