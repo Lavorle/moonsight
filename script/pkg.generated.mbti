@@ -18,6 +18,8 @@ pub fn compile_to_ir(String, file~ : String) -> IrModule raise CompileError
 
 pub fn decode_module(Bytes) -> IrModule raise BytecodeError
 
+pub fn decode_msb2(Bytes) -> Msb2Bundle raise BytecodeError
+
 pub fn encode_module(IrModule) -> Bytes
 
 pub fn encode_msb2(Msb2Bundle) -> Bytes
