@@ -20,8 +20,6 @@ pub(all) struct Engine {
   mut vm : Vm
   director : Director
   mut stage : Stage
-  /// Stable project/module identity supplied by the host manifest.
-  mut module_id : String
   /// When true, a bare `None_` intent while waiting on Yield advances dialogue.
   mut auto : Bool
   /// Modal UI stack, UiMode, prefs, and retained UiApp trees.
@@ -50,9 +48,8 @@ pub fn Engine::from_ir(
   ir : @script.IrModule,
   entry~ : String,
   director? : Director,
-  app? : UiApp = UiApp::new(),
-  save_slots? : Int = 6,
-  module_id? : String = "",
+  app~ : UiApp = UiApp::new(),
+  save_slots~ : Int = 6,
 ) -> Engine {
   let stage = Stage::new()
   stage.scene = entry
@@ -72,7 +69,6 @@ pub fn Engine::from_ir(
     vm: Vm::from_module(ir, entry~),
     director: dir,
     stage,
-    module_id,
     auto: false,
     ui,
     ir_entry: entry,
@@ -83,15 +79,6 @@ pub fn Engine::from_ir(
   }
   eng.sync_mixer_prefs()
   eng
-}
-
-///|
-/// Set the stable project/module identity before save hydration or loading.
-///
-/// Hosts should source this from the project manifest and set it before exposing
-/// save slots. Empty keeps legacy unscoped v2-v4 behavior.
-pub fn Engine::set_module_id(self : Engine, module_id : String) -> Unit {
-  self.module_id = module_id
 }
 
 ///|
@@ -192,14 +179,14 @@ fn Engine::write_slot(self : Engine, i : Int) -> Unit {
 /// True when the top modal is `"confirm"`.
 fn Engine::confirm_is_top(self : Engine) -> Bool {
   self.ui.stack_depth() > 0 &&
-  self.ui.stack[self.ui.stack_depth() - 1].name == "confirm"
+    self.ui.stack[self.ui.stack_depth() - 1].name == "confirm"
 }
 
 ///|
 /// True when the top modal is `"backlog"` (History).
 fn Engine::backlog_is_top(self : Engine) -> Bool {
   self.ui.stack_depth() > 0 &&
-  self.ui.stack[self.ui.stack_depth() - 1].name == "backlog"
+    self.ui.stack[self.ui.stack_depth() - 1].name == "backlog"
 }
 
 ///|
@@ -273,7 +260,9 @@ pub impl Capabilities for Engine with fn slot_label(self, i) {
   match self.slot_blobs[i] {
     None => slot_label(i, None)
     Some(blob) =>
-      slot_label(i, Some(parse_save_game(blob))) catch {
+      try {
+        slot_label(i, Some(parse_save_game(blob)))
+      } catch {
         _ => "Slot \{i} (empty)"
       }
   }
@@ -324,9 +313,10 @@ pub impl Capabilities for Engine with fn confirm_yes(self) {
       self.write_slot(i)
       self.pop_confirm_if_top()
     }
-    Some(QuitToTitle) =>
+    Some(QuitToTitle) => {
       // Teardown clears stack and enters Title.
       self.quit_to_title()
+    }
     None => self.pop_confirm_if_top()
   }
 }
@@ -443,9 +433,10 @@ pub fn Engine::tick(
   self : Engine,
   intent : Intent,
   dt? : Double = 1.0 / 60.0,
-  skip_held? : Bool = false,
+  skip_held~ : Bool = false,
 ) -> Unit {
-  let ui_active = self.ui.stack_depth() > 0 || self.ui.mode is Title
+  let ui_active =
+    self.ui.stack_depth() > 0 || (self.ui.mode is Title)
   if ui_active {
     self.tick_ui(intent)
     @audio.global_mixer().tick(dt)
@@ -470,14 +461,15 @@ pub fn Engine::tick(
   }
 
   // Timed wait: swallow Advance/Select/SkipTyping so the countdown cannot be skipped.
-  let gated = if self.stage.wait_remaining > 0.0 {
-    match effective {
-      Advance | SkipTyping | Select(_) => Intent::None_
-      other => other
+  let gated =
+    if self.stage.wait_remaining > 0.0 {
+      match effective {
+        Advance | SkipTyping | Select(_) => Intent::None_
+        other => other
+      }
+    } else {
+      effective
     }
-  } else {
-    effective
-  }
   self.apply_intent(gated)
   self.tick_wait(dt)
   if self.vm.wait is Running {
@@ -486,7 +478,8 @@ pub fn Engine::tick(
   // If @ui.show opened a modal this frame, freeze narrative presentation.
   // Also gate on pending ui_ops: Show is queued until drain_ui_ops, so stack
   // may still be empty while a modal is about to open.
-  let playing = self.ui.stack.is_empty() &&
+  let playing =
+    self.ui.stack.is_empty() &&
     !(self.ui.mode is Title) &&
     self.stage.ui_ops.is_empty()
   if skip_held && playing && self.stage.wait_remaining <= 0.0 {
@@ -494,7 +487,8 @@ pub fn Engine::tick(
   }
   self.drain_ui_ops()
   // Re-check playing: skip burst or host ops may have opened a modal.
-  let playing = self.ui.stack.is_empty() && !(self.ui.mode is Title)
+  let playing =
+    self.ui.stack.is_empty() && !(self.ui.mode is Title)
   if playing {
     self.tick_transitions(dt)
     self.stage.tick_layer_tweens(dt)
@@ -515,7 +509,7 @@ fn Engine::tick_skip_burst(self : Engine) -> Unit {
     }
     // Modal open or pending @ui.show / hide: stop narrative skip.
     if self.ui.stack_depth() > 0 ||
-      self.ui.mode is Title ||
+      (self.ui.mode is Title) ||
       !self.stage.ui_ops.is_empty() {
       break
     }
@@ -605,7 +599,7 @@ pub fn Engine::pointer_event(
     return self.ui.hover_kind()
   }
   if phase == 0 {
-    self.ui.pointer_scroll_move(y~)
+    self.ui.pointer_scroll_move(y=y)
     ignore(self.ui.pointer_hover(x, y))
     return self.ui.hover_kind()
   }
@@ -617,7 +611,7 @@ pub fn Engine::pointer_event(
   // phase == 1 down
   ignore(self.ui.pointer_hover(x, y))
   let caps : &Capabilities = self
-  let ui_active = self.ui.stack_depth() > 0 || self.ui.mode is Title
+  let ui_active = self.ui.stack_depth() > 0 || (self.ui.mode is Title)
   if ui_active {
     ignore(self.ui.handle_pointer(caps, x, y))
     return self.ui.hover_kind()
@@ -682,19 +676,21 @@ pub fn Engine::sync_ui_bind(self : Engine) -> Unit {
   for i in 0..<n_slots {
     slot_labels.push(self.slot_label(i))
   }
-  self.ui.sync_bind({
-    has_text,
-    has_choices,
-    prefs: self.ui.prefs,
-    occupied,
-    modal_mode,
-    vars: {},
-    choice_labels,
-    dialogue_name,
-    dialogue_body,
-    backlog_lines,
-    slot_labels,
-  })
+  self.ui.sync_bind(
+    {
+      has_text,
+      has_choices,
+      prefs: self.ui.prefs,
+      occupied,
+      modal_mode,
+      vars: {},
+      choice_labels,
+      dialogue_name,
+      dialogue_body,
+      backlog_lines,
+      slot_labels,
+    },
+  )
 }
 
 ///|
@@ -753,7 +749,7 @@ fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
     // OpenBacklog is handled on the Playing path (empty stack).
     OpenBacklog => ()
     ToggleAuto => self.apply_intent(ToggleAuto)
-    Select(n) =>
+    Select(n) => {
       // Optional: jump focus to index n when in range.
       if !self.ui.stack.is_empty() {
         let items = self.ui.focusables_top(self.ui.bind)
@@ -763,6 +759,7 @@ fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
           self.ui.stack[i] = { ..cur, focus: n }
         }
       }
+    }
     None_ => ()
   }
 }
@@ -998,7 +995,11 @@ fn Engine::tick_dissolve(self : Engine, dt : Double) -> Unit {
     self.stage.dissolve_phase = 2
     self.stage.fade_to = 0.0
     let t = elapsed - half
-    self.stage.overlay_opacity = if half > 0.0 { 1.0 - t / half } else { 0.0 }
+    self.stage.overlay_opacity = if half > 0.0 {
+      1.0 - t / half
+    } else {
+      0.0
+    }
   }
 }
 

@@ -19,73 +19,115 @@ let modal_card_w : Double = 560.0
 
 ///|
 fn build_title(app : @runtime.UiApp) -> @runtime.UiNode {
-  @runtime.UiNode::Fixed(x=0.0, y=0.0, w=Some(1920.0), h=Some(1080.0), children=[
-    @runtime.UiNode::Panel(
-      resource="ui.dialogue_box",
-      x=modal_card_x,
-      y=250.0,
-      w=modal_card_w,
-      h=520.0,
-      visible=@runtime.VisiblePred::Always,
-    ),
-    @runtime.UiNode::VBox(x=Some(modal_col_x), y=Some(300.0), children=[
-      @runtime.UiNode::Text(
-        src=@runtime.TextBindSrc::Literal("MoonSight"),
-        x=0.0,
-        y=0.0,
-        font_size=42.0,
+  @runtime.UiNode::Fixed(
+    x=0.0,
+    y=0.0,
+    w=Some(1920.0),
+    h=Some(1080.0),
+    children=[
+      @runtime.UiNode::Panel(
+        resource="ui.dialogue_box",
+        x=modal_card_x,
+        y=250.0,
+        w=modal_card_w,
+        h=520.0,
         visible=@runtime.VisiblePred::Always,
       ),
-      @runtime.UiNode::Spacer(w=400.0, h=12.0),
-      app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
-      app.button("Load", fn(c : &@runtime.Capabilities) {
-        c.show_modal("save_load", mode=Some("load"))
-      }),
-      app.button("Settings", fn(c : &@runtime.Capabilities) {
-        c.show_modal("settings", mode=None)
-      }),
-    ]),
-  ])
+      @runtime.UiNode::VBox(
+        x=Some(modal_col_x),
+        y=Some(300.0),
+        children=[
+          @runtime.UiNode::Text(
+            src=@runtime.TextBindSrc::Literal("MoonSight"),
+            x=0.0,
+            y=0.0,
+            font_size=42.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Spacer(w=400.0, h=12.0),
+          app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
+          app.button(
+            "Load",
+            fn(c : &@runtime.Capabilities) {
+              c.show_modal("save_load", mode=Some("load"))
+            },
+          ),
+          app.button(
+            "Settings",
+            fn(c : &@runtime.Capabilities) {
+              c.show_modal("settings", mode=None)
+            },
+          ),
+        ],
+      ),
+    ],
+  )
 }
 
 ///|
 fn build_game_menu(app : @runtime.UiApp) -> @runtime.UiNode {
-  @runtime.UiNode::Fixed(x=0.0, y=0.0, w=Some(1920.0), h=Some(1080.0), children=[
-    @runtime.UiNode::Panel(
-      resource="ui.dialogue_box",
-      x=modal_card_x,
-      y=160.0,
-      w=modal_card_w,
-      h=720.0,
-      visible=@runtime.VisiblePred::Always,
-    ),
-    @runtime.UiNode::VBox(x=Some(modal_col_x), y=Some(200.0), children=[
-      @runtime.UiNode::Text(
-        src=@runtime.TextBindSrc::Literal("Menu"),
-        x=0.0,
-        y=0.0,
-        font_size=32.0,
+  @runtime.UiNode::Fixed(
+    x=0.0,
+    y=0.0,
+    w=Some(1920.0),
+    h=Some(1080.0),
+    children=[
+      @runtime.UiNode::Panel(
+        resource="ui.dialogue_box",
+        x=modal_card_x,
+        y=160.0,
+        w=modal_card_w,
+        h=720.0,
         visible=@runtime.VisiblePred::Always,
       ),
-      @runtime.UiNode::Spacer(w=400.0, h=8.0),
-      app.button("Continue", fn(c : &@runtime.Capabilities) { c.return_modal() }),
-      app.button("History", fn(c : &@runtime.Capabilities) {
-        c.show_modal("backlog", mode=None)
-      }),
-      app.button("Save", fn(c : &@runtime.Capabilities) {
-        c.show_modal("save_load", mode=Some("save"))
-      }),
-      app.button("Load", fn(c : &@runtime.Capabilities) {
-        c.show_modal("save_load", mode=Some("load"))
-      }),
-      app.button("Settings", fn(c : &@runtime.Capabilities) {
-        c.show_modal("settings", mode=None)
-      }),
-      app.button("Title", fn(c : &@runtime.Capabilities) {
-        c.request_quit_to_title()
-      }),
-    ]),
-  ])
+      @runtime.UiNode::VBox(
+        x=Some(modal_col_x),
+        y=Some(200.0),
+        children=[
+          @runtime.UiNode::Text(
+            src=@runtime.TextBindSrc::Literal("Menu"),
+            x=0.0,
+            y=0.0,
+            font_size=32.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Spacer(w=400.0, h=8.0),
+          app.button(
+            "Continue",
+            fn(c : &@runtime.Capabilities) { c.return_modal() },
+          ),
+          app.button(
+            "History",
+            fn(c : &@runtime.Capabilities) {
+              c.show_modal("backlog", mode=None)
+            },
+          ),
+          app.button(
+            "Save",
+            fn(c : &@runtime.Capabilities) {
+              c.show_modal("save_load", mode=Some("save"))
+            },
+          ),
+          app.button(
+            "Load",
+            fn(c : &@runtime.Capabilities) {
+              c.show_modal("save_load", mode=Some("load"))
+            },
+          ),
+          app.button(
+            "Settings",
+            fn(c : &@runtime.Capabilities) {
+              c.show_modal("settings", mode=None)
+            },
+          ),
+          app.button(
+            "Title",
+            fn(c : &@runtime.Capabilities) { c.request_quit_to_title() },
+          ),
+        ],
+      ),
+    ],
+  )
 }
 
 ///|
@@ -107,72 +149,107 @@ fn build_backlog(app : @runtime.UiApp) -> @runtime.UiNode {
       ),
     )
   }
-  @runtime.UiNode::Fixed(x=0.0, y=0.0, w=Some(1920.0), h=Some(1080.0), children=[
-    @runtime.UiNode::Panel(
-      resource="ui.dialogue_box",
-      x=280.0,
-      y=48.0,
-      w=1360.0,
-      h=980.0,
-      visible=@runtime.VisiblePred::Always,
-    ),
-    @runtime.UiNode::Text(
-      src=@runtime.TextBindSrc::Literal("History"),
-      x=360.0,
-      y=72.0,
-      font_size=30.0,
-      visible=@runtime.VisiblePred::Always,
-    ),
-    // Spec §2.3: empty backlog shows hint copy + Close (not only title + empty SV).
-    @runtime.UiNode::Text(
-      src=@runtime.TextBindSrc::Literal("No dialogue history yet."),
-      x=360.0,
-      y=150.0,
-      font_size=24.0,
-      visible=@runtime.VisiblePred::Not(@runtime.VisiblePred::HasBacklog),
-    ),
-    @runtime.UiNode::ScrollView(x=360.0, y=150.0, w=1200.0, h=780.0, children=[
-      @runtime.UiNode::VBox(x=None, y=None, children=line_nodes),
-    ]),
-    // Close outside ScrollView so it stays clickable/focusable at bottom.
-    @runtime.UiNode::VBox(x=Some(modal_col_x), y=Some(960.0), children=[
-      app.button("Close", fn(c : &@runtime.Capabilities) { c.return_modal() }),
-    ]),
-  ])
+  @runtime.UiNode::Fixed(
+    x=0.0,
+    y=0.0,
+    w=Some(1920.0),
+    h=Some(1080.0),
+    children=[
+      @runtime.UiNode::Panel(
+        resource="ui.dialogue_box",
+        x=280.0,
+        y=48.0,
+        w=1360.0,
+        h=980.0,
+        visible=@runtime.VisiblePred::Always,
+      ),
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::Literal("History"),
+        x=360.0,
+        y=72.0,
+        font_size=30.0,
+        visible=@runtime.VisiblePred::Always,
+      ),
+      // Spec §2.3: empty backlog shows hint copy + Close (not only title + empty SV).
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::Literal("No dialogue history yet."),
+        x=360.0,
+        y=150.0,
+        font_size=24.0,
+        visible=@runtime.VisiblePred::Not(@runtime.VisiblePred::HasBacklog),
+      ),
+      @runtime.UiNode::ScrollView(
+        x=360.0,
+        y=150.0,
+        w=1200.0,
+        h=780.0,
+        children=[
+          @runtime.UiNode::VBox(x=None, y=None, children=line_nodes),
+        ],
+      ),
+      // Close outside ScrollView so it stays clickable/focusable at bottom.
+      @runtime.UiNode::VBox(
+        x=Some(modal_col_x),
+        y=Some(960.0),
+        children=[
+          app.button(
+            "Close",
+            fn(c : &@runtime.Capabilities) { c.return_modal() },
+          ),
+        ],
+      ),
+    ],
+  )
 }
 
 ///|
 /// Confirm: No registered first so default focus is safe-cancel.
 fn build_confirm(app : @runtime.UiApp) -> @runtime.UiNode {
-  @runtime.UiNode::Fixed(x=0.0, y=0.0, w=Some(1920.0), h=Some(1080.0), children=[
-    @runtime.UiNode::Panel(
-      resource="ui.dialogue_box",
-      x=modal_card_x,
-      y=320.0,
-      w=modal_card_w,
-      h=400.0,
-      visible=@runtime.VisiblePred::Always,
-    ),
-    @runtime.UiNode::VBox(x=Some(modal_col_x), y=Some(360.0), children=[
-      @runtime.UiNode::Text(
-        src=@runtime.TextBindSrc::Literal("Confirm"),
-        x=0.0,
-        y=0.0,
-        font_size=30.0,
+  @runtime.UiNode::Fixed(
+    x=0.0,
+    y=0.0,
+    w=Some(1920.0),
+    h=Some(1080.0),
+    children=[
+      @runtime.UiNode::Panel(
+        resource="ui.dialogue_box",
+        x=modal_card_x,
+        y=320.0,
+        w=modal_card_w,
+        h=400.0,
         visible=@runtime.VisiblePred::Always,
       ),
-      @runtime.UiNode::Text(
-        src=@runtime.TextBindSrc::Literal("Are you sure?"),
-        x=0.0,
-        y=0.0,
-        font_size=24.0,
-        visible=@runtime.VisiblePred::Always,
+      @runtime.UiNode::VBox(
+        x=Some(modal_col_x),
+        y=Some(360.0),
+        children=[
+          @runtime.UiNode::Text(
+            src=@runtime.TextBindSrc::Literal("Confirm"),
+            x=0.0,
+            y=0.0,
+            font_size=30.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Text(
+            src=@runtime.TextBindSrc::Literal("Are you sure?"),
+            x=0.0,
+            y=0.0,
+            font_size=24.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Spacer(w=400.0, h=12.0),
+          app.button(
+            "No",
+            fn(c : &@runtime.Capabilities) { c.confirm_no() },
+          ),
+          app.button(
+            "Yes",
+            fn(c : &@runtime.Capabilities) { c.confirm_yes() },
+          ),
+        ],
       ),
-      @runtime.UiNode::Spacer(w=400.0, h=12.0),
-      app.button("No", fn(c : &@runtime.Capabilities) { c.confirm_no() }),
-      app.button("Yes", fn(c : &@runtime.Capabilities) { c.confirm_yes() }),
-    ]),
-  ])
+    ],
+  )
 }
 
 ///|
@@ -221,9 +298,7 @@ fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
     let load_id = app.alloc_action(fn(c : &@runtime.Capabilities) {
       c.load_slot(slot)
     })
-    let icon_y = save_load_slots_y0 +
-      slot.to_double() * save_load_slot_stride +
-      8.0
+    let icon_y = save_load_slots_y0 + slot.to_double() * save_load_slot_stride + 8.0
     icons.push(
       @runtime.UiNode::Panel(
         resource="ui.slot_empty",
@@ -312,99 +387,118 @@ fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
 ///|
 /// Settings: sectioned sliders + Auto toggle pair + Back.
 fn build_settings(app : @runtime.UiApp) -> @runtime.UiNode {
-  @runtime.UiNode::Fixed(x=0.0, y=0.0, w=Some(1920.0), h=Some(1080.0), children=[
-    @runtime.UiNode::Panel(
-      resource="ui.dialogue_box",
-      x=560.0,
-      y=48.0,
-      w=800.0,
-      h=980.0,
-      visible=@runtime.VisiblePred::Always,
-    ),
-    @runtime.UiNode::VBox(x=Some(modal_col_x), y=Some(72.0), children=[
-      @runtime.UiNode::Text(
-        src=@runtime.TextBindSrc::Literal("Settings"),
-        x=0.0,
-        y=0.0,
-        font_size=32.0,
+  @runtime.UiNode::Fixed(
+    x=0.0,
+    y=0.0,
+    w=Some(1920.0),
+    h=Some(1080.0),
+    children=[
+      @runtime.UiNode::Panel(
+        resource="ui.dialogue_box",
+        x=560.0,
+        y=48.0,
+        w=800.0,
+        h=980.0,
         visible=@runtime.VisiblePred::Always,
       ),
-      @runtime.UiNode::Spacer(w=400.0, h=8.0),
-      @runtime.UiNode::Text(
-        src=@runtime.TextBindSrc::Pref("text_speed"),
-        x=0.0,
-        y=0.0,
-        font_size=22.0,
-        visible=@runtime.VisiblePred::Always,
+      @runtime.UiNode::VBox(
+        x=Some(modal_col_x),
+        y=Some(72.0),
+        children=[
+          @runtime.UiNode::Text(
+            src=@runtime.TextBindSrc::Literal("Settings"),
+            x=0.0,
+            y=0.0,
+            font_size=32.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Spacer(w=400.0, h=8.0),
+          @runtime.UiNode::Text(
+            src=@runtime.TextBindSrc::Pref("text_speed"),
+            x=0.0,
+            y=0.0,
+            font_size=22.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Slider(
+            key="text_speed",
+            x=0.0,
+            y=0.0,
+            w=400.0,
+            h=36.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Text(
+            src=@runtime.TextBindSrc::Pref("auto_mode"),
+            x=0.0,
+            y=0.0,
+            font_size=22.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          app.button(
+            "Auto on",
+            fn(c : &@runtime.Capabilities) {
+              c.set_pref_b("auto_mode", true)
+            },
+          ),
+          app.button(
+            "Auto off",
+            fn(c : &@runtime.Capabilities) {
+              c.set_pref_b("auto_mode", false)
+            },
+          ),
+          @runtime.UiNode::Text(
+            src=@runtime.TextBindSrc::Pref("master_volume"),
+            x=0.0,
+            y=0.0,
+            font_size=22.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Slider(
+            key="master_volume",
+            x=0.0,
+            y=0.0,
+            w=400.0,
+            h=36.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Text(
+            src=@runtime.TextBindSrc::Pref("bgm_volume"),
+            x=0.0,
+            y=0.0,
+            font_size=22.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Slider(
+            key="bgm_volume",
+            x=0.0,
+            y=0.0,
+            w=400.0,
+            h=36.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Text(
+            src=@runtime.TextBindSrc::Pref("se_volume"),
+            x=0.0,
+            y=0.0,
+            font_size=22.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Slider(
+            key="se_volume",
+            x=0.0,
+            y=0.0,
+            w=400.0,
+            h=36.0,
+            visible=@runtime.VisiblePred::Always,
+          ),
+          @runtime.UiNode::Spacer(w=400.0, h=8.0),
+          app.button(
+            "Back",
+            fn(c : &@runtime.Capabilities) { c.return_modal() },
+          ),
+        ],
       ),
-      @runtime.UiNode::Slider(
-        key="text_speed",
-        x=0.0,
-        y=0.0,
-        w=400.0,
-        h=36.0,
-        visible=@runtime.VisiblePred::Always,
-      ),
-      @runtime.UiNode::Text(
-        src=@runtime.TextBindSrc::Pref("auto_mode"),
-        x=0.0,
-        y=0.0,
-        font_size=22.0,
-        visible=@runtime.VisiblePred::Always,
-      ),
-      app.button("Auto on", fn(c : &@runtime.Capabilities) {
-        c.set_pref_b("auto_mode", true)
-      }),
-      app.button("Auto off", fn(c : &@runtime.Capabilities) {
-        c.set_pref_b("auto_mode", false)
-      }),
-      @runtime.UiNode::Text(
-        src=@runtime.TextBindSrc::Pref("master_volume"),
-        x=0.0,
-        y=0.0,
-        font_size=22.0,
-        visible=@runtime.VisiblePred::Always,
-      ),
-      @runtime.UiNode::Slider(
-        key="master_volume",
-        x=0.0,
-        y=0.0,
-        w=400.0,
-        h=36.0,
-        visible=@runtime.VisiblePred::Always,
-      ),
-      @runtime.UiNode::Text(
-        src=@runtime.TextBindSrc::Pref("bgm_volume"),
-        x=0.0,
-        y=0.0,
-        font_size=22.0,
-        visible=@runtime.VisiblePred::Always,
-      ),
-      @runtime.UiNode::Slider(
-        key="bgm_volume",
-        x=0.0,
-        y=0.0,
-        w=400.0,
-        h=36.0,
-        visible=@runtime.VisiblePred::Always,
-      ),
-      @runtime.UiNode::Text(
-        src=@runtime.TextBindSrc::Pref("se_volume"),
-        x=0.0,
-        y=0.0,
-        font_size=22.0,
-        visible=@runtime.VisiblePred::Always,
-      ),
-      @runtime.UiNode::Slider(
-        key="se_volume",
-        x=0.0,
-        y=0.0,
-        w=400.0,
-        h=36.0,
-        visible=@runtime.VisiblePred::Always,
-      ),
-      @runtime.UiNode::Spacer(w=400.0, h=8.0),
-      app.button("Back", fn(c : &@runtime.Capabilities) { c.return_modal() }),
-    ]),
-  ])
+    ],
+  )
 }

@@ -353,8 +353,21 @@ fn builtin_layer_show(stage : Stage, args : Array[Value]) -> HostResult {
       // New layer. show_layer defaults scale=1.0 (current for Scale tween).
       if duration > 0.0 {
         // x/y/z/kind/resource immediate; opacity starts at 0 and tweens to target.
-        stage.show_layer(id~, layer=kind, resource~, z~, x~, y~, opacity=0.0)
-        stage.start_layer_tween(id~, prop=Opacity, to=opacity_target, duration~)
+        stage.show_layer(
+          id~,
+          layer=kind,
+          resource~,
+          z~,
+          x~,
+          y~,
+          opacity=0.0,
+        )
+        stage.start_layer_tween(
+          id~,
+          prop=Opacity,
+          to=opacity_target,
+          duration~,
+        )
       } else {
         stage.show_layer(
           id~,

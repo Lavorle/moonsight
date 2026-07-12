@@ -22,7 +22,10 @@ fn parse_kind(v : @runtime.Value) -> @runtime.LayerKind? {
 
 ///|
 /// Read optional double from named map key.
-fn named_double(named : Map[String, @runtime.Value], key : String) -> Double? {
+fn named_double(
+  named : Map[String, @runtime.Value],
+  key : String,
+) -> Double? {
   match named.get(key) {
     Some(v) => @runtime.value_as_double(v)
     None => None
@@ -205,8 +208,21 @@ pub fn cmd_layer_show(
       // New layer. show_layer defaults scale=1.0 (current for Scale tween).
       if duration > 0.0 {
         // x/y/z/kind/resource immediate; opacity starts at 0 and tweens to target.
-        stage.show_layer(id~, layer=kind, resource~, z~, x~, y~, opacity=0.0)
-        stage.start_layer_tween(id~, prop=Opacity, to=opacity_target, duration~)
+        stage.show_layer(
+          id~,
+          layer=kind,
+          resource~,
+          z~,
+          x~,
+          y~,
+          opacity=0.0,
+        )
+        stage.start_layer_tween(
+          id~,
+          prop=Opacity,
+          to=opacity_target,
+          duration~,
+        )
       } else {
         stage.show_layer(
           id~,

@@ -75,11 +75,11 @@ test "layer.show respects kind and duration opacity" {
 test "layer.set errors on missing id" {
   let reg = @std_commands.standard_registry()
   let stage = @runtime.Stage::new()
-  let r = reg.call("layer.set", stage, [
-    Str("nope"),
-    Str("#:opacity"),
-    Float(1.0),
-  ])
+  let r = reg.call(
+    "layer.set",
+    stage,
+    [Str("nope"), Str("#:opacity"), Float(1.0)],
+  )
   guard r is Error(msg) else { fail("expected error") }
   // Must be registered (not "unknown host") and soft-halt on missing layer id.
   assert_true(!msg.contains("unknown"), msg="got: \{msg}")
@@ -95,24 +95,26 @@ test "layer.show and layer.set accept scale" {
   let reg = @std_commands.standard_registry()
   let stage = @runtime.Stage::new()
   ignore(
-    reg.call("layer.show", stage, [
-      Str("y"),
-      Str("char_y"),
-      Str("#:kind"),
-      Str("character"),
-      Str("#:scale"),
-      Float(0.5),
-    ]),
+    reg.call(
+      "layer.show",
+      stage,
+      [
+        Str("y"),
+        Str("char_y"),
+        Str("#:kind"),
+        Str("character"),
+        Str("#:scale"),
+        Float(0.5),
+      ],
+    ),
   )
   assert_eq(stage.layers[0].scale, 0.5)
   ignore(
-    reg.call("layer.set", stage, [
-      Str("y"),
-      Str("#:scale"),
-      Float(1.0),
-      Str("#:duration"),
-      Float(0.0),
-    ]),
+    reg.call(
+      "layer.set",
+      stage,
+      [Str("y"), Str("#:scale"), Float(1.0), Str("#:duration"), Float(0.0)],
+    ),
   )
   assert_eq(stage.layers[0].scale, 1.0)
 }
@@ -166,7 +168,11 @@ test "layer.show cancels pending hide tween" {
   assert_eq(stage.layers.length(), 1)
   assert_eq(stage.layers[0].opacity, 1.0)
   ignore(
-    reg.call("layer.hide", stage, [Str("y"), Str("#:duration"), Float(0.5)]),
+    reg.call("layer.hide", stage, [
+      Str("y"),
+      Str("#:duration"),
+      Float(0.5),
+    ]),
   )
   assert_true(stage.layers[0].pending_hide)
   // Partial fade, then re-show before hide completes.
@@ -258,19 +264,27 @@ test "audio.bgm volume and fade named args" {
   @audio.reset_global_mixer()
   // Immediate volume.
   assert_true(
-    reg.call("audio.bgm", stage, [Str("bgm_soft"), Str("#:volume"), Float(0.5)]) ==
+    reg.call(
+      "audio.bgm",
+      stage,
+      [Str("bgm_soft"), Str("#:volume"), Float(0.5)],
+    ) ==
     Ok,
   )
   assert_eq(@audio.global_mixer().bgm_volume, 0.5)
   // Fade in on new id: start 0 → approach target.
   assert_true(
-    reg.call("audio.bgm", stage, [
-      Str("bgm_other"),
-      Str("#:volume"),
-      Float(0.8),
-      Str("#:fade"),
-      Float(1.0),
-    ]) ==
+    reg.call(
+      "audio.bgm",
+      stage,
+      [
+        Str("bgm_other"),
+        Str("#:volume"),
+        Float(0.8),
+        Str("#:fade"),
+        Float(1.0),
+      ],
+    ) ==
     Ok,
   )
   assert_eq(@audio.global_mixer().bgm_volume, 0.0)
@@ -300,7 +314,11 @@ test "ui.show and ui.hide queue stage ops" {
     stage.ui_ops[0] == @runtime.UiHostOp::Show(name="game_menu", mode=None),
   )
   assert_true(
-    reg.call("ui.show", stage, [Str("save_load"), Str("#:mode"), Str("load")]) ==
+    reg.call(
+      "ui.show",
+      stage,
+      [Str("save_load"), Str("#:mode"), Str("load")],
+    ) ==
     Yield,
   )
   assert_eq(stage.ui_ops.length(), 2)
@@ -312,7 +330,9 @@ test "ui.show and ui.hide queue stage ops" {
   assert_eq(stage.ui_ops.length(), 3)
   assert_true(stage.ui_ops[2] == @runtime.UiHostOp::Hide(name=None))
   assert_true(reg.call("ui.hide", stage, [Str("settings")]) == Ok)
-  assert_true(stage.ui_ops[3] == @runtime.UiHostOp::Hide(name=Some("settings")))
+  assert_true(
+    stage.ui_ops[3] == @runtime.UiHostOp::Hide(name=Some("settings")),
+  )
 }
 
 ///|

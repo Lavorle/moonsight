@@ -43,7 +43,7 @@ pub fn cmd_audio_bgm(
           }
         }
       } else {
-        m.play_bgm(resource, volume~)
+        m.play_bgm(resource, volume=volume)
       }
       Ok
     }

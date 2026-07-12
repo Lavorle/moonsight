@@ -4,8 +4,8 @@ pub fn standard_host_names() -> Array[String] {
   [
     "audio.bgm", "audio.se", "flow.choice", "flow.jump", "flow.jump_if", "flow.jump_if_not",
     "flow.wait", "flow.yield", "layer.hide", "layer.move", "layer.set", "layer.show",
-    "sys.save_hint", "text.begin", "text.end", "text.type", "trans.dissolve", "trans.fade",
-    "ui.hide", "ui.show", "var.set",
+    "sys.save_hint", "text.begin", "text.end", "text.type", "trans.dissolve",
+    "trans.fade", "ui.hide", "ui.show", "var.set",
   ]
 }
 

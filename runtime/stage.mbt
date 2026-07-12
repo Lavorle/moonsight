@@ -191,68 +191,60 @@ fn layer_kind_rank(kind : LayerKind) -> Int {
 
 ///|
 /// Return a copy of `layer` with one property set.
-fn layer_with_prop(
-  layer : LayerState,
-  prop : TweenProp,
-  value : Double,
-) -> LayerState {
+fn layer_with_prop(layer : LayerState, prop : TweenProp, value : Double) -> LayerState {
   match prop {
-    X =>
-      {
-        id: layer.id,
-        kind: layer.kind,
-        resource: layer.resource,
-        z: layer.z,
-        x: value,
-        y: layer.y,
-        opacity: layer.opacity,
-        scale: layer.scale,
-        visible: layer.visible,
-        tweens: layer.tweens,
-        pending_hide: layer.pending_hide,
-      }
-    Y =>
-      {
-        id: layer.id,
-        kind: layer.kind,
-        resource: layer.resource,
-        z: layer.z,
-        x: layer.x,
-        y: value,
-        opacity: layer.opacity,
-        scale: layer.scale,
-        visible: layer.visible,
-        tweens: layer.tweens,
-        pending_hide: layer.pending_hide,
-      }
-    Opacity =>
-      {
-        id: layer.id,
-        kind: layer.kind,
-        resource: layer.resource,
-        z: layer.z,
-        x: layer.x,
-        y: layer.y,
-        opacity: value,
-        scale: layer.scale,
-        visible: layer.visible,
-        tweens: layer.tweens,
-        pending_hide: layer.pending_hide,
-      }
-    Scale =>
-      {
-        id: layer.id,
-        kind: layer.kind,
-        resource: layer.resource,
-        z: layer.z,
-        x: layer.x,
-        y: layer.y,
-        opacity: layer.opacity,
-        scale: value,
-        visible: layer.visible,
-        tweens: layer.tweens,
-        pending_hide: layer.pending_hide,
-      }
+    X => {
+      id: layer.id,
+      kind: layer.kind,
+      resource: layer.resource,
+      z: layer.z,
+      x: value,
+      y: layer.y,
+      opacity: layer.opacity,
+      scale: layer.scale,
+      visible: layer.visible,
+      tweens: layer.tweens,
+      pending_hide: layer.pending_hide,
+    }
+    Y => {
+      id: layer.id,
+      kind: layer.kind,
+      resource: layer.resource,
+      z: layer.z,
+      x: layer.x,
+      y: value,
+      opacity: layer.opacity,
+      scale: layer.scale,
+      visible: layer.visible,
+      tweens: layer.tweens,
+      pending_hide: layer.pending_hide,
+    }
+    Opacity => {
+      id: layer.id,
+      kind: layer.kind,
+      resource: layer.resource,
+      z: layer.z,
+      x: layer.x,
+      y: layer.y,
+      opacity: value,
+      scale: layer.scale,
+      visible: layer.visible,
+      tweens: layer.tweens,
+      pending_hide: layer.pending_hide,
+    }
+    Scale => {
+      id: layer.id,
+      kind: layer.kind,
+      resource: layer.resource,
+      z: layer.z,
+      x: layer.x,
+      y: layer.y,
+      opacity: layer.opacity,
+      scale: value,
+      visible: layer.visible,
+      tweens: layer.tweens,
+      pending_hide: layer.pending_hide,
+    }
   }
 }
 
@@ -356,7 +348,11 @@ pub fn Stage::tick_layer_tweens(self : Stage, dt : Double) -> Unit {
           Opacity => opacity = stepped
           Scale => scale = stepped
         }
-        next_tweens.push({ prop: t.prop, to: t.to, remaining: t.remaining - dt })
+        next_tweens.push({
+          prop: t.prop,
+          to: t.to,
+          remaining: t.remaining - dt,
+        })
       }
     }
     self.layers[i] = {

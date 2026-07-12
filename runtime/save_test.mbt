@@ -10,17 +10,6 @@ fn load_min_demo_engine() -> @runtime.Engine raise {
 }
 
 ///|
-fn load_min_demo_engine_for(module_id : String) -> @runtime.Engine raise {
-  let src =
-    #|- scene "s"
-    #|@layer.show "bg" "bg_room"
-    #|y:Hi
-    #|
-  let ir = @script.compile_to_ir(src, file="min_demo.yuki")
-  @runtime.Engine::from_ir(ir, entry="s", module_id~)
-}
-
-///|
 test "save roundtrip restores scene ip vars and layers" {
   let eng = load_min_demo_engine()
   eng.tick(Intent::Advance)
@@ -121,9 +110,11 @@ test "save during dissolve does not restore dual-phase" {
   let eng = load_min_demo_engine()
   // Start dual-phase dissolve and advance into Out half.
   ignore(
-    @std_commands.standard_registry().call("trans.dissolve", eng.stage, [
-      Float(1.0),
-    ]),
+    @std_commands.standard_registry().call(
+      "trans.dissolve",
+      eng.stage,
+      [Float(1.0)],
+    ),
   )
   eng.tick(None_, dt=0.25)
   assert_eq(eng.stage.dissolve_phase, 1)
@@ -270,14 +261,7 @@ test "slot_label empty and filled" {
     layers: [],
     text: None,
     overlay_opacity: 0.0,
-    audio: {
-      bgm: None,
-      se: None,
-      bgm_volume: None,
-      bgm_fade_to: None,
-      bgm_fade_remaining: None,
-      bgm_fade_stop: None,
-    },
+    audio: { bgm: None, se: None, bgm_volume: None, bgm_fade_to: None, bgm_fade_remaining: None, bgm_fade_stop: None },
     wait: Running,
     choices: None,
     choose_result_var: None,
@@ -306,10 +290,7 @@ test "save mid fade-out restores audible fade toward stop" {
   @audio.global_mixer().fade_bgm_to(0.0, 1.0, stop=true)
   @audio.global_mixer().tick(0.5)
   assert_true(@audio.global_mixer().bgm is Some(_))
-  assert_true(
-    @audio.global_mixer().bgm_volume > 0.4 &&
-    @audio.global_mixer().bgm_volume < 0.6,
-  )
+  assert_true(@audio.global_mixer().bgm_volume > 0.4 && @audio.global_mixer().bgm_volume < 0.6)
   let blob = eng.save()
   let game = @runtime.parse_save_game(blob)
   // Blob must carry mixer identity + fade-stop mid-state (not null bgm).
@@ -325,9 +306,7 @@ test "save mid fade-out restores audible fade toward stop" {
   eng2.load(blob)
   // Stage stays clear during restored fade-out; mixer still holds the id.
   assert_true(eng2.stage.bgm is None)
-  guard @audio.global_mixer().bgm is Some(id) else {
-    fail("mixer bgm after load")
-  }
+  guard @audio.global_mixer().bgm is Some(id) else { fail("mixer bgm after load") }
   assert_eq(id, "bgm_soft")
   assert_true(@audio.global_mixer().bgm_fade_stop)
   assert_true(@audio.global_mixer().bgm_fade_remaining > 0.0)
@@ -389,172 +368,4 @@ test "load v3 save without layer scale defaults to 1.0" {
   assert_eq(eng.stage.layers[0].scale, 1.0)
   assert_eq(eng.stage.layers[0].tweens.length(), 0)
   assert_true(!eng.stage.layers[0].pending_hide)
-}
-
-///|
-test "save writes configured module identity without requiring format v5" {
-  let eng = load_min_demo_engine_for("demo-project")
-  let game = @runtime.parse_save_game(eng.save())
-  assert_eq(game.format_version, 4)
-  assert_eq(game.module_id, "demo-project")
-}
-
-///|
-test "load rejects a save from another module before mutating runtime state" {
-  @audio.reset_global_mixer()
-  let source = load_min_demo_engine_for("project-a")
-  source.tick(None_)
-  let blob = source.save()
-  let target = load_min_demo_engine_for("project-b")
-  target.tick(None_)
-  target.stage.set_var("keep", Int(7))
-  target.stage.overlay_opacity = 0.37
-  target.auto = true
-  target.ui.mode = Title
-  let prefs_json =
-    #|{"text_speed":1.5,"auto_mode":true,"master_volume":0.25,"bgm_volume":0.5,"se_volume":0.75}
-  ignore(target.set_prefs_json(prefs_json))
-  target.stage.bgm = Some("keep-bgm")
-  @audio.global_mixer().play_bgm("keep-bgm", volume=0.6)
-  let scene_before = target.vm.scene
-  let ip_before = target.vm.ip
-  let wait_before = target.vm.wait
-  let layer_count_before = target.stage.layers.length()
-  let ui_mode_before = target.ui.mode
-  let prefs_before = target.ui.prefs
-  let mixer_bgm_before = @audio.global_mixer().bgm
-  let mixer_volume_before = @audio.global_mixer().bgm_volume
-  let mixer_pref_master_before = @audio.global_mixer().pref_master
-  let mixer_pref_bgm_before = @audio.global_mixer().pref_bgm
-  let mixer_pref_se_before = @audio.global_mixer().pref_se
-  try target.load(blob) catch {
-    SaveError::ModuleMismatch(expected~, found~) => {
-      assert_eq(expected, "project-b")
-      assert_eq(found, "project-a")
-    }
-    err => fail("unexpected error: \{err}")
-  } noraise {
-    _ => fail("expected ModuleMismatch")
-  }
-  assert_eq(target.vm.scene, scene_before)
-  assert_eq(target.vm.ip, ip_before)
-  assert_true(target.vm.wait == wait_before)
-  assert_true(target.stage.get_var("keep") == Int(7))
-  assert_eq(target.stage.layers.length(), layer_count_before)
-  assert_eq(target.stage.overlay_opacity, 0.37)
-  assert_true(target.auto)
-  assert_true(target.ui.mode == ui_mode_before)
-  assert_true(target.ui.prefs == prefs_before)
-  assert_true(@audio.global_mixer().bgm == mixer_bgm_before)
-  assert_eq(@audio.global_mixer().bgm_volume, mixer_volume_before)
-  assert_eq(@audio.global_mixer().pref_master, mixer_pref_master_before)
-  assert_eq(@audio.global_mixer().pref_bgm, mixer_pref_bgm_before)
-  assert_eq(@audio.global_mixer().pref_se, mixer_pref_se_before)
-  @audio.reset_global_mixer()
-}
-
-///|
-test "load accepts legacy v2 save without module identity in configured runtime" {
-  let eng = load_min_demo_engine_for("project-a")
-  let v2 =
-    #|{"format_version":2,"module_id":"","scene":"s","ip":0,"call_stack":[],"vars":{"met":["Bool",true]},"layers":[],"overlay_opacity":0,"audio":{},"wait":"Running","auto":false}
-  eng.load(v2)
-  assert_eq(eng.vm.scene, "s")
-  assert_true(eng.stage.get_var("met") == Bool(true))
-}
-
-///|
-test "load rejects unknown scene and stale ip before mutating state" {
-  let eng = load_min_demo_engine_for("project-a")
-  eng.tick(None_)
-  eng.stage.set_var("keep", Str("yes"))
-  let base = @runtime.parse_save_game(eng.save())
-  let scene_before = eng.vm.scene
-  let ip_before = eng.vm.ip
-  let wait_before = eng.vm.wait
-  let unknown = { ..base, scene: "missing" }.to_json().stringify()
-  try eng.load(unknown) catch {
-    SaveError::UnknownScene(scene~) => assert_eq(scene, "missing")
-    err => fail("unexpected error: \{err}")
-  } noraise {
-    _ => fail("expected UnknownScene")
-  }
-  assert_eq(eng.vm.scene, scene_before)
-  assert_eq(eng.vm.ip, ip_before)
-  assert_true(eng.vm.wait == wait_before)
-  assert_true(eng.stage.get_var("keep") == Str("yes"))
-  let stale = { ..base, ip: 999 }.to_json().stringify()
-  try eng.load(stale) catch {
-    SaveError::InvalidInstructionPointer(scene~, ip~, max_ip~) => {
-      assert_eq(scene, "s")
-      assert_eq(ip, 999)
-      assert_true(max_ip < 999)
-    }
-    err => fail("unexpected error: \{err}")
-  } noraise {
-    _ => fail("expected InvalidInstructionPointer")
-  }
-  assert_eq(eng.vm.scene, scene_before)
-  assert_eq(eng.vm.ip, ip_before)
-  assert_true(eng.vm.wait == wait_before)
-  assert_true(eng.stage.get_var("keep") == Str("yes"))
-}
-
-///|
-test "load rejects unsupported stack and inconsistent choice continuation" {
-  let eng = load_min_demo_engine_for("project-a")
-  let base = @runtime.parse_save_game(eng.save())
-  let stacked = { ..base, call_stack: [{ scene: "s", ip: 0 }] }
-    .to_json()
-    .stringify()
-  try eng.load(stacked) catch {
-    SaveError::UnsupportedCallStack(depth~) => assert_eq(depth, 1)
-    err => fail("unexpected error: \{err}")
-  } noraise {
-    _ => fail("expected UnsupportedCallStack")
-  }
-  let inconsistent = {
-      ..base,
-      wait: Choose,
-      choices: None,
-      choose_result_var: None,
-    }
-    .to_json()
-    .stringify()
-  try eng.load(inconsistent) catch {
-    SaveError::InvalidContinuation(message~) =>
-      assert_true(message.contains("Choose"))
-    err => fail("unexpected error: \{err}")
-  } noraise {
-    _ => fail("expected InvalidContinuation")
-  }
-}
-
-///|
-test "supported save versions are authoritative and remain exactly v2 through v4" {
-  assert_true(@runtime.is_supported_save_version(2))
-  assert_true(@runtime.is_supported_save_version(3))
-  assert_true(@runtime.is_supported_save_version(4))
-  assert_true(!@runtime.is_supported_save_version(1))
-  assert_true(!@runtime.is_supported_save_version(5))
-}
-
-///|
-test "validate_save exposes typed checks without mutating engine state" {
-  let eng = load_min_demo_engine_for("project-a")
-  eng.tick(None_)
-  eng.stage.set_var("keep", Int(9))
-  let game = @runtime.parse_save_game(eng.save())
-  let invalid = { ..game, scene: "missing" }.to_json().stringify()
-  let scene_before = eng.vm.scene
-  let ip_before = eng.vm.ip
-  try eng.validate_save(invalid) catch {
-    SaveError::UnknownScene(scene~) => assert_eq(scene, "missing")
-    err => fail("unexpected error: \{err}")
-  } noraise {
-    _ => fail("expected UnknownScene")
-  }
-  assert_eq(eng.vm.scene, scene_before)
-  assert_eq(eng.vm.ip, ip_before)
-  assert_true(eng.stage.get_var("keep") == Int(9))
 }

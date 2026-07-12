@@ -58,43 +58,49 @@ let hud_choice_line_h : Double = 56.0
 ///|
 /// Build the default dialogue + choice HUD tree.
 fn build_hud(_app : @runtime.UiApp) -> @runtime.UiNode {
-  @runtime.UiNode::Fixed(x=0.0, y=0.0, w=Some(1920.0), h=Some(1080.0), children=[
-    @runtime.UiNode::Panel(
-      resource="ui.dialogue_box",
-      x=hud_dialogue_x,
-      y=hud_dialogue_y,
-      w=hud_dialogue_w,
-      h=hud_dialogue_h,
-      visible=@runtime.VisiblePred::HasText,
-    ),
-    @runtime.UiNode::Panel(
-      resource="ui.nameplate",
-      x=hud_nameplate_x,
-      y=hud_nameplate_y,
-      w=hud_nameplate_w,
-      h=hud_nameplate_h,
-      visible=@runtime.VisiblePred::HasText,
-    ),
-    @runtime.UiNode::Text(
-      src=@runtime.TextBindSrc::DialogueName,
-      x=hud_nameplate_x + 20.0,
-      y=hud_nameplate_y + 6.0,
-      font_size=hud_name_font,
-      visible=@runtime.VisiblePred::HasText,
-    ),
-    @runtime.UiNode::Text(
-      src=@runtime.TextBindSrc::DialogueBody,
-      x=hud_text_x,
-      y=hud_text_y,
-      font_size=hud_body_font,
-      visible=@runtime.VisiblePred::HasText,
-    ),
-    @runtime.UiNode::ChoiceList(
-      x=hud_choice_x,
-      y=hud_choice_y,
-      w=hud_choice_w,
-      line_h=hud_choice_line_h,
-      visible=@runtime.VisiblePred::HasChoices,
-    ),
-  ])
+  @runtime.UiNode::Fixed(
+    x=0.0,
+    y=0.0,
+    w=Some(1920.0),
+    h=Some(1080.0),
+    children=[
+      @runtime.UiNode::Panel(
+        resource="ui.dialogue_box",
+        x=hud_dialogue_x,
+        y=hud_dialogue_y,
+        w=hud_dialogue_w,
+        h=hud_dialogue_h,
+        visible=@runtime.VisiblePred::HasText,
+      ),
+      @runtime.UiNode::Panel(
+        resource="ui.nameplate",
+        x=hud_nameplate_x,
+        y=hud_nameplate_y,
+        w=hud_nameplate_w,
+        h=hud_nameplate_h,
+        visible=@runtime.VisiblePred::HasText,
+      ),
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::DialogueName,
+        x=hud_nameplate_x + 20.0,
+        y=hud_nameplate_y + 6.0,
+        font_size=hud_name_font,
+        visible=@runtime.VisiblePred::HasText,
+      ),
+      @runtime.UiNode::Text(
+        src=@runtime.TextBindSrc::DialogueBody,
+        x=hud_text_x,
+        y=hud_text_y,
+        font_size=hud_body_font,
+        visible=@runtime.VisiblePred::HasText,
+      ),
+      @runtime.UiNode::ChoiceList(
+        x=hud_choice_x,
+        y=hud_choice_y,
+        w=hud_choice_w,
+        line_h=hud_choice_line_h,
+        visible=@runtime.VisiblePred::HasChoices,
+      ),
+    ],
+  )
 }

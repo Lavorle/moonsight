@@ -46,7 +46,7 @@ pub(all) enum UiNode {
     y~ : Double,
     w~ : Double?,
     h~ : Double?,
-    children~ : Array[UiNode]
+    children~ : Array[UiNode],
   )
   Spacer(w~ : Double, h~ : Double)
   Panel(
@@ -55,14 +55,14 @@ pub(all) enum UiNode {
     y~ : Double,
     w~ : Double,
     h~ : Double,
-    visible~ : VisiblePred
+    visible~ : VisiblePred,
   )
   Text(
     src~ : TextBindSrc,
     x~ : Double,
     y~ : Double,
     font_size~ : Double,
-    visible~ : VisiblePred
+    visible~ : VisiblePred,
   )
   Image(
     resource~ : String,
@@ -70,7 +70,7 @@ pub(all) enum UiNode {
     y~ : Double,
     w~ : Double,
     h~ : Double,
-    visible~ : VisiblePred
+    visible~ : VisiblePred,
   )
   Button(label~ : String, action_id~ : Int, visible~ : VisiblePred)
   /// Horizontal pref slider; MenuLeft/Right adjust the named pref.
@@ -80,14 +80,14 @@ pub(all) enum UiNode {
     y~ : Double,
     w~ : Double,
     h~ : Double,
-    visible~ : VisiblePred
+    visible~ : VisiblePred,
   )
   ChoiceList(
     x~ : Double,
     y~ : Double,
     w~ : Double,
     line_h~ : Double,
-    visible~ : VisiblePred
+    visible~ : VisiblePred,
   )
   /// Vertical scroll viewport. Children laid out from top; runtime owns scroll_y.
   ScrollView(
@@ -95,7 +95,7 @@ pub(all) enum UiNode {
     y~ : Double,
     w~ : Double,
     h~ : Double,
-    children~ : Array[UiNode]
+    children~ : Array[UiNode],
   )
 } derive(Debug)
 
@@ -185,12 +185,13 @@ pub fn VisiblePred::eval(self : VisiblePred, bind : UiBindCtx) -> Bool {
     HasChoices => bind.has_choices
     HasBacklog => bind.backlog_lines.length() > 0
     PrefBool(key) => pref_bool(bind.prefs, key)
-    SlotOccupied(i) =>
+    SlotOccupied(i) => {
       if i < 0 || i >= bind.occupied.length() {
         false
       } else {
         bind.occupied[i]
       }
+    }
     ModeIs(m) =>
       match bind.modal_mode {
         Some(mm) => mm == m
@@ -217,23 +218,25 @@ pub fn TextBindSrc::resolve(self : TextBindSrc, bind : UiBindCtx) -> String {
     DialogueName => bind.dialogue_name
     DialogueBody => bind.dialogue_body
     Pref(key) => format_pref_bind(bind.prefs, key)
-    SlotLabel(i) =>
+    SlotLabel(i) => {
       if i < 0 || i >= bind.slot_labels.length() {
         "Slot \{i} (empty)"
       } else {
         bind.slot_labels[i]
       }
+    }
     Var(name) =>
       match bind.vars.get(name) {
         Some(s) => s
         None => ""
       }
-    BacklogLine(i) =>
+    BacklogLine(i) => {
       if i < 0 || i >= bind.backlog_lines.length() {
         ""
       } else {
         bind.backlog_lines[i]
       }
+    }
   }
 }
 

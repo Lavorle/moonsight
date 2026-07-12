@@ -12,7 +12,7 @@ struct FakeCaps {
 } derive(Debug)
 
 ///|
-fn FakeCaps::new(slots? : Array[Bool] = []) -> FakeCaps {
+fn FakeCaps::new(slots~ : Array[Bool] = []) -> FakeCaps {
   {
     started: false,
     start_game_n: 0,
@@ -134,9 +134,13 @@ test "ui app registers modal and hud" {
   )
   app.register_modal(
     "title",
-    UiNode::VBox(x=Some(10.0), y=Some(20.0), children=[
-      UiNode::Button(label="Start", action_id=0, visible=VisiblePred::Always),
-    ]),
+    UiNode::VBox(
+      x=Some(10.0),
+      y=Some(20.0),
+      children=[
+        UiNode::Button(label="Start", action_id=0, visible=VisiblePred::Always),
+      ],
+    ),
   )
   assert_true(app.hud is Some(_))
   assert_true(app.modals.contains("title"))
@@ -167,13 +171,17 @@ test "modal show return and activate start_game" {
   let start_id = app.alloc_action(fn(c : &Capabilities) { c.start_game() })
   app.register_modal(
     "title",
-    UiNode::VBox(x=Some(0.0), y=Some(0.0), children=[
-      UiNode::Button(
-        label="Start",
-        action_id=start_id,
-        visible=VisiblePred::Always,
-      ),
-    ]),
+    UiNode::VBox(
+      x=Some(0.0),
+      y=Some(0.0),
+      children=[
+        UiNode::Button(
+          label="Start",
+          action_id=start_id,
+          visible=VisiblePred::Always,
+        ),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   let caps = FakeCaps::new()
@@ -191,10 +199,14 @@ test "vbox layout stacks buttons vertically" {
   let app = UiApp::new()
   app.register_modal(
     "m",
-    UiNode::VBox(x=Some(100.0), y=Some(200.0), children=[
-      UiNode::Button(label="A", action_id=0, visible=VisiblePred::Always),
-      UiNode::Button(label="B", action_id=1, visible=VisiblePred::Always),
-    ]),
+    UiNode::VBox(
+      x=Some(100.0),
+      y=Some(200.0),
+      children=[
+        UiNode::Button(label="A", action_id=0, visible=VisiblePred::Always),
+        UiNode::Button(label="B", action_id=1, visible=VisiblePred::Always),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   rt.show_modal("m")
@@ -234,10 +246,14 @@ test "focus_delta wraps and activate invokes focused button" {
   let b_id = app.alloc_action(fn(_c : &Capabilities) { b_n = b_n + 1 })
   app.register_modal(
     "m",
-    UiNode::VBox(x=Some(0.0), y=Some(0.0), children=[
-      UiNode::Button(label="A", action_id=a_id, visible=VisiblePred::Always),
-      UiNode::Button(label="B", action_id=b_id, visible=VisiblePred::Always),
-    ]),
+    UiNode::VBox(
+      x=Some(0.0),
+      y=Some(0.0),
+      children=[
+        UiNode::Button(label="A", action_id=a_id, visible=VisiblePred::Always),
+        UiNode::Button(label="B", action_id=b_id, visible=VisiblePred::Always),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   let caps = FakeCaps::new()
@@ -349,9 +365,13 @@ test "handle_pointer hits button and activates" {
   let id = app.alloc_action(fn(_c : &Capabilities) { n = n + 1 })
   app.register_modal(
     "m",
-    UiNode::VBox(x=Some(100.0), y=Some(200.0), children=[
-      UiNode::Button(label="Hit", action_id=id, visible=VisiblePred::Always),
-    ]),
+    UiNode::VBox(
+      x=Some(100.0),
+      y=Some(200.0),
+      children=[
+        UiNode::Button(label="Hit", action_id=id, visible=VisiblePred::Always),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   let caps = FakeCaps::new()
@@ -417,14 +437,22 @@ test "slot occupied false is not focusable" {
   })
   app.register_modal(
     "save_load",
-    UiNode::VBox(x=Some(0.0), y=Some(0.0), children=[
-      UiNode::Button(
-        label="Slot 0",
-        action_id=id0,
-        visible=VisiblePred::SlotOccupied(0),
-      ),
-      UiNode::Button(label="Slot 1", action_id=id1, visible=VisiblePred::Always),
-    ]),
+    UiNode::VBox(
+      x=Some(0.0),
+      y=Some(0.0),
+      children=[
+        UiNode::Button(
+          label="Slot 0",
+          action_id=id0,
+          visible=VisiblePred::SlotOccupied(0),
+        ),
+        UiNode::Button(
+          label="Slot 1",
+          action_id=id1,
+          visible=VisiblePred::Always,
+        ),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   let caps = FakeCaps::new(slots=[false, true])
@@ -469,7 +497,10 @@ test "VisiblePred And short-circuits ModeIs and SlotOccupied" {
 
 ///|
 test "VisiblePred Not inverts SlotOccupied" {
-  let bind = { ..UiBindCtx::empty(), occupied: [false, true] }
+  let bind = {
+    ..UiBindCtx::empty(),
+    occupied: [false, true],
+  }
   let empty0 = VisiblePred::Not(VisiblePred::SlotOccupied(0))
   let empty1 = VisiblePred::Not(VisiblePred::SlotOccupied(1))
   assert_true(empty0.eval(bind))
@@ -483,16 +514,20 @@ test "slider is focusable and MenuRight adjusts pref" {
   let app = UiApp::new()
   app.register_modal(
     "settings",
-    UiNode::VBox(x=Some(0.0), y=Some(0.0), children=[
-      UiNode::Slider(
-        key="master_volume",
-        x=0.0,
-        y=0.0,
-        w=400.0,
-        h=52.0,
-        visible=VisiblePred::Always,
-      ),
-    ]),
+    UiNode::VBox(
+      x=Some(0.0),
+      y=Some(0.0),
+      children=[
+        UiNode::Slider(
+          key="master_volume",
+          x=0.0,
+          y=0.0,
+          w=400.0,
+          h=52.0,
+          visible=VisiblePred::Always,
+        ),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   let caps = FakeCaps::new()
@@ -558,16 +593,20 @@ test "text in VBox paints at origin and takes a line of flow" {
   let app = UiApp::new()
   app.register_modal(
     "title",
-    UiNode::VBox(x=Some(760.0), y=Some(360.0), children=[
-      UiNode::Text(
-        src=TextBindSrc::Literal("MoonSight"),
-        x=0.0,
-        y=0.0,
-        font_size=36.0,
-        visible=VisiblePred::Always,
-      ),
-      UiNode::Button(label="Start", action_id=0, visible=VisiblePred::Always),
-    ]),
+    UiNode::VBox(
+      x=Some(760.0),
+      y=Some(360.0),
+      children=[
+        UiNode::Text(
+          src=TextBindSrc::Literal("MoonSight"),
+          x=0.0,
+          y=0.0,
+          font_size=36.0,
+          visible=VisiblePred::Always,
+        ),
+        UiNode::Button(label="Start", action_id=0, visible=VisiblePred::Always),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   rt.show_modal("title")
@@ -605,9 +644,13 @@ test "handle_pointer returns false on miss true on hit" {
   let id = app.alloc_action(fn(_c : &Capabilities) { n = n + 1 })
   app.register_modal(
     "m",
-    UiNode::VBox(x=Some(100.0), y=Some(200.0), children=[
-      UiNode::Button(label="Hit", action_id=id, visible=VisiblePred::Always),
-    ]),
+    UiNode::VBox(
+      x=Some(100.0),
+      y=Some(200.0),
+      children=[
+        UiNode::Button(label="Hit", action_id=id, visible=VisiblePred::Always),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   let caps = FakeCaps::new()
@@ -625,16 +668,22 @@ test "handle_pointer slider sets pref from x ratio" {
   let app = UiApp::new()
   app.register_modal(
     "settings",
-    UiNode::Fixed(x=100.0, y=100.0, w=Some(400.0), h=Some(24.0), children=[
-      UiNode::Slider(
-        key="master_volume",
-        x=0.0,
-        y=0.0,
-        w=400.0,
-        h=24.0,
-        visible=VisiblePred::Always,
-      ),
-    ]),
+    UiNode::Fixed(
+      x=100.0,
+      y=100.0,
+      w=Some(400.0),
+      h=Some(24.0),
+      children=[
+        UiNode::Slider(
+          key="master_volume",
+          x=0.0,
+          y=0.0,
+          w=400.0,
+          h=24.0,
+          visible=VisiblePred::Always,
+        ),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   let caps = FakeCaps::new()
@@ -653,10 +702,14 @@ test "pointer_hover sets hover and paint uses button_hover" {
   let id = app.alloc_action(fn(_c : &Capabilities) { () })
   app.register_modal(
     "m",
-    UiNode::VBox(x=Some(100.0), y=Some(200.0), children=[
-      UiNode::Button(label="A", action_id=id, visible=VisiblePred::Always),
-      UiNode::Button(label="B", action_id=id, visible=VisiblePred::Always),
-    ]),
+    UiNode::VBox(
+      x=Some(100.0),
+      y=Some(200.0),
+      children=[
+        UiNode::Button(label="A", action_id=id, visible=VisiblePred::Always),
+        UiNode::Button(label="B", action_id=id, visible=VisiblePred::Always),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   rt.show_modal("m")
@@ -712,11 +765,7 @@ test "ScrollView paints only content inside viewport" {
   let rt = UiRuntime::from_app(app, save_slots=6)
   rt.show_modal("sv")
   rt.sync_bind(UiBindCtx::empty())
-  let ops = rt.paint_modal(
-    canvas_w=1920.0,
-    canvas_h=1080.0,
-    bind=UiBindCtx::empty(),
-  )
+  let ops = rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty())
   // At scroll_y=0, only top lines intersect viewport; ops with text must have y in [100, 196)
   for op in ops {
     match op.text {
@@ -746,16 +795,18 @@ test "ScrollView content_h exceeds viewport when many children" {
   }
   app.register_modal(
     "sv",
-    UiNode::ScrollView(x=0.0, y=0.0, w=400.0, h=64.0, children=[
-      UiNode::VBox(x=None, y=None, children=lines),
-    ]),
+    UiNode::ScrollView(
+      x=0.0,
+      y=0.0,
+      w=400.0,
+      h=64.0,
+      children=[UiNode::VBox(x=None, y=None, children=lines)],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   rt.show_modal("sv")
   rt.sync_bind(UiBindCtx::empty())
-  ignore(
-    rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()),
-  )
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   assert_true(rt.scroll_max() > 0.0)
 }
 
@@ -767,7 +818,7 @@ fn make_scroll_runtime(
   y : Double,
   w : Double,
   h : Double,
-  modal_name? : String = "sv",
+  modal_name~ : String = "sv",
 ) -> UiRuntime {
   let app = UiApp::new()
   let lines : Array[UiNode] = []
@@ -784,9 +835,13 @@ fn make_scroll_runtime(
   }
   app.register_modal(
     modal_name,
-    UiNode::ScrollView(x~, y~, w~, h~, children=[
-      UiNode::VBox(x=None, y=None, children=lines),
-    ]),
+    UiNode::ScrollView(
+      x~,
+      y~,
+      w~,
+      h~,
+      children=[UiNode::VBox(x=None, y=None, children=lines)],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   rt.show_modal(modal_name)
@@ -798,9 +853,7 @@ fn make_scroll_runtime(
 test "scroll_by clamps to range" {
   // 5 lines × ui_line_h (~64), viewport h=64 → content_h > viewport
   let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 64.0)
-  ignore(
-    rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()),
-  )
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   assert_true(rt.scroll_max() > 0.0)
   rt.scroll_by(-1000.0)
   assert_eq(rt.scroll_y, 0.0)
@@ -812,9 +865,7 @@ test "scroll_by clamps to range" {
 test "wheel dy positive decreases scroll_y" {
   // Viewport at (100,100) 400×200 so (150,120) is over the scroll area
   let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 200.0)
-  ignore(
-    rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()),
-  )
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   rt.scroll_y = rt.scroll_max()
   let before = rt.scroll_y
   assert_true(before > 0.0)
@@ -825,9 +876,7 @@ test "wheel dy positive decreases scroll_y" {
 ///|
 test "wheel outside viewport is ignored" {
   let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 200.0)
-  ignore(
-    rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()),
-  )
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   rt.scroll_y = rt.scroll_max()
   let before = rt.scroll_y
   assert_false(rt.handle_wheel(10.0, 10.0, 40.0))
@@ -837,18 +886,9 @@ test "wheel outside viewport is ignored" {
 ///|
 test "show_modal backlog pins scroll to newest" {
   // pin_scroll_end before measure sets pin_on_next_layout; paint applies max
-  let rt = make_scroll_runtime(
-    5,
-    100.0,
-    100.0,
-    400.0,
-    64.0,
-    modal_name="backlog",
-  )
+  let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 64.0, modal_name="backlog")
   rt.pin_scroll_end()
-  ignore(
-    rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()),
-  )
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   assert_true(rt.scroll_max() > 0.0)
   assert_true(rt.scroll_y >= rt.scroll_max() - 0.01)
 }
@@ -858,9 +898,7 @@ test "show_modal backlog pins scroll to newest" {
 test "content drag pans scroll_y" {
   // Viewport at (100,100) 400×200; content taller so scroll_max > 0
   let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 200.0)
-  ignore(
-    rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()),
-  )
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   assert_true(rt.scroll_max() > 50.0)
   rt.scroll_y = 50.0
   // Drag content down by 20 (pointer y increases) => scroll_y decreases by 20
@@ -879,9 +917,7 @@ test "content drag pans scroll_y" {
 test "scrollbar thumb drag maps to scroll_y" {
   // Tall content, short viewport so thumb is small and travel is large
   let rt = make_scroll_runtime(8, 100.0, 100.0, 400.0, 200.0)
-  ignore(
-    rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()),
-  )
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   assert_true(rt.scroll_max() > 0.0)
   rt.scroll_y = 0.0
   let caps = FakeCaps::new()
@@ -899,9 +935,7 @@ test "scrollbar thumb drag maps to scroll_y" {
 /// Track click jumps scroll_y by vertical ratio and may start Bar drag.
 test "scrollbar track click jumps scroll_y" {
   let rt = make_scroll_runtime(8, 100.0, 100.0, 400.0, 200.0)
-  ignore(
-    rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()),
-  )
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   rt.scroll_y = 0.0
   let caps = FakeCaps::new()
   let c : &Capabilities = caps
@@ -921,52 +955,66 @@ test "button hit preferred over content pan" {
   // area is not required — Button is a focusable child of ScrollView content.
   app.register_modal(
     "sv",
-    UiNode::Fixed(x=0.0, y=0.0, w=Some(800.0), h=Some(600.0), children=[
-      UiNode::ScrollView(x=100.0, y=100.0, w=400.0, h=200.0, children=[
-        UiNode::VBox(x=None, y=None, children=[
-          UiNode::Button(
-            label="Close",
-            action_id=id,
-            visible=VisiblePred::Always,
-          ),
-          UiNode::Text(
-            src=TextBindSrc::Literal("L1"),
-            x=0.0,
-            y=0.0,
-            font_size=22.0,
-            visible=VisiblePred::Always,
-          ),
-          UiNode::Text(
-            src=TextBindSrc::Literal("L2"),
-            x=0.0,
-            y=0.0,
-            font_size=22.0,
-            visible=VisiblePred::Always,
-          ),
-          UiNode::Text(
-            src=TextBindSrc::Literal("L3"),
-            x=0.0,
-            y=0.0,
-            font_size=22.0,
-            visible=VisiblePred::Always,
-          ),
-          UiNode::Text(
-            src=TextBindSrc::Literal("L4"),
-            x=0.0,
-            y=0.0,
-            font_size=22.0,
-            visible=VisiblePred::Always,
-          ),
-        ]),
-      ]),
-    ]),
+    UiNode::Fixed(
+      x=0.0,
+      y=0.0,
+      w=Some(800.0),
+      h=Some(600.0),
+      children=[
+        UiNode::ScrollView(
+          x=100.0,
+          y=100.0,
+          w=400.0,
+          h=200.0,
+          children=[
+            UiNode::VBox(
+              x=None,
+              y=None,
+              children=[
+                UiNode::Button(
+                  label="Close",
+                  action_id=id,
+                  visible=VisiblePred::Always,
+                ),
+                UiNode::Text(
+                  src=TextBindSrc::Literal("L1"),
+                  x=0.0,
+                  y=0.0,
+                  font_size=22.0,
+                  visible=VisiblePred::Always,
+                ),
+                UiNode::Text(
+                  src=TextBindSrc::Literal("L2"),
+                  x=0.0,
+                  y=0.0,
+                  font_size=22.0,
+                  visible=VisiblePred::Always,
+                ),
+                UiNode::Text(
+                  src=TextBindSrc::Literal("L3"),
+                  x=0.0,
+                  y=0.0,
+                  font_size=22.0,
+                  visible=VisiblePred::Always,
+                ),
+                UiNode::Text(
+                  src=TextBindSrc::Literal("L4"),
+                  x=0.0,
+                  y=0.0,
+                  font_size=22.0,
+                  visible=VisiblePred::Always,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   rt.show_modal("sv")
   rt.sync_bind(UiBindCtx::empty())
-  ignore(
-    rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()),
-  )
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   assert_true(rt.scroll_max() > 0.0)
   rt.scroll_y = 50.0
   let before = rt.scroll_y
@@ -989,9 +1037,7 @@ test "button hit preferred over content pan" {
 /// Down on empty viewport content starts Content drag (consumed).
 test "content hit begins content drag" {
   let rt = make_scroll_runtime(5, 100.0, 100.0, 400.0, 200.0)
-  ignore(
-    rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()),
-  )
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   rt.scroll_y = 50.0
   let caps = FakeCaps::new()
   let c : &Capabilities = caps
@@ -1011,9 +1057,15 @@ test "return_modal clears scroll viewport metrics" {
   // Menu under backlog: return leaves this top (no ScrollView).
   app.register_modal(
     "game_menu",
-    UiNode::Fixed(x=0.0, y=0.0, w=Some(1920.0), h=Some(1080.0), children=[
-      UiNode::Button(label="Continue", action_id=0, visible=VisiblePred::Always),
-    ]),
+    UiNode::Fixed(
+      x=0.0,
+      y=0.0,
+      w=Some(1920.0),
+      h=Some(1080.0),
+      children=[
+        UiNode::Button(label="Continue", action_id=0, visible=VisiblePred::Always),
+      ],
+    ),
   )
   // Enough lines that content_h exceeds viewport (20 × ~64 > 400).
   let lines : Array[UiNode] = []
@@ -1031,20 +1083,28 @@ test "return_modal clears scroll viewport metrics" {
   // Backlog-like viewport geometry so post-pop coords match a real leave path.
   app.register_modal(
     "backlog",
-    UiNode::Fixed(x=0.0, y=0.0, w=Some(1920.0), h=Some(1080.0), children=[
-      UiNode::ScrollView(x=360.0, y=150.0, w=1200.0, h=400.0, children=[
-        UiNode::VBox(x=None, y=None, children=lines),
-      ]),
-      UiNode::Button(label="Close", action_id=1, visible=VisiblePred::Always),
-    ]),
+    UiNode::Fixed(
+      x=0.0,
+      y=0.0,
+      w=Some(1920.0),
+      h=Some(1080.0),
+      children=[
+        UiNode::ScrollView(
+          x=360.0,
+          y=150.0,
+          w=1200.0,
+          h=400.0,
+          children=[UiNode::VBox(x=None, y=None, children=lines)],
+        ),
+        UiNode::Button(label="Close", action_id=1, visible=VisiblePred::Always),
+      ],
+    ),
   )
   let rt = UiRuntime::from_app(app, save_slots=6)
   rt.show_modal("game_menu")
   rt.show_modal("backlog")
   rt.sync_bind(UiBindCtx::empty())
-  ignore(
-    rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()),
-  )
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=UiBindCtx::empty()))
   assert_true(rt.scroll_max() > 0.0)
   // Wheel over measured viewport consumes while backlog is open.
   assert_true(rt.handle_wheel(500.0, 400.0, 40.0))

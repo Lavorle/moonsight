@@ -97,8 +97,7 @@ test "lex floats bools and spans" {
 
 ///|
 test "lexer named negative int and float" {
-  let src =
-    #|@layer.set "y" x=-200 y=-1.5 duration=0.5
+  let src = #|@layer.set "y" x=-200 y=-1.5 duration=0.5
   let toks = @script.lex(src, file="t.yuki")
   let mut saw_neg_int = false
   let mut saw_neg_float = false

@@ -25,11 +25,9 @@ fn test_view_with_layer() -> @runtime.StageView {
 
 ///|
 /// Sample dialogue chrome ops (geometry formerly hard-coded in UiLayout).
-fn dialogue_ops(
-  layout : UiLayout,
-  speaker : String?,
-  body : String,
-) -> Array[@runtime.UiDrawOp] {
+fn dialogue_ops(layout : UiLayout, speaker : String?, body : String) -> Array[
+  @runtime.UiDrawOp,
+] {
   let margin : Float = 48.0
   let pad : Float = 32.0
   let dialogue_h = layout.canvas_h * 0.3
@@ -54,7 +52,7 @@ fn dialogue_ops(
   })
   match speaker {
     None => ()
-    Some(name) =>
+    Some(name) => {
       ops.push({
         kind: 0,
         resource: ui_nameplate,
@@ -69,6 +67,7 @@ fn dialogue_ops(
         focused: false,
         hovered: false,
       })
+    }
   }
   ops.push({
     kind: 1,
@@ -425,18 +424,22 @@ test "paint_modal ops emit buttons and glyphs" {
   let app = @runtime.UiApp::new()
   app.register_modal(
     "test_menu",
-    @runtime.UiNode::VBox(x=Some(100.0), y=Some(200.0), children=[
-      @runtime.UiNode::Button(
-        label="One",
-        action_id=0,
-        visible=@runtime.VisiblePred::Always,
-      ),
-      @runtime.UiNode::Button(
-        label="Two",
-        action_id=1,
-        visible=@runtime.VisiblePred::Always,
-      ),
-    ]),
+    @runtime.UiNode::VBox(
+      x=Some(100.0),
+      y=Some(200.0),
+      children=[
+        @runtime.UiNode::Button(
+          label="One",
+          action_id=0,
+          visible=@runtime.VisiblePred::Always,
+        ),
+        @runtime.UiNode::Button(
+          label="Two",
+          action_id=1,
+          visible=@runtime.VisiblePred::Always,
+        ),
+      ],
+    ),
   )
   let rt = @runtime.UiRuntime::from_app(app, save_slots=6)
   rt.show_modal("test_menu")
@@ -530,18 +533,22 @@ test "title root modal has no dim" {
   let app = @runtime.UiApp::new()
   app.register_modal(
     "title",
-    @runtime.UiNode::VBox(x=Some(0.0), y=Some(0.0), children=[
-      @runtime.UiNode::Button(
-        label="One",
-        action_id=0,
-        visible=@runtime.VisiblePred::Always,
-      ),
-      @runtime.UiNode::Button(
-        label="Two",
-        action_id=1,
-        visible=@runtime.VisiblePred::Always,
-      ),
-    ]),
+    @runtime.UiNode::VBox(
+      x=Some(0.0),
+      y=Some(0.0),
+      children=[
+        @runtime.UiNode::Button(
+          label="One",
+          action_id=0,
+          visible=@runtime.VisiblePred::Always,
+        ),
+        @runtime.UiNode::Button(
+          label="Two",
+          action_id=1,
+          visible=@runtime.VisiblePred::Always,
+        ),
+      ],
+    ),
   )
   let rt = @runtime.UiRuntime::from_app(app, save_slots=6)
   rt.show_modal("title")

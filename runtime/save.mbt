@@ -109,11 +109,6 @@ pub(all) suberror SaveError {
   UnsupportedVersion(version~ : Int)
   InvalidJson(message~ : String)
   DecodeFailed(message~ : String)
-  ModuleMismatch(expected~ : String, found~ : String)
-  UnknownScene(scene~ : String)
-  InvalidInstructionPointer(scene~ : String, ip~ : Int, max_ip~ : Int)
-  UnsupportedCallStack(depth~ : Int)
-  InvalidContinuation(message~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -127,27 +122,11 @@ pub impl Show for SaveError with fn output(self : SaveError, logger : &Logger) -
       logger.write_string("invalid save JSON: \{message}")
     DecodeFailed(message~) =>
       logger.write_string("failed to decode save game: \{message}")
-    ModuleMismatch(expected~, found~) =>
-      logger.write_string(
-        "save module_id mismatch: expected \{expected}, found \{found}",
-      )
-    UnknownScene(scene~) =>
-      logger.write_string("save references unknown scene: \{scene}")
-    InvalidInstructionPointer(scene~, ip~, max_ip~) =>
-      logger.write_string(
-        "save instruction pointer \{ip} is invalid for scene \{scene} (expected 0..\{max_ip})",
-      )
-    UnsupportedCallStack(depth~) =>
-      logger.write_string(
-        "save call_stack depth \{depth} is unsupported by this runtime",
-      )
-    InvalidContinuation(message~) =>
-      logger.write_string("invalid save continuation: \{message}")
   }
 }
 
 ///|
-pub fn is_supported_save_version(version : Int) -> Bool {
+fn supported_save_version(version : Int) -> Bool {
   version == 2 || version == 3 || version == 4
 }
 
@@ -170,7 +149,7 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
   }
   let game : SaveGame = {
     format_version: save_format_version,
-    module_id: self.module_id,
+    module_id: "",
     scene: self.vm.scene,
     ip: self.vm.ip,
     call_stack: [],
@@ -200,9 +179,7 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
 /// wait, choices, and v3 fade/wait remaining fields. v3 layers without `scale`
 /// default to 1.0; v4 is the native scale-aware shape.
 pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
-  let game = parse_save_game(blob)
-  let ops = validate_save_game(self, game)
-  apply_save_game(self, game, ops)
+  apply_save_game(self, parse_save_game(blob))
   // Spec: load returns to narrative play with no residual modal stack.
   self.clear_screens_to_playing()
   // Session backlog is not part of save; drop lines from the prior playthrough.
@@ -210,19 +187,6 @@ pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
   self.backlog_last_key = ""
   // Prefs are not in the save blob; re-apply current gains after mixer restore.
   self.sync_mixer_prefs()
-}
-
-///|
-/// Parse and validate a save against this engine without mutating runtime state.
-///
-/// Hosts should use this for slot classification so version, identity, scene,
-/// instruction-position, and continuation rules remain runtime-authoritative.
-pub fn Engine::validate_save(
-  self : Engine,
-  blob : String,
-) -> Unit raise SaveError {
-  let game = parse_save_game(blob)
-  ignore(validate_save_game(self, game))
 }
 
 ///|
@@ -250,7 +214,7 @@ pub fn parse_save_game(blob : String) -> SaveGame raise SaveError {
   let game : SaveGame = @json.from_json(json) catch {
     err => raise SaveError::DecodeFailed(message=err.to_string())
   }
-  if !is_supported_save_version(game.format_version) {
+  if !supported_save_version(game.format_version) {
     raise SaveError::UnsupportedVersion(version=game.format_version)
   }
   game
@@ -276,7 +240,7 @@ fn ensure_layer_scale_default(json : Json) -> Json {
   match json {
     Object(map) => {
       match map.get("layers") {
-        Some(Array(layers)) =>
+        Some(Array(layers)) => {
           for layer in layers {
             match layer {
               Object(lm) =>
@@ -286,6 +250,7 @@ fn ensure_layer_scale_default(json : Json) -> Json {
               _ => ()
             }
           }
+        }
         _ => ()
       }
       json
@@ -320,7 +285,7 @@ fn reject_unsupported_version(json : Json) -> Int raise SaveError {
       match map.get("format_version") {
         Some(Number(n, ..)) => {
           let version = n.to_int()
-          if !is_supported_save_version(version) {
+          if !supported_save_version(version) {
             raise SaveError::UnsupportedVersion(version~)
           }
           version
@@ -379,60 +344,19 @@ fn save_game_from_v2(v2 : SaveGameV2) -> SaveGame {
 }
 
 ///|
-fn validate_save_game(
-  eng : Engine,
-  game : SaveGame,
-) -> Array[@script.IrOp] raise SaveError {
-  // Empty module_id is the legacy v2-v4 compatibility case. Once a save is
-  // scoped, it must match the runtime identity exactly; an unconfigured runtime
-  // therefore cannot silently load another project's scoped save.
-  if game.module_id != "" && game.module_id != eng.module_id {
-    raise SaveError::ModuleMismatch(
-      expected=eng.module_id,
-      found=game.module_id,
-    )
+fn apply_save_game(eng : Engine, game : SaveGame) -> Unit {
+  match load_scene_ops(eng.vm.ir, game.scene) {
+    Some(ops) => {
+      eng.vm.ops = ops
+      eng.vm.halted = game.wait is Halted
+      eng.vm.last_error = None
+    }
+    None => {
+      eng.vm.ops = []
+      eng.vm.halted = true
+      eng.vm.last_error = Some("unknown scene: \{game.scene}")
+    }
   }
-  if !game.call_stack.is_empty() {
-    raise SaveError::UnsupportedCallStack(depth=game.call_stack.length())
-  }
-  let ops = match load_scene_ops(eng.vm.ir, game.scene) {
-    Some(ops) => ops
-    None => raise SaveError::UnknownScene(scene=game.scene)
-  }
-  let max_ip = ops.length()
-  if game.ip < 0 || game.ip > max_ip {
-    raise SaveError::InvalidInstructionPointer(
-      scene=game.scene,
-      ip=game.ip,
-      max_ip~,
-    )
-  }
-  match game.wait {
-    Choose =>
-      if game.choices is None || game.choose_result_var is None {
-        raise SaveError::InvalidContinuation(
-          message="Choose requires choices and choose_result_var",
-        )
-      }
-    _ =>
-      if game.choices is Some(_) || game.choose_result_var is Some(_) {
-        raise SaveError::InvalidContinuation(
-          message="non-Choose wait cannot carry choice state",
-        )
-      }
-  }
-  ops
-}
-
-///|
-fn apply_save_game(
-  eng : Engine,
-  game : SaveGame,
-  ops : Array[@script.IrOp],
-) -> Unit {
-  eng.vm.ops = ops
-  eng.vm.halted = game.wait is Halted
-  eng.vm.last_error = None
   eng.vm.scene = game.scene
   eng.vm.ip = game.ip
   eng.vm.stack = []
@@ -495,16 +419,8 @@ fn audio_logic_from_mixer(bgm : String?, se : String?) -> AudioLogicState {
     se,
     bgm_volume: Some(m.bgm_volume),
     bgm_fade_to: fade_to,
-    bgm_fade_remaining: if fade_rem > 0.0 {
-      Some(fade_rem)
-    } else {
-      None
-    },
-    bgm_fade_stop: if fade_stop {
-      Some(true)
-    } else {
-      None
-    },
+    bgm_fade_remaining: if fade_rem > 0.0 { Some(fade_rem) } else { None },
+    bgm_fade_stop: if fade_stop { Some(true) } else { None },
   }
 }
 
@@ -524,7 +440,7 @@ fn restore_mixer_from_audio(audio : AudioLogicState) -> Unit {
           Some(true) => true
           _ => false
         }
-        m.fade_bgm_to(target, rem, stop~)
+        m.fade_bgm_to(target, rem, stop=stop)
       }
     _ => ()
   }

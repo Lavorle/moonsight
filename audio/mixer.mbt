@@ -239,11 +239,11 @@ pub fn Mixer::apply_logic(
       match self.bgm {
         Some(cur) =>
           if cur != id {
-            self.play_bgm(id, looped=true, volume~)
+            self.play_bgm(id, looped=true, volume=volume)
           } else {
             self.backend.set_bgm_volume(self.output_bgm_volume(volume))
           }
-        None => self.play_bgm(id, looped=true, volume~)
+        None => self.play_bgm(id, looped=true, volume=volume)
       }
     None => self.stop_bgm()
   }
