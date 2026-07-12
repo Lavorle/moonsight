@@ -189,10 +189,32 @@ export async function loadGameBundle(
   if (typeof digests["game.msb"] !== "string") {
     throw new Error("MoonSight: production manifest digest for game.msb is missing");
   }
+  for (const sectionName of ["resources", "audio"] as const) {
+    const section = manifest?.[sectionName];
+    if (section == null) continue;
+    if (typeof section !== "object" || Array.isArray(section)) {
+      throw new Error(`MoonSight: manifest ${sectionName} map is invalid`);
+    }
+    for (const path of Object.values(section as Record<string, unknown>)) {
+      if (typeof path !== "string" || typeof digests[path] !== "string") {
+        throw new Error(`MoonSight: manifest ${sectionName} artifact '${String(path)}' has no digest`);
+      }
+    }
+  }
   const paths = [
     "game.msb",
     ...Object.keys(digests).filter((path) => path !== "game.msb").sort(),
   ];
+  for (const path of paths) {
+    if (
+      path === "" ||
+      path.startsWith("/") ||
+      path.includes("\\") ||
+      path.split("/").some((part) => part === "" || part === "." || part === "..")
+    ) {
+      throw new Error(`MoonSight: unsafe bundle artifact path '${path}'`);
+    }
+  }
   let gameBytes: Uint8Array | null = null;
   for (const path of paths) {
     const expected = digests[path];

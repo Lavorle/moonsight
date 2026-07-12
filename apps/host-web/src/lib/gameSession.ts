@@ -51,7 +51,7 @@ import {
 } from "./saveSlots";
 import { loadTheme } from "./theme";
 import {
-  loadGameContent,
+  loadGameBundle,
   loadManifest,
   loadWasm,
   validateContentManifest,
@@ -147,6 +147,7 @@ export type Manifest = {
   resources?: Record<string, string>;
   audio?: Record<string, string>;
   save_slots?: number;
+  digests?: Record<string, string>;
   [k: string]: unknown;
 };
 
@@ -493,7 +494,11 @@ export class GameSession {
     contentMode: ContentMode,
   ): Promise<void> {
     if (!this.exports_) throw new Error("MoonSight: runtime is unavailable");
-    await loadGameContent(this.exports_, contentMode);
+    await loadGameBundle(
+      this.exports_,
+      (manifest as Record<string, unknown> | null | undefined) ?? null,
+      contentMode,
+    );
     stopBgm(this.audio);
     this.afterEngineReady(manifest);
   }
@@ -942,9 +947,6 @@ export class GameSession {
         manifestUrl,
       ) as Manifest | null;
 
-      // Preconfigure identity + slot count before engine construction.
-      this.applySaveSlotsFromManifest(manifest);
-      this.applyModuleIdFromManifest(manifest);
       this.setStatus("init engine…");
       await this.maybeLoadSource(manifest, contentMode);
       this.setStatus("loading assets…");

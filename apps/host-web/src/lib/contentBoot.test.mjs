@@ -66,6 +66,28 @@ test("whole-bundle preflight validates every artifact before installing MSB2", a
   assert.deepEqual(calls, ["./game.msb", "./assets/bg.png"]);
 });
 
+test("whole-bundle rejects unsafe and undigested mapped artifacts before mutation", async () => {
+  let mutations = 0;
+  const runtime = { load_msb: () => (mutations += 1) };
+  await assert.rejects(
+    loadGameBundle(runtime, {
+      resources: { bg: "assets/bg.png" },
+      digests: { "game.msb": "a".repeat(64) },
+    }),
+    /resources artifact.*has no digest/,
+  );
+  await assert.rejects(
+    loadGameBundle(runtime, {
+      digests: {
+        "game.msb": "a".repeat(64),
+        "../escape": "a".repeat(64),
+      },
+    }),
+    /unsafe bundle artifact path/,
+  );
+  assert.equal(mutations, 0);
+});
+
 test("production content boot rejects a missing game.msb without demo fallback", async () => {
   const calls = [];
   const runtime = {
