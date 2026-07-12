@@ -17,14 +17,15 @@ test "rollback intent restores the latest aggregate logical checkpoint" {
   assert_eq(first.full_text, "First line.")
 
   eng.tick(Advance)
+  eng.tick(Advance)
   guard eng.stage.text is Some(second) else { fail("second line") }
   assert_eq(second.full_text, "Second line.")
-  assert_eq(eng.rollback.count(), 1)
+  assert_eq(eng.rollback.count(), 2)
 
   eng.tick(Rollback)
   guard eng.stage.text is Some(restored) else { fail("restored first line") }
   assert_eq(restored.full_text, "First line.")
-  assert_eq(eng.rollback.count(), 0)
+  assert_eq(eng.rollback.count(), 1)
 }
 
 ///|
