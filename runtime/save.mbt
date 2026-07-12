@@ -464,11 +464,7 @@ fn SaveGame::to_logical_state(
       wait_remaining: self.wait_remaining,
       dissolve_phase: self.dissolve_phase,
       dissolve_total: self.dissolve_total,
-      bgm: if fade_out {
-        None
-      } else {
-        self.audio.bgm
-      },
+      bgm: if fade_out { None } else { self.audio.bgm },
       se: self.audio.se,
     },
     audio: self.audio,
