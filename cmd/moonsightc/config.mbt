@@ -52,31 +52,42 @@ fn is_ascii_upper(c : Char) -> Bool {
 }
 
 ///|
+fn is_title_script(s : String) -> Bool {
+  if s.length() != 4 {
+    return false
+  }
+  let mut index = 0
+  for c in s {
+    if (index == 0 && !is_ascii_upper(c)) ||
+      (index > 0 && !is_ascii_lower(c)) {
+      return false
+    }
+    index = index + 1
+  }
+  true
+}
+
+///|
 fn is_formal_locale_tag(tag : String) -> Bool {
   let parts = tag.split("-").to_array()
   if parts.length() < 1 || parts.length() > 3 {
     return false
   }
-  let language = parts[0]
+  let language = parts[0].to_owned()
   if (language.length() != 2 && language.length() != 3) ||
     !chars_all(language, is_ascii_lower) {
     return false
   }
   let mut index = 1
   if index < parts.length() && parts[index].length() == 4 {
-    let script = parts[index]
-    if !is_ascii_upper(script[0]) {
+    let script = parts[index].to_owned()
+    if !is_title_script(script) {
       return false
-    }
-    for i in 1..<script.length() {
-      if !is_ascii_lower(script[i]) {
-        return false
-      }
     }
     index = index + 1
   }
   if index < parts.length() {
-    let region = parts[index]
+    let region = parts[index].to_owned()
     let valid_region =
       (region.length() == 2 && chars_all(region, is_ascii_upper)) ||
       (region.length() == 3 && chars_all(region, fn(c) { c.is_ascii_digit() }))
