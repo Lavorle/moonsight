@@ -16,6 +16,7 @@ import {
   INTENT_NONE,
   INTENT_OPEN_BACKLOG,
   INTENT_OPEN_MENU,
+  INTENT_ROLLBACK,
   INTENT_SELECT_BASE,
   INTENT_TOGGLE_AUTO,
 } from "./intents";
@@ -680,6 +681,13 @@ export class GameSession {
         case "a":
         case "A":
           this.pendingIntent = INTENT_TOGGLE_AUTO;
+          break;
+        case "r":
+        case "R":
+          if (!ev.ctrlKey && !ev.metaKey) {
+            this.pendingIntent = INTENT_ROLLBACK;
+            ev.preventDefault();
+          }
           break;
         case "l":
         case "L":

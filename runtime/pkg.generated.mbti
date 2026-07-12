@@ -69,6 +69,12 @@ pub(all) struct BacklogEntry {
   text_id : String?
 } derive(Eq, @debug.Debug)
 
+pub struct BacklogLogicalState {
+  entries : Array[BacklogEntry]
+  capacity : Int
+  last_key : String
+}
+
 pub(all) struct BacklogStore {
   mut entries : Array[BacklogEntry]
   capacity : Int
@@ -102,6 +108,11 @@ pub(all) enum CommandEffect {
   Barrier(String)
 } derive(Eq, @debug.Debug)
 
+pub(all) struct CompletedCommandEffect {
+  effect : CommandEffect
+  succeeded : Bool
+} derive(Eq, @debug.Debug)
+
 pub(all) enum ConfirmKind {
   OverwriteSave(Int)
   QuitToTitle
@@ -110,6 +121,7 @@ pub(all) enum ConfirmKind {
 pub(all) struct Director {
   handlers : Map[String, HostHandler]
   effects : Map[String, CommandEffect]
+  mut completed_effects : Array[CompletedCommandEffect]
 } derive(@debug.Debug)
 pub fn Director::call(Self, String, Stage, Array[Value]) -> HostResult
 pub fn Director::effect_for(Self, String) -> CommandEffect
@@ -136,6 +148,8 @@ pub(all) struct Engine {
   mut backlog_last_key : String
   mut pending_confirm : ConfirmKind?
   mut pending_backend_audio : AudioLogicState?
+  rollback : RollbackRing[EngineLogicalState]
+  mut rollback_unavailable_reason : String
 }
 pub fn Engine::boot_title(Self) -> Unit
 pub fn Engine::clear_screens_to_playing(Self) -> Unit
@@ -148,6 +162,7 @@ pub fn Engine::pointer_event(Self, Double, Double, phase~ : Int) -> Int
 pub fn Engine::prefs_json(Self) -> String
 pub fn Engine::quit_to_title(Self) -> Unit
 pub fn Engine::reconcile_backends(Self) -> Unit
+pub fn Engine::rollback_unavailable(Self) -> String
 pub fn Engine::save(Self, slot? : Int) -> String
 pub fn Engine::set_module_id(Self, String) -> Unit
 pub fn Engine::set_prefs_json(Self, String) -> Int
@@ -161,6 +176,16 @@ pub fn Engine::validate_save(Self, String) -> Unit raise SaveError
 pub fn Engine::view(Self) -> StageView
 pub fn Engine::wheel_event(Self, Double, Double, Double) -> Int
 pub impl Capabilities for Engine
+
+pub struct EngineLogicalState {
+  module_id : String
+  vm : VmLogicalState
+  stage : StageLogicalState
+  ui : UiLogicalState
+  backlog : BacklogLogicalState
+  audio : AudioLogicState
+  auto : Bool
+}
 
 pub(all) struct HostCall {
   name : String
@@ -191,6 +216,7 @@ pub(all) enum Intent {
   MenuLeft
   MenuRight
   OpenBacklog
+  Rollback
 } derive(Eq, @debug.Debug)
 
 type LaidFocus derive(@debug.Debug)
@@ -357,6 +383,22 @@ pub fn Stage::start_layer_tween(Self, id~ : String, prop~ : TweenProp, to~ : Dou
 pub fn Stage::tick_layer_tweens(Self, Double) -> Unit
 pub fn Stage::type_more(Self, String) -> Unit
 
+pub struct StageLogicalState {
+  scene : String
+  vars : Map[String, Value]
+  layers : Array[LayerState]
+  text : TextBlock?
+  choices : ChoiceState?
+  overlay_opacity : Double
+  fade_to : Double
+  fade_remaining : Double
+  wait_remaining : Double
+  dissolve_phase : Int
+  dissolve_total : Double
+  bgm : String?
+  se : String?
+}
+
 pub(all) struct StageView {
   layers : Array[LayerState]
   text : TextBlock?
@@ -448,6 +490,13 @@ pub(all) enum UiHostOp {
   Show(name~ : String, mode~ : String?)
   Hide(name~ : String?)
 } derive(Eq, @debug.Debug)
+
+pub struct UiLogicalState {
+  mode : UiMode
+  stack : Array[ModalInstance]
+  hud_focus : Int
+  scroll_y : Double
+}
 
 pub(all) enum UiMode {
   Title
@@ -552,6 +601,15 @@ pub(all) struct Vm {
 pub fn Vm::from_module(@script.IrModule, entry~ : String) -> Self
 pub fn Vm::jump_scene(Self, String, Stage) -> Unit
 pub fn Vm::run_until_wait(Self, Director, Stage, budget? : Int) -> Unit
+
+pub struct VmLogicalState {
+  scene : String
+  ip : Int
+  stack : Array[Value]
+  halted : Bool
+  wait : WaitKind
+  choose_result_var : String?
+}
 
 pub(all) enum WaitKind {
   Running

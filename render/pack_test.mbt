@@ -109,6 +109,7 @@ test "intent code mapping" {
   assert_eq(intent_to_code(intent_from_code(8)), 8)
   assert_eq(intent_to_code(intent_from_code(9)), 9)
   assert_eq(intent_to_code(intent_from_code(12)), 12)
+  assert_eq(intent_to_code(intent_from_code(19)), 19)
   match intent_from_code(7) {
     MenuLeft => ()
     _ => fail("expected MenuLeft")
@@ -125,6 +126,7 @@ test "intent code mapping" {
     Select(n) => assert_eq(n, 2)
     _ => fail("expected Select(2)")
   }
+  assert_true(intent_from_code(19) == @runtime.Intent::Rollback)
 }
 
 ///|
