@@ -167,3 +167,24 @@ test "rollback stable references remain in the current locale" {
   assert_eq(eng.backlog.get(0).text, "你好")
   assert_eq(eng.ui.prefs.locale, "zh-CN")
 }
+
+///|
+test "partial cross-locale rollback failure is atomic and requeues history" {
+  let eng = rollback_test_engine()
+  eng.stage.begin_text(text_id="dialogue.greeting")
+  eng.stage.type_more("Hello")
+  eng.stage.reveal_chars(2)
+  eng.capture_rollback_checkpoint()
+  let catalogs = LocaleCatalogs::new(default_locale="en", catalogs={
+    "en": { "dialogue.greeting": "Hello" },
+    "zh-CN": { "dialogue.greeting": "你好" },
+  })
+  eng.switch_locale(catalogs, "zh-CN", partial_visible_utf16=1)
+  let before = EngineLogicalState::capture(eng)
+
+  eng.tick(Rollback)
+
+  assert_logical_state_eq(EngineLogicalState::capture(eng), before)
+  assert_eq(eng.rollback.count(), 1)
+  assert_eq(eng.rollback_unavailable(), "rollback.unavailable.restore")
+}
