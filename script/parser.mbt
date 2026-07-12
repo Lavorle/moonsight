@@ -546,4 +546,3 @@ fn merge_span(a : SourceSpan, b : SourceSpan) -> SourceSpan {
     end_col: b.end_col,
   }
 }
-

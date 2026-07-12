@@ -311,7 +311,10 @@ fn UiRuntime::map_bar_y_to_scroll(self : UiRuntime, y : Double) -> Unit {
 
 ///|
 /// Begin a content-pan drag at pointer y (tests + pointer down path).
-pub fn UiRuntime::begin_scroll_drag_content(self : UiRuntime, y~ : Double) -> Unit {
+pub fn UiRuntime::begin_scroll_drag_content(
+  self : UiRuntime,
+  y~ : Double,
+) -> Unit {
   self.scroll_drag = Content(y)
 }
 
@@ -397,7 +400,7 @@ pub fn UiRuntime::return_modal(self : UiRuntime) -> Unit {
     return
   }
   ignore(self.stack.pop())
-  if self.stack.is_empty() && (self.mode is Menu) {
+  if self.stack.is_empty() && self.mode is Menu {
     self.mode = Playing
   }
   // Focusables / ScrollView changed with the stack; drop hover + viewport metrics.
@@ -421,7 +424,7 @@ pub fn UiRuntime::hide_modal(self : UiRuntime, name? : String) -> Unit {
         }
       }
       self.stack = kept
-      if self.stack.is_empty() && (self.mode is Menu) {
+      if self.stack.is_empty() && self.mode is Menu {
         self.mode = Playing
       }
       self.hover = -1
@@ -547,10 +550,7 @@ fn UiRuntime::handle_pointer_scroll(
     let track_x = self.scroll_track_x().to_double()
     let vy = self.scroll_vp_y.to_double()
     let vh = self.scroll_vp_h.to_double()
-    let in_track = x >= track_x &&
-      x < track_x + bar_w &&
-      y >= vy &&
-      y < vy + vh
+    let in_track = x >= track_x && x < track_x + bar_w && y >= vy && y < vy + vh
     if in_track {
       let thumb_y = self.scroll_thumb_y().to_double()
       let thumb_h = self.scroll_thumb_h().to_double()
@@ -626,7 +626,11 @@ pub fn UiRuntime::hover_kind(self : UiRuntime) -> Int {
 
 ///|
 /// Map a normalized 0..1 slider click ratio to a prefs value via `set_pref_f`.
-fn apply_slider_normalized(caps : &Capabilities, key : String, t : Double) -> Unit {
+fn apply_slider_normalized(
+  caps : &Capabilities,
+  key : String,
+  t : Double,
+) -> Unit {
   let t = if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t }
   match key {
     "text_speed" => caps.set_pref_f(key, 0.25 + t * (3.0 - 0.25))
@@ -658,23 +662,21 @@ pub fn UiRuntime::paint_modal(
   self.bind = bind2
   let ops : Array[UiDrawOp] = []
   // Pin: dim when Menu or nested stack (depth > 1). Root Title alone undimmed.
-  if (self.mode is Menu) || self.stack.length() > 1 {
-    ops.push(
-      {
-        kind: 0,
-        resource: ui_res_dim,
-        x: 0.0,
-        y: 0.0,
-        w: Float::from_double(canvas_w),
-        h: Float::from_double(canvas_h),
-        opacity: ui_dim_opacity,
-        z: ui_z_dim,
-        text: None,
-        font_size: 0.0,
-        focused: false,
-        hovered: false,
-      },
-    )
+  if self.mode is Menu || self.stack.length() > 1 {
+    ops.push({
+      kind: 0,
+      resource: ui_res_dim,
+      x: 0.0,
+      y: 0.0,
+      w: Float::from_double(canvas_w),
+      h: Float::from_double(canvas_h),
+      opacity: ui_dim_opacity,
+      z: ui_z_dim,
+      text: None,
+      font_size: 0.0,
+      focused: false,
+      hovered: false,
+    })
   }
   match self.app.modals.get(top.name) {
     None => ()
@@ -944,22 +946,20 @@ fn walk_ui_node(
       if visible.eval(st.bind) &&
         st.paint &&
         rect_intersects_clip(st, px, py, pw, ph) {
-        st.ops.push(
-          {
-            kind: 0,
-            resource: resource,
-            x: px,
-            y: py,
-            w: pw,
-            h: ph,
-            opacity: 1.0,
-            z: ui_z_widget,
-            text: None,
-            font_size: 0.0,
-            focused: false,
-            hovered: false,
-          },
-        )
+        st.ops.push({
+          kind: 0,
+          resource,
+          x: px,
+          y: py,
+          w: pw,
+          h: ph,
+          opacity: 1.0,
+          z: ui_z_widget,
+          text: None,
+          font_size: 0.0,
+          focused: false,
+          hovered: false,
+        })
       }
       (0.0, 0.0)
     }
@@ -976,22 +976,20 @@ fn walk_ui_node(
       let px = origin_x + Float::from_double(x)
       let py = origin_y + Float::from_double(y)
       if st.paint && rect_intersects_clip(st, px, py, ui_btn_w, ui_line_h) {
-        st.ops.push(
-          {
-            kind: 1,
-            resource: "",
-            x: px,
-            y: py,
-            w: ui_btn_w,
-            h: ui_line_h,
-            opacity: 1.0,
-            z: ui_z_widget,
-            text: Some(label),
-            font_size: Float::from_double(font_size),
-            focused: false,
-            hovered: false,
-          },
-        )
+        st.ops.push({
+          kind: 1,
+          resource: "",
+          x: px,
+          y: py,
+          w: ui_btn_w,
+          h: ui_line_h,
+          opacity: 1.0,
+          z: ui_z_widget,
+          text: Some(label),
+          font_size: Float::from_double(font_size),
+          focused: false,
+          hovered: false,
+        })
       }
       // Take a line so VBox/HBox advance past title labels (Phase 3 parity).
       (ui_btn_w, ui_line_h)
@@ -1004,22 +1002,20 @@ fn walk_ui_node(
       if visible.eval(st.bind) &&
         st.paint &&
         rect_intersects_clip(st, px, py, pw, ph) {
-        st.ops.push(
-          {
-            kind: 0,
-            resource: resource,
-            x: px,
-            y: py,
-            w: pw,
-            h: ph,
-            opacity: 1.0,
-            z: ui_z_widget,
-            text: None,
-            font_size: 0.0,
-            focused: false,
-            hovered: false,
-          },
-        )
+        st.ops.push({
+          kind: 0,
+          resource,
+          x: px,
+          y: py,
+          w: pw,
+          h: ph,
+          opacity: 1.0,
+          z: ui_z_widget,
+          text: None,
+          font_size: 0.0,
+          focused: false,
+          hovered: false,
+        })
       }
       (0.0, 0.0)
     }
@@ -1034,16 +1030,14 @@ fn walk_ui_node(
       let idx = st.focus_counter
       st.focus_counter = idx + 1
       let focused = idx == st.focus_index
-      let hovered = (!focused) && (idx == st.hover_index)
-      st.focusables.push(
-        {
-          target: UiFocusTarget::Button(action_id),
-          x: origin_x,
-          y: origin_y,
-          w: ui_btn_w,
-          h: ui_btn_h,
-        },
-      )
+      let hovered = !focused && idx == st.hover_index
+      st.focusables.push({
+        target: UiFocusTarget::Button(action_id),
+        x: origin_x,
+        y: origin_y,
+        w: ui_btn_w,
+        h: ui_btn_h,
+      })
       if st.paint {
         let res = if focused {
           ui_res_button_focus
@@ -1059,22 +1053,20 @@ fn walk_ui_node(
         } else {
           0.75
         }
-        st.ops.push(
-          {
-            kind: 0,
-            resource: res,
-            x: origin_x,
-            y: origin_y,
-            w: ui_btn_w,
-            h: ui_btn_h,
-            opacity,
-            z: ui_z_widget,
-            text: Some(label),
-            font_size: ui_font_size,
-            focused,
-            hovered,
-          },
-        )
+        st.ops.push({
+          kind: 0,
+          resource: res,
+          x: origin_x,
+          y: origin_y,
+          w: ui_btn_w,
+          h: ui_btn_h,
+          opacity,
+          z: ui_z_widget,
+          text: Some(label),
+          font_size: ui_font_size,
+          focused,
+          hovered,
+        })
       }
       (ui_btn_w, ui_line_h)
     }
@@ -1093,66 +1085,60 @@ fn walk_ui_node(
       let idx = st.focus_counter
       st.focus_counter = idx + 1
       let focused = idx == st.focus_index
-      let hovered = (!focused) && (idx == st.hover_index)
-      st.focusables.push(
-        {
-          target: UiFocusTarget::Slider(key),
-          x: px,
-          y: py,
-          w: bw,
-          h: bh,
-        },
-      )
+      let hovered = !focused && idx == st.hover_index
+      st.focusables.push({
+        target: UiFocusTarget::Slider(key),
+        x: px,
+        y: py,
+        w: bw,
+        h: bh,
+      })
       if st.paint {
         let t = pref_normalized(st.bind.prefs, key)
         let fill_w = bw * Float::from_double(t)
         // Track (full width).
-        st.ops.push(
-          {
+        st.ops.push({
+          kind: 0,
+          resource: ui_res_slider_track,
+          x: px,
+          y: py,
+          w: bw,
+          h: bh,
+          opacity: if focused {
+            0.55
+          } else if hovered {
+            0.5
+          } else {
+            0.4
+          },
+          z: ui_z_widget,
+          text: None,
+          font_size: 0.0,
+          focused: false,
+          hovered: false,
+        })
+        // Fill proportional to normalized pref value.
+        if fill_w > 0.0 {
+          st.ops.push({
             kind: 0,
-            resource: ui_res_slider_track,
+            resource: ui_res_slider_fill,
             x: px,
             y: py,
-            w: bw,
+            w: fill_w,
             h: bh,
             opacity: if focused {
-              0.55
+              1.0
             } else if hovered {
-              0.5
+              0.95
             } else {
-              0.4
+              0.85
             },
             z: ui_z_widget,
             text: None,
             font_size: 0.0,
-            focused: false,
-            hovered: false,
-          },
-        )
-        // Fill proportional to normalized pref value.
-        if fill_w > 0.0 {
-          st.ops.push(
-            {
-              kind: 0,
-              resource: ui_res_slider_fill,
-              x: px,
-              y: py,
-              w: fill_w,
-              h: bh,
-              opacity: if focused {
-                1.0
-              } else if hovered {
-                0.95
-              } else {
-                0.85
-              },
-              z: ui_z_widget,
-              text: None,
-              font_size: 0.0,
-              focused,
-              hovered,
-            },
-          )
+            focused,
+            hovered,
+          })
         }
       }
       // Flow size: at least one button line so VBox advances past the control.
@@ -1175,16 +1161,14 @@ fn walk_ui_node(
           let idx = st.focus_counter
           st.focus_counter = idx + 1
           let focused = idx == st.focus_index
-          let hovered = (!focused) && (idx == st.hover_index)
-          st.focusables.push(
-            {
-              target: UiFocusTarget::Choice(i),
-              x: bx,
-              y: row_y,
-              w: bw,
-              h: btn_h,
-            },
-          )
+          let hovered = !focused && idx == st.hover_index
+          st.focusables.push({
+            target: UiFocusTarget::Choice(i),
+            x: bx,
+            y: row_y,
+            w: bw,
+            h: btn_h,
+          })
           if st.paint {
             let res = if focused {
               ui_res_choice_focus
@@ -1200,22 +1184,20 @@ fn walk_ui_node(
             } else {
               0.75
             }
-            st.ops.push(
-              {
-                kind: 0,
-                resource: res,
-                x: bx,
-                y: row_y,
-                w: bw,
-                h: btn_h,
-                opacity,
-                z: ui_z_widget,
-                text: Some(labels[i]),
-                font_size: ui_font_size,
-                focused,
-                hovered,
-              },
-            )
+            st.ops.push({
+              kind: 0,
+              resource: res,
+              x: bx,
+              y: row_y,
+              w: bw,
+              h: btn_h,
+              opacity,
+              z: ui_z_widget,
+              text: Some(labels[i]),
+              font_size: ui_font_size,
+              focused,
+              hovered,
+            })
           }
         }
         i = i + 1
@@ -1291,40 +1273,36 @@ fn walk_ui_node(
       if st.paint && content_h > vh {
         let bar_w = rt.scroll_bar_w
         let track_x = rt.scroll_track_x()
-        st.ops.push(
-          {
-            kind: 0,
-            resource: ui_res_scroll_track,
-            x: track_x,
-            y: vy,
-            w: bar_w,
-            h: vh,
-            opacity: 0.45,
-            z: ui_z_widget,
-            text: None,
-            font_size: 0.0,
-            focused: false,
-            hovered: false,
-          },
-        )
+        st.ops.push({
+          kind: 0,
+          resource: ui_res_scroll_track,
+          x: track_x,
+          y: vy,
+          w: bar_w,
+          h: vh,
+          opacity: 0.45,
+          z: ui_z_widget,
+          text: None,
+          font_size: 0.0,
+          focused: false,
+          hovered: false,
+        })
         let thumb_h = rt.scroll_thumb_h()
         let thumb_y = rt.scroll_thumb_y()
-        st.ops.push(
-          {
-            kind: 0,
-            resource: ui_res_scroll_thumb,
-            x: track_x,
-            y: thumb_y,
-            w: bar_w,
-            h: thumb_h,
-            opacity: 0.85,
-            z: ui_z_widget,
-            text: None,
-            font_size: 0.0,
-            focused: false,
-            hovered: false,
-          },
-        )
+        st.ops.push({
+          kind: 0,
+          resource: ui_res_scroll_thumb,
+          x: track_x,
+          y: thumb_y,
+          w: bar_w,
+          h: thumb_h,
+          opacity: 0.85,
+          z: ui_z_widget,
+          text: None,
+          font_size: 0.0,
+          focused: false,
+          hovered: false,
+        })
       }
       // Absolute viewport like Panel: no flow size contribution.
       (0.0, 0.0)

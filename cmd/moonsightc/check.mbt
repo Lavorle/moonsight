@@ -42,7 +42,7 @@ fn cmd_check(path : String) -> Int {
       } else {
         path
       }
-      let ir = compile_yuki_paths(files[:], entry_file=entry_file)
+      let ir = compile_yuki_paths(files[:], entry_file~)
       let missing = unknown_jump_targets(ir)
       if missing.length() > 0 {
         for t in missing {

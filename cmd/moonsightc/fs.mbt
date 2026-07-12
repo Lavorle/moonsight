@@ -193,9 +193,7 @@ fn remove_tree(path : String) -> Unit raise IoError {
 ///|
 /// Best-effort recursive remove (swallows I/O errors).
 fn remove_tree_best_effort(path : String) -> Unit {
-  try {
-    remove_tree(path)
-  } catch {
+  remove_tree(path) catch {
     IoError(_) => ()
   }
 }

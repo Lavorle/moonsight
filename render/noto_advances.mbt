@@ -102,4 +102,3 @@ pub fn noto_advance_em(ch : Char) -> Float {
     _ => 0.55
   }
 }
-

@@ -16,12 +16,9 @@ pub(all) struct BacklogStore {
 
 ///|
 /// Create an empty backlog. Default capacity is 100 lines.
-pub fn BacklogStore::new(capacity~ : Int = 100) -> BacklogStore {
+pub fn BacklogStore::new(capacity? : Int = 100) -> BacklogStore {
   let cap = if capacity < 1 { 1 } else { capacity }
-  {
-    entries: [],
-    capacity: cap,
-  }
+  { entries: [], capacity: cap }
 }
 
 ///|

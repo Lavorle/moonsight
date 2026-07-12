@@ -223,7 +223,7 @@ fn emit_text_glyphs(
       let cell_w = if adv_i < 1 { 3 } else { adv_i + 2 }
       // ~1.5em: room for f-like ascenders AND g/y descenders under one baseline
       let cell_h = size + size / 2 + 4
-      let entry = atlas.get_or_queue(ch, size, cell_w=cell_w, cell_h=cell_h)
+      let entry = atlas.get_or_queue(ch, size, cell_w~, cell_h~)
       let sw = Float::from_int(entry.atlas_w)
       let sh = Float::from_int(entry.atlas_h)
       glyphs.push({

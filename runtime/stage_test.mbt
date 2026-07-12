@@ -167,7 +167,12 @@ test "tick_layer_tweens eases opacity linearly" {
     z=10,
     opacity=0.0,
   )
-  st.start_layer_tween(id="y", prop=@runtime.TweenProp::Opacity, to=1.0, duration=1.0)
+  st.start_layer_tween(
+    id="y",
+    prop=@runtime.TweenProp::Opacity,
+    to=1.0,
+    duration=1.0,
+  )
   st.tick_layer_tweens(0.25)
   assert_eq(st.layers[0].opacity, 0.25)
   st.tick_layer_tweens(0.75)
@@ -185,9 +190,19 @@ test "layer scale snaps and tweens" {
     z=0,
   )
   assert_eq(st.layers[0].scale, 1.0)
-  st.start_layer_tween(id="y", prop=@runtime.TweenProp::Scale, to=0.5, duration=0.0)
+  st.start_layer_tween(
+    id="y",
+    prop=@runtime.TweenProp::Scale,
+    to=0.5,
+    duration=0.0,
+  )
   assert_eq(st.layers[0].scale, 0.5)
-  st.start_layer_tween(id="y", prop=@runtime.TweenProp::Scale, to=1.0, duration=1.0)
+  st.start_layer_tween(
+    id="y",
+    prop=@runtime.TweenProp::Scale,
+    to=1.0,
+    duration=1.0,
+  )
   st.tick_layer_tweens(0.5)
   let s = st.layers[0].scale
   assert_true(s > 0.74 && s < 0.76)
@@ -208,7 +223,13 @@ test "snapshot_layers sorts by kind then z" {
 ///|
 test "pending_hide removes layer after opacity tween" {
   let st = @runtime.Stage::new()
-  st.show_layer(id="y", layer=@runtime.LayerKind::Character, resource="c", z=1, opacity=1.0)
+  st.show_layer(
+    id="y",
+    layer=@runtime.LayerKind::Character,
+    resource="c",
+    z=1,
+    opacity=1.0,
+  )
   st.begin_hide_layer(id="y", duration=0.5)
   st.tick_layer_tweens(0.5)
   assert_eq(st.layers.length(), 0)
@@ -219,40 +240,31 @@ test "pending_hide removes layer after opacity tween" {
 test "builtin layer.show cancels pending hide tween" {
   let st = @runtime.Stage::new()
   assert_true(
-    @runtime.dispatch_builtin(
-      "layer.show",
-      st,
-      [
-        @runtime.Value::Str("y"),
-        @runtime.Value::Str("c"),
-        @runtime.Value::Str("#:opacity"),
-        @runtime.Value::Float(1.0),
-      ],
-    ) ==
+    @runtime.dispatch_builtin("layer.show", st, [
+      @runtime.Value::Str("y"),
+      @runtime.Value::Str("c"),
+      @runtime.Value::Str("#:opacity"),
+      @runtime.Value::Float(1.0),
+    ]) ==
     @runtime.HostResult::Ok,
   )
   assert_eq(st.layers.length(), 1)
   assert_true(
-    @runtime.dispatch_builtin(
-      "layer.hide",
-      st,
-      [
-        @runtime.Value::Str("y"),
-        @runtime.Value::Str("#:duration"),
-        @runtime.Value::Float(0.5),
-      ],
-    ) ==
+    @runtime.dispatch_builtin("layer.hide", st, [
+      @runtime.Value::Str("y"),
+      @runtime.Value::Str("#:duration"),
+      @runtime.Value::Float(0.5),
+    ]) ==
     @runtime.HostResult::Ok,
   )
   assert_true(st.layers[0].pending_hide)
   st.tick_layer_tweens(0.25)
   assert_eq(st.layers.length(), 1)
   assert_true(
-    @runtime.dispatch_builtin(
-      "layer.show",
-      st,
-      [@runtime.Value::Str("y"), @runtime.Value::Str("c")],
-    ) ==
+    @runtime.dispatch_builtin("layer.show", st, [
+      @runtime.Value::Str("y"),
+      @runtime.Value::Str("c"),
+    ]) ==
     @runtime.HostResult::Ok,
   )
   assert_eq(st.layers.length(), 1)

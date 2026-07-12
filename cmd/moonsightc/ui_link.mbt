@@ -128,7 +128,8 @@ fn restore_project_ui_stub() -> Unit {
         write_project_ui_stub(ui_dir)
         println("restored host_web/project_ui stub")
       } catch {
-        IoError(msg) => println("warning: failed to restore project_ui stub: \{msg}")
+        IoError(msg) =>
+          println("warning: failed to restore project_ui stub: \{msg}")
       }
   }
 }
@@ -138,9 +139,13 @@ fn restore_project_ui_stub() -> Unit {
 ///
 /// Always rewrites `moon.pkg` to the engine runtime import (project packages
 /// are not full modules — only sources are linked).
-fn prepare_project_ui(project_dir : String, cfg : ProjectConfig) -> Unit raise IoError {
+fn prepare_project_ui(
+  project_dir : String,
+  cfg : ProjectConfig,
+) -> Unit raise IoError {
   match find_project_ui_dir() {
-    None => raise IoError("host_web/project_ui not found (run from engine repo)")
+    None =>
+      raise IoError("host_web/project_ui not found (run from engine repo)")
     Some(ui_dir) =>
       match cfg.ui_package {
         None => {
@@ -159,7 +164,10 @@ fn prepare_project_ui(project_dir : String, cfg : ProjectConfig) -> Unit raise I
           try {
             ensure_dir(ui_dir)
             clear_project_ui_mbt(ui_dir)
-            write_string_to_file(join_path(ui_dir, "moon.pkg"), project_ui_moon_pkg())
+            write_string_to_file(
+              join_path(ui_dir, "moon.pkg"),
+              project_ui_moon_pkg(),
+            )
             let mut copied = 0
             for name in read_dir(src) {
               if name.has_suffix(".mbt") {
@@ -189,14 +197,15 @@ fn rebuild_host_web_wasm() -> Unit raise IoError {
     None => raise IoError("engine root not found for moon build host_web")
     Some(root) => {
       // Quote-free: engine paths are expected to be simple. Use sh -c via system.
-      let cmd =
-        "cd \{root} && moon build --target wasm-gc --release host_web"
+      let cmd = "cd \{root} && moon build --target wasm-gc --release host_web"
       println("running: \{cmd}")
       let rc = shell_run(cmd)
       if rc != 0 {
         raise IoError("moon build host_web failed (exit \{rc})")
       }
-      let wasm = join_path(root, "_build/wasm-gc/release/build/host_web/host_web.wasm")
+      let wasm = join_path(
+        root, "_build/wasm-gc/release/build/host_web/host_web.wasm",
+      )
       guard path_exists(wasm) else {
         raise IoError("host_web.wasm missing after build: \{wasm}")
       }

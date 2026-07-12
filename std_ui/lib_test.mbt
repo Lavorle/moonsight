@@ -131,7 +131,11 @@ test "save_load paints slot empty and filled icons" {
     occupied: [false, true, false, false, false, false],
     modal_mode: Some("load"),
   }
-  let ops_load = rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind=bind_load)
+  let ops_load = rt.paint_modal(
+    canvas_w=1920.0,
+    canvas_h=1080.0,
+    bind=bind_load,
+  )
   let mut empty_load = 0
   let mut filled_load = 0
   for op in ops_load {
@@ -301,7 +305,9 @@ test "typewriter bind exposes visible prefix only" {
   eng.sync_ui_bind()
   let body = eng.ui.bind.dialogue_body
   assert_true(body.length() >= 1)
-  assert_true(body.length() < 5 || eng.stage.text is Some({ complete: true, .. }))
+  assert_true(
+    body.length() < 5 || eng.stage.text is Some({ complete: true, .. }),
+  )
   guard eng.stage.text is Some(t) else { fail("text") }
   assert_eq(body, t.full_text.unsafe_substring(start=0, end=t.visible_chars))
 }
