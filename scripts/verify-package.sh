@@ -65,7 +65,7 @@ def require_file(relative: str) -> Path:
     return path
 
 
-index = require_file("index.html")
+index_html = require_file("index.html")
 manifest_path = require_file("manifest.json")
 msb = require_file("game.msb")
 require_file("host_web.wasm")
@@ -190,9 +190,9 @@ if manifest_path.is_file() and manifest_path.stat().st_size:
         for relative in sorted(declared - actual_artifacts):
             errors.append(f"manifest digest declares missing artifact: {relative}")
 
-if index.is_file() and index.stat().st_size:
+if index_html.is_file() and index_html.stat().st_size:
     try:
-        html = index.read_text(encoding="utf-8")
+        html = index_html.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
         errors.append(f"index.html is not valid UTF-8 text: {error}")
     else:
