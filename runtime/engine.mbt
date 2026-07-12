@@ -547,6 +547,7 @@ pub fn Engine::tick(
   if skip_held && playing && self.stage.wait_remaining <= 0.0 {
     self.tick_skip_burst()
   }
+  self.enforce_completed_effects()
   self.drain_ui_ops()
   // Re-check playing: skip burst or host ops may have opened a modal.
   let playing = self.ui.stack.is_empty() && !(self.ui.mode is Title)
@@ -556,6 +557,17 @@ pub fn Engine::tick(
     self.tick_typewriter(dt)
   }
   @audio.global_mixer().tick(dt)
+}
+
+///|
+/// Enforce Director-owned rollback semantics after command execution.
+fn Engine::enforce_completed_effects(self : Engine) -> Unit {
+  for completed in self.director.drain_completed_effects() {
+    self.rollback.after_effect(
+      completed.effect,
+      succeeded=completed.succeeded,
+    )
+  }
 }
 
 ///|

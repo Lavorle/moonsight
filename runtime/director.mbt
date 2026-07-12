@@ -6,7 +6,15 @@
 pub(all) struct Director {
   handlers : Map[String, HostHandler]
   effects : Map[String, CommandEffect]
+  mut completed_effects : Array[CompletedCommandEffect]
 } derive(Debug)
+
+///|
+/// One completed Director call awaiting rollback lifecycle enforcement.
+pub(all) struct CompletedCommandEffect {
+  effect : CommandEffect
+  succeeded : Bool
+} derive(Debug, Eq)
 
 ///|
 /// Rollback policy attached to every Director registration.
@@ -48,13 +56,14 @@ pub fn Director::with_builtins() -> Director {
       "layer.set": Checkpointed,
       "var.set": Checkpointed,
     },
+    completed_effects: [],
   }
 }
 
 ///|
 /// Empty director (no handlers); useful for tests that inject handlers later.
 pub fn Director::new() -> Director {
-  { handlers: {}, effects: {} }
+  { handlers: {}, effects: {}, completed_effects: [] }
 }
 
 ///|
@@ -120,13 +129,28 @@ pub fn Director::call(
   stage : Stage,
   args : Array[Value],
 ) -> HostResult {
-  match self.handlers.get(name) {
+  let result = match self.handlers.get(name) {
     Some(Builtin(kind)) => dispatch_builtin_kind(kind, stage, args)
     Some(Handler(f)) => f(stage, args)
     None =>
       // Fall back to string dispatch so unregistered-but-known builtins still work.
       dispatch_builtin(name, stage, args)
   }
+  self.completed_effects.push({
+    effect: self.effect_for(name),
+    succeeded: !(result is Error(_)),
+  })
+  result
+}
+
+///|
+/// Consume completed effects exactly once after a VM execution boundary.
+fn Director::drain_completed_effects(
+  self : Director,
+) -> Array[CompletedCommandEffect] {
+  let effects = self.completed_effects
+  self.completed_effects = []
+  effects
 }
 
 ///|

@@ -96,3 +96,32 @@ test "director registrations always expose an effect descriptor" {
     Barrier("rollback.barrier.unknown-command"),
   )
 }
+
+///|
+test "director records successful and failed effect completion" {
+  let stage = @runtime.Stage::new()
+  let dir = @runtime.Director::new()
+  dir.register_fn_with_effect(
+    "audio.bgm",
+    (_stage, _args) => Ok,
+    CompensatableAudio,
+  )
+  dir.register_fn_with_effect(
+    "external.fail",
+    (_stage, _args) => Error("blocked"),
+    Barrier("rollback.barrier.external"),
+  )
+  ignore(dir.call("audio.bgm", stage, []))
+  ignore(dir.call("external.fail", stage, []))
+  let completed = dir.completed_effects
+  assert_eq(completed.length(), 2)
+  assert_true(
+    completed[0] == { effect: CompensatableAudio, succeeded: true },
+  )
+  assert_true(
+    completed[1] == {
+      effect: Barrier("rollback.barrier.external"),
+      succeeded: false,
+    },
+  )
+}
