@@ -56,7 +56,9 @@ pub(all) struct LayerState {
 /// Current dialogue typewriter block on stage.
 pub(all) struct TextBlock {
   speaker : String?
+  speaker_id : String?
   full_text : String
+  text_id : String?
   visible_chars : Int
   complete : Bool
 } derive(Debug, Eq, ToJson, FromJson)
@@ -65,6 +67,7 @@ pub(all) struct TextBlock {
 /// Active choice UI: option labels and optional user selection index.
 pub(all) struct ChoiceState {
   options : Array[String]
+  option_ids : Array[String?]
   selected : Int?
 } derive(Debug)
 
@@ -469,8 +472,20 @@ pub fn Stage::get_var(self : Stage, name : String) -> Value {
 
 ///|
 /// Start a new dialogue block (resets typewriter state).
-pub fn Stage::begin_text(self : Stage, speaker? : String) -> Unit {
-  self.text = Some({ speaker, full_text: "", visible_chars: 0, complete: false })
+pub fn Stage::begin_text(
+  self : Stage,
+  speaker? : String,
+  speaker_id? : String,
+  text_id? : String,
+) -> Unit {
+  self.text = Some({
+    speaker,
+    speaker_id,
+    full_text: "",
+    text_id,
+    visible_chars: 0,
+    complete: false,
+  })
 }
 
 ///|
@@ -481,12 +496,7 @@ pub fn Stage::type_more(self : Stage, chunk : String) -> Unit {
   match self.text {
     None => ()
     Some(t) =>
-      self.text = Some({
-        speaker: t.speaker,
-        full_text: t.full_text + chunk,
-        visible_chars: t.visible_chars,
-        complete: false,
-      })
+      self.text = Some({ ..t, full_text: t.full_text + chunk, complete: false })
   }
 }
 
@@ -496,12 +506,7 @@ pub fn Stage::complete_text(self : Stage) -> Unit {
   match self.text {
     None => ()
     Some(t) =>
-      self.text = Some({
-        speaker: t.speaker,
-        full_text: t.full_text,
-        visible_chars: t.full_text.length(),
-        complete: true,
-      })
+      self.text = Some({ ..t, visible_chars: t.full_text.length(), complete: true })
   }
 }
 
@@ -523,12 +528,7 @@ pub fn Stage::reveal_chars(self : Stage, n : Int) -> Unit {
       let len = t.full_text.length()
       let next = t.visible_chars + n
       let visible = if next >= len { len } else { next }
-      self.text = Some({
-        speaker: t.speaker,
-        full_text: t.full_text,
-        visible_chars: visible,
-        complete: visible >= len,
-      })
+      self.text = Some({ ..t, visible_chars: visible, complete: visible >= len })
     }
   }
 }
@@ -537,7 +537,29 @@ pub fn Stage::reveal_chars(self : Stage, n : Int) -> Unit {
 /// Present choice options; keyboard/mouse focus starts on the first row.
 pub fn Stage::set_choices(self : Stage, options : Array[String]) -> Unit {
   let focus : Int? = if options.length() > 0 { Some(0) } else { None }
-  self.choices = Some({ options: options.copy(), selected: focus })
+  self.choices = Some({
+    options: options.copy(),
+    option_ids: options.map(_ => None),
+    selected: focus,
+  })
+}
+
+///|
+/// Present choices with author-owned stable IDs. Order is canonical.
+pub fn Stage::set_localized_choices(
+  self : Stage,
+  options : Array[String],
+  option_ids : Array[String],
+) -> Unit raise {
+  if options.length() != option_ids.length() {
+    fail("choice stable ID count must match option count")
+  }
+  let focus : Int? = if options.length() > 0 { Some(0) } else { None }
+  self.choices = Some({
+    options: options.copy(),
+    option_ids: option_ids.map(id => Some(id)),
+    selected: focus,
+  })
 }
 
 ///|
@@ -555,7 +577,7 @@ pub fn Stage::select_choice(self : Stage, index : Int) -> Unit {
       } else if i >= c.options.length() {
         i = c.options.length() - 1
       }
-      self.choices = Some({ options: c.options, selected: Some(i) })
+      self.choices = Some({ ..c, selected: Some(i) })
     }
   }
 }
@@ -579,7 +601,7 @@ pub fn Stage::move_choice_focus(self : Stage, delta : Int) -> Unit {
       if next < 0 {
         next = next + n
       }
-      self.choices = Some({ options: c.options, selected: Some(next) })
+      self.choices = Some({ ..c, selected: Some(next) })
     }
   }
 }
@@ -605,4 +627,62 @@ pub fn Stage::choice_focus(self : Stage) -> Int? {
 /// Clear active choices.
 pub fn Stage::clear_choices(self : Stage) -> Unit {
   self.choices = None
+}
+
+///|
+/// Atomically relocalize live dialogue and choice labels from stable IDs.
+/// Partial dialogue requires a Host-provided UTF-16 boundary derived from true
+/// grapheme segmentation; this runtime never substitutes code-point counting.
+pub fn Stage::relocalize(
+  self : Stage,
+  catalogs : LocaleCatalogs,
+  locale : String,
+  partial_visible_utf16? : Int,
+) -> Unit raise {
+  let next_text = match self.text {
+    None => None
+    Some(text) => {
+      let speaker = match text.speaker_id {
+        Some(id) => Some(catalogs.resolve(locale, id))
+        None => text.speaker
+      }
+      let full_text = match text.text_id {
+        Some(id) => catalogs.resolve(locale, id)
+        None => text.full_text
+      }
+      let visible_chars = if text.complete {
+        full_text.length()
+      } else if text.text_id is Some(_) {
+        match partial_visible_utf16 {
+          Some(boundary) => if boundary < 0 || boundary > full_text.length() {
+            fail("localized grapheme boundary is outside resolved text")
+          } else {
+            boundary
+          }
+          None => fail("partial locale switch requires grapheme boundary")
+        }
+      } else {
+        text.visible_chars
+      }
+      Some({ ..text, speaker, full_text, visible_chars })
+    }
+  }
+  let next_choices = match self.choices {
+    None => None
+    Some(choices) => {
+      if choices.option_ids.length() != choices.options.length() {
+        fail("choice stable ID count must match option count")
+      }
+      let options : Array[String] = []
+      for i in 0..<choices.options.length() {
+        options.push(match choices.option_ids[i] {
+          Some(id) => catalogs.resolve(locale, id)
+          None => choices.options[i]
+        })
+      }
+      Some({ ..choices, options })
+    }
+  }
+  self.text = next_text
+  self.choices = next_choices
 }
