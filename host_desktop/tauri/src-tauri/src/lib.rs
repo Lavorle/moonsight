@@ -90,9 +90,9 @@ fn recover_interrupted_replace_locked(path: &Path) -> io::Result<()> {
     let backup = backup_path(path);
     let mut changed = false;
 
-    if path.exists() {
+    if path.try_exists()? {
         changed |= remove_if_exists(&backup)?;
-    } else if backup.exists() {
+    } else if backup.try_exists()? {
         fs::rename(&backup, path)?;
         changed = true;
     }
@@ -142,7 +142,7 @@ fn durable_write_with_fault(path: &Path, body: &str, _fault: WriteFault) -> io::
     file.sync_all()?;
     drop(file);
 
-    let had_last_good = path.exists();
+    let had_last_good = path.try_exists()?;
     if had_last_good {
         fs::rename(path, &backup)?;
         if let Err(error) = sync_directory(parent) {
