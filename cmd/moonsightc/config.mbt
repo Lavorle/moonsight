@@ -58,8 +58,7 @@ fn is_title_script(s : String) -> Bool {
   }
   let mut index = 0
   for c in s {
-    if (index == 0 && !is_ascii_upper(c)) ||
-      (index > 0 && !is_ascii_lower(c)) {
+    if (index == 0 && !is_ascii_upper(c)) || (index > 0 && !is_ascii_lower(c)) {
       return false
     }
     index = index + 1
@@ -88,8 +87,9 @@ fn is_formal_locale_tag(tag : String) -> Bool {
   }
   if index < parts.length() {
     let region = parts[index].to_owned()
-    let valid_region =
-      (region.length() == 2 && chars_all(region, is_ascii_upper)) ||
+    let valid_region = (
+        region.length() == 2 && chars_all(region, is_ascii_upper)
+      ) ||
       (region.length() == 3 && chars_all(region, fn(c) { c.is_ascii_digit() }))
     if !valid_region {
       return false
