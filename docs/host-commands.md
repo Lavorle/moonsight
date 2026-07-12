@@ -402,8 +402,16 @@ Writers always emit **format_version 4**. Loaders accept **v2, v3, and v4**.
 - v3 loads: layers missing `scale` default to `1.0`; otherwise same as v3 shape.
 - v2 loads: layers without tweens; `kind` defaults as stored (missing → character semantics where applicable); no tween restore; `scale=1.0`.
 - Unknown higher versions are rejected with a clear error.
+- Saves whose non-empty `module_id` differs from the current manifest `name`
+  are rejected before runtime state changes. Legacy v2-v4 saves without an ID
+  remain loadable.
 - **UI modal stack / HUD focus are not saved.** **Prefs are not part of slot saves.**
 - **Mid-dissolve save/load:** dual-phase dissolve is not part of the save format; after load the dissolve clock is hard-cleared (`dissolve_phase=0`, `dissolve_total=0`). Authors should not rely on resuming an in-flight dissolve (remaining `fade_*` may continue as a simple fade only).
+
+There is no v5 migration in this release: writers stay on v4 and known v2-v4
+inputs load in place. Corrupt JSON, unsupported versions, wrong-project IDs,
+unknown scenes, and stale instruction pointers are reported as failures; they
+are not rewritten or treated as empty slots.
 
 ### Multi-slot + prefs (Phase 3+)
 
@@ -414,6 +422,17 @@ Writers always emit **format_version 4**. Loaders accept **v2, v3, and v4**.
 | Prefs fields | `text_speed`, `auto_mode`, `master_volume`, `bgm_volume`, `se_volume` |
 | Quick keys | Ctrl/Cmd+S / Ctrl/Cmd+L → **slot 0** |
 | `save_slots` | `moonsight.json` optional field (default 6, clamp 1..20); also in `manifest.json` |
+
+Slot discovery distinguishes `empty`, `occupied-valid`, `occupied-corrupt`,
+`occupied-incompatible`, and storage read failures. Only envelope-valid v2-v4
+JSON is seeded into the runtime; semantic validation still happens in the
+runtime before mutation.
+
+Save completion is observable at the persistence boundary: Web resolves after
+the synchronous `localStorage.setItem`; desktop resolves after the Tauri write
+has synced the replacement and directory. Writes are serialized. Visibility
+loss and orderly session shutdown call `flush`; a rejected write or flush must
+be shown as a failure rather than a successful save.
 
 ---
 

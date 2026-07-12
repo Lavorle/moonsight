@@ -114,8 +114,14 @@ constructs `DesktopSaveStore`, which preloads prefs + slots then write-throughs 
 | Windows | `%APPDATA%\app.moonsight.desktop\` |
 
 Commands (ACL: `allow-moonsight-save`): `read_prefs`, `write_prefs`,
-`read_save_slot`, `write_save_slot`. Browser builds keep `WebSaveStore` /
-`localStorage` (`moonsight/prefs`, `moonsight/save/{n}`).
+`read_save_slot`, `write_save_slot`, `flush_persistence`. Browser builds keep
+`WebSaveStore` / `localStorage` (`moonsight/prefs`, `moonsight/save/{n}`).
+
+Desktop writes resolve only after the new file and parent directory are synced.
+Writes are serialized, and shutdown awaits `flush_persistence`; a failed write
+keeps the previous committed in-memory value and the Rust layer restores or
+recovers the last-good file. Interrupted `.tmp` / `.bak` artifacts are cleaned
+on the next read or write.
 
 **Web slots and desktop slots are not interchangeable** — no automatic migration
 between browser `localStorage` and appData files. Engine save JSON remains v4
