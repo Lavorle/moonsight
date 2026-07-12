@@ -93,7 +93,7 @@ pub fn Engine::from_ir(
     backlog_last_key: "",
     pending_confirm: None,
     pending_backend_audio: None,
-    rollback: RollbackRing::new(),
+    rollback: RollbackRing::new_default(),
     rollback_unavailable_reason: "",
   }
   eng.sync_mixer_prefs()
@@ -587,8 +587,8 @@ fn Engine::rollback_latest(self : Engine) -> Unit {
   match self.rollback.take_latest() {
     Checkpoint(state) => {
       self.restore_logical_state(state) catch {
-        err => {
-          self.rollback_unavailable_reason = "rollback.unavailable.restore: {err}"
+        _ => {
+          self.rollback_unavailable_reason = "rollback.unavailable.restore"
           return
         }
       }
@@ -858,7 +858,7 @@ fn Engine::tick_ui(self : Engine, intent : Intent) -> Unit {
           self.ui.stack[i] = { ..cur, focus: n }
         }
       }
-    None_ => ()
+    None_ | Rollback => ()
   }
 }
 
@@ -962,7 +962,8 @@ fn Engine::apply_intent(self : Engine, intent : Intent) -> Unit {
         | MenuUp
         | MenuDown
         | MenuLeft
-        | MenuRight => ()
+        | MenuRight
+        | Rollback => ()
       }
     Choose =>
       match intent {

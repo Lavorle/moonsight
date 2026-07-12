@@ -1,7 +1,7 @@
 ///|
 /// VM-owned logical snapshot. Runtime diagnostics and decoded scene ops are
 /// prepared from the target module rather than persisted as authority.
-priv struct VmLogicalState {
+pub struct VmLogicalState {
   scene : String
   ip : Int
   stack : Array[Value]
@@ -12,7 +12,7 @@ priv struct VmLogicalState {
 
 ///|
 /// Stage-owned logical snapshot. Host op queues and save hints are transient.
-priv struct StageLogicalState {
+pub struct StageLogicalState {
   scene : String
   vars : Map[String, Value]
   layers : Array[LayerState]
@@ -31,7 +31,7 @@ priv struct StageLogicalState {
 ///|
 /// UI-owned semantic state. Preferences, slots, bind/layout caches, hover,
 /// pointer gestures, and transient confirmation modals are excluded.
-priv struct UiLogicalState {
+pub struct UiLogicalState {
   mode : UiMode
   stack : Array[ModalInstance]
   hud_focus : Int
@@ -40,7 +40,7 @@ priv struct UiLogicalState {
 
 ///|
 /// Backlog-owned session state used by rollback, but not the save projection.
-priv struct BacklogLogicalState {
+pub struct BacklogLogicalState {
   entries : Array[BacklogEntry]
   capacity : Int
   last_key : String
@@ -49,7 +49,7 @@ priv struct BacklogLogicalState {
 ///|
 /// Sole aggregate logical snapshot facade. Save and rollback adapters consume
 /// this type instead of reading live Engine fields independently.
-priv struct EngineLogicalState {
+pub struct EngineLogicalState {
   module_id : String
   vm : VmLogicalState
   stage : StageLogicalState

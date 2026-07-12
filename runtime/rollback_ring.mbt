@@ -57,6 +57,23 @@ pub fn[T] RollbackRing::new(
 }
 
 ///|
+/// Frozen production defaults; unlike configurable construction these values
+/// are compile-time valid and cannot raise during Engine construction.
+fn[T] RollbackRing::new_default() -> RollbackRing[T] {
+  {
+    entries: [],
+    max_count: 64,
+    max_bytes: 16 * 1024 * 1024,
+    retained_bytes: 0,
+    high_water_bytes: 0,
+    evictions: 0,
+    rejections: 0,
+    barriers: 0,
+    last_barrier: None,
+  }
+}
+
+///|
 pub fn[T] RollbackRing::count(self : RollbackRing[T]) -> Int {
   self.entries.length()
 }

@@ -32,7 +32,7 @@ test "backlog stable references relocalize atomically" {
     "zh-CN": { "speaker.alice": "爱丽丝", "dialogue.greeting": "你好" },
   })
   b.relocalize(catalogs, "zh-CN")
-  assert_eq(b.get(0).speaker, Some("爱丽丝"))
+  assert_true(b.get(0).speaker == Some("爱丽丝"))
   assert_eq(b.get(0).text, "你好")
   assert_true(b.get(0).speaker_id == Some("speaker.alice"))
   assert_true(b.get(0).text_id == Some("dialogue.greeting"))
