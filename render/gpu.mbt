@@ -88,9 +88,12 @@ pub fn ResourceTable::count(self : ResourceTable) -> Int {
 /// - `7` MenuLeft
 /// - `8` MenuRight
 /// - `9` OpenBacklog
-/// - `10 + n` Select(n)
+/// - `10 + n` Select(n), for n=0..8
+/// - `19` Rollback
 pub fn intent_from_code(code : Int) -> @runtime.Intent {
-  if code >= 10 {
+  if code == 19 {
+    @runtime.Intent::Rollback
+  } else if code >= 10 {
     @runtime.Intent::Select(code - 10)
   } else {
     match code {
@@ -122,6 +125,7 @@ pub fn intent_to_code(intent : @runtime.Intent) -> Int {
     MenuLeft => 7
     MenuRight => 8
     OpenBacklog => 9
+    Rollback => 19
     Select(n) => 10 + n
   }
 }

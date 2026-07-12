@@ -20,4 +20,6 @@ pub(all) enum Intent {
   MenuRight
   /// Open the dialogue backlog modal while Playing.
   OpenBacklog
+  /// Restore the newest reachable aggregate logical checkpoint.
+  Rollback
 } derive(Debug, Eq)

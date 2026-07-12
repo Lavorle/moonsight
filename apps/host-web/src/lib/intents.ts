@@ -13,6 +13,8 @@ export const INTENT_MENU_DOWN = 6;
 export const INTENT_MENU_LEFT = 7;
 export const INTENT_MENU_RIGHT = 8;
 export const INTENT_OPEN_BACKLOG = 9;
+/** Restore the newest reachable logical checkpoint. */
+export const INTENT_ROLLBACK = 19;
 
 /** Select(row) base: intent = 10 + row for row 0..8 (keys 1–9 / choice hit). */
 export const INTENT_SELECT_BASE = 10;
