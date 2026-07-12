@@ -2,7 +2,8 @@
 test "project config defaults to a single en locale" {
   let cfg = parse_project_config("{}")
   assert_eq(cfg.default_locale, "en")
-  assert_eq(cfg.supported_locales, ["en"])
+  assert_eq(cfg.supported_locales.length(), 1)
+  assert_eq(cfg.supported_locales[0], "en")
 }
 
 ///|
@@ -11,7 +12,10 @@ test "project config accepts the frozen Formal 1.0 locale profile" {
     "{\"default_locale\":\"zh-Hans-CN\",\"supported_locales\":[\"en\",\"zh-Hans-CN\",\"es-419\"]}",
   )
   assert_eq(cfg.default_locale, "zh-Hans-CN")
-  assert_eq(cfg.supported_locales, ["en", "zh-Hans-CN", "es-419"])
+  assert_eq(cfg.supported_locales.length(), 3)
+  assert_eq(cfg.supported_locales[0], "en")
+  assert_eq(cfg.supported_locales[1], "zh-Hans-CN")
+  assert_eq(cfg.supported_locales[2], "es-419")
 }
 
 ///|
@@ -55,8 +59,10 @@ test "package manifest emits the frozen locale and schema fields" {
   guard json is Object(fields) else { fail("expected manifest object") }
   assert_eq(fields["package_schema_version"], Json::number(2.0))
   assert_eq(fields["default_locale"], Json::string("zh-Hans-CN"))
-  assert_eq(
-    fields["supported_locales"],
-    Json::array([Json::string("en"), Json::string("zh-Hans-CN")]),
-  )
+  guard fields["supported_locales"] is Array(locales) else {
+    fail("expected supported_locales array")
+  }
+  assert_eq(locales.length(), 2)
+  assert_eq(locales[0], Json::string("en"))
+  assert_eq(locales[1], Json::string("zh-Hans-CN"))
 }
