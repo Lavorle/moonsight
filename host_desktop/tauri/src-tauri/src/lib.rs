@@ -7,7 +7,7 @@
 //! Persistence: prefs + save slots under OS appData (`…/moonsight/`), exposed
 //! via invoke commands consumed by `DesktopSaveStore` in the Svelte host.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -53,7 +53,7 @@ fn remove_if_exists(path: &Path) -> io::Result<bool> {
 
 #[cfg(unix)]
 fn sync_directory(path: &Path) -> io::Result<()> {
-    File::open(path)?.sync_all()
+    fs::File::open(path)?.sync_all()
 }
 
 #[cfg(windows)]
@@ -135,10 +135,7 @@ fn durable_write_with_fault(path: &Path, body: &str, fault: WriteFault) -> io::R
     let backup = backup_path(path);
     remove_if_exists(&tmp)?;
 
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&tmp)?;
+    let mut file = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
     file.write_all(body.as_bytes())?;
     file.sync_all()?;
     drop(file);
@@ -200,6 +197,14 @@ fn atomic_write(path: &Path, body: String) -> Result<(), String> {
     durable_write(path, &body).map_err(|e| e.to_string())
 }
 
+fn flush_directory_tree(dir: &Path) -> io::Result<()> {
+    let _guard = WRITE_LOCK
+        .lock()
+        .map_err(|_| io::Error::other("persistence write lock poisoned"))?;
+    sync_directory(&dir.join("saves"))?;
+    sync_directory(dir)
+}
+
 #[tauri::command]
 fn read_prefs(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let path = moonsight_dir(&app)?.join("prefs.json");
@@ -228,6 +233,12 @@ fn write_save_slot(app: tauri::AppHandle, slot: u32, body: String) -> Result<(),
     atomic_write(&path, body)
 }
 
+#[tauri::command]
+fn flush_persistence(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = moonsight_dir(&app)?;
+    flush_directory_tree(&dir).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -235,7 +246,8 @@ pub fn run() {
             read_prefs,
             write_prefs,
             read_save_slot,
-            write_save_slot
+            write_save_slot,
+            flush_persistence
         ])
         .run(tauri::generate_context!())
         .expect("error while running MoonSight desktop shell");
@@ -253,10 +265,8 @@ mod tests {
     impl TestDir {
         fn new() -> Self {
             let id = NEXT_TEST_DIR.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!(
-                "moonsight-save-tests-{}-{id}",
-                std::process::id()
-            ));
+            let path = std::env::temp_dir()
+                .join(format!("moonsight-save-tests-{}-{id}", std::process::id()));
             fs::create_dir_all(&path).unwrap();
             Self(path)
         }

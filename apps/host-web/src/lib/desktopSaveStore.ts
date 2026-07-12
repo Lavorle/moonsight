@@ -1,6 +1,6 @@
 /**
  * Desktop SaveStore: Tauri appData via invoke, with preload + write-through cache.
- * Sync SaveStore API; disk IO is async (fire-and-forget writes after cache update).
+ * Writes are serialized and resolve only after Rust confirms durable replacement.
  */
 
 import type { SaveStore } from "./saveStore";
@@ -28,6 +28,8 @@ export class DesktopSaveStore implements SaveStore {
   private prefs: string | null = null;
   private slots = new Map<number, string>();
   private invoke: Invoke;
+  private writeTail: Promise<void> = Promise.resolve();
+  private firstWriteFailure: unknown = null;
 
   private constructor(invoke: Invoke) {
     this.invoke = invoke;
@@ -53,10 +55,18 @@ export class DesktopSaveStore implements SaveStore {
     return this.prefs;
   }
 
-  savePrefs(json: string): void {
+  private enqueue(operation: () => Promise<unknown>): Promise<void> {
+    const result = this.writeTail.then(operation).then(() => undefined);
+    this.writeTail = result.catch((error: unknown) => {
+      if (this.firstWriteFailure === null) this.firstWriteFailure = error;
+    });
+    return result;
+  }
+
+  savePrefs(json: string): Promise<void> {
     this.prefs = json;
-    void this.invoke("write_prefs", { body: json }).catch((e) =>
-      console.error("[moonsight] write_prefs", e),
+    return this.enqueue(() =>
+      this.invoke("write_prefs", { body: json }),
     );
   }
 
@@ -64,10 +74,23 @@ export class DesktopSaveStore implements SaveStore {
     return this.slots.get(slot) ?? null;
   }
 
-  saveSlot(slot: number, json: string): void {
+  saveSlot(slot: number, json: string): Promise<void> {
     this.slots.set(slot, json);
-    void this.invoke("write_save_slot", { slot, body: json }).catch((e) =>
-      console.error("[moonsight] write_save_slot", e),
+    return this.enqueue(() =>
+      this.invoke("write_save_slot", { slot, body: json }),
     );
+  }
+
+  /**
+   * Wait for all writes queued before this call, then cross a Rust-side lock
+   * and directory-sync barrier. Rejects with the first write/barrier failure.
+   */
+  async flush(): Promise<void> {
+    const barrier = this.enqueue(() => this.invoke("flush_persistence"));
+    await barrier.catch(() => undefined);
+
+    const failure = this.firstWriteFailure;
+    this.firstWriteFailure = null;
+    if (failure !== null) throw failure;
   }
 }
