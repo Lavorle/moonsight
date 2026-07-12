@@ -99,6 +99,7 @@ pub(all) enum BuiltinHost {
 
 pub(all) struct ChoiceState {
   options : Array[String]
+  option_ids : Array[String?]
   selected : Int?
 } derive(@debug.Debug)
 
@@ -365,7 +366,7 @@ pub(all) struct Stage {
   mut ui_ops : Array[UiHostOp]
 } derive(@debug.Debug)
 pub fn Stage::begin_hide_layer(Self, id~ : String, duration~ : Double) -> Unit
-pub fn Stage::begin_text(Self, speaker? : String) -> Unit
+pub fn Stage::begin_text(Self, speaker? : String, speaker_id? : String, text_id? : String) -> Unit
 pub fn Stage::choice_focus(Self) -> Int?
 pub fn Stage::clear_choices(Self) -> Unit
 pub fn Stage::complete_text(Self) -> Unit
@@ -373,9 +374,11 @@ pub fn Stage::get_var(Self, String) -> Value
 pub fn Stage::hide_layer(Self, id~ : String) -> Unit
 pub fn Stage::move_choice_focus(Self, Int) -> Unit
 pub fn Stage::new() -> Self
+pub fn Stage::relocalize(Self, LocaleCatalogs, String, partial_visible_utf16? : Int) -> Unit raise
 pub fn Stage::reveal_chars(Self, Int) -> Unit
 pub fn Stage::select_choice(Self, Int) -> Unit
 pub fn Stage::set_choices(Self, Array[String]) -> Unit
+pub fn Stage::set_localized_choices(Self, Array[String], Array[String]) -> Unit raise
 pub fn Stage::set_var(Self, String, Value) -> Unit
 pub fn Stage::show_layer(Self, id~ : String, layer~ : LayerKind, resource~ : String, z~ : Int, x? : Double, y? : Double, opacity? : Double) -> Unit
 pub fn Stage::snapshot_layers(Self) -> Array[LayerState]
@@ -425,7 +428,9 @@ pub fn TextBindSrc::resolve(Self, UiBindCtx) -> String
 
 pub(all) struct TextBlock {
   speaker : String?
+  speaker_id : String?
   full_text : String
+  text_id : String?
   visible_chars : Int
   complete : Bool
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)

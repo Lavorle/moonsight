@@ -193,12 +193,7 @@ test "typewriter only lays out visible chars via ui ops" {
   // leave incomplete with 3 visible
   match st.text {
     Some(t) =>
-      st.text = Some({
-        speaker: t.speaker,
-        full_text: t.full_text,
-        visible_chars: 3,
-        complete: false,
-      })
+      st.text = Some({ ..t, visible_chars: 3, complete: false })
     None => fail("text")
   }
   let view = @runtime.StageView::from_stage(
