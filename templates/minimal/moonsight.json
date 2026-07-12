@@ -3,5 +3,10 @@
   "entry": "main.yuki",
   "logical_width": 1920,
   "logical_height": 1080,
-  "save_slots": 6
+  "save_slots": 6,
+  "default_locale": "en",
+  "supported_locales": [
+    "en",
+    "zh-Hans-CN"
+  ]
 }

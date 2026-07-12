@@ -11,8 +11,8 @@ description: Install, WebGPU setup, build the demo, and play MoonSight
 > Distilled from the repo root `README.md` / `README.mbt.md`. When behavior
 > diverges, prefer the repo README and package sources until migration is done.
 
-MoonSight is a MoonBit + WebGPU visual novel engine (Phases 1–4 + Q1/0.5
-playable core + Q2 engine presentation). MoonYuki scripts compile to IR/bytecode,
+MoonSight is a MoonBit + WebGPU visual novel engine targeting Formal 1.0.
+MoonYuki scripts compile to deterministic MSB2 executable/catalog bundles,
 run on a VM + Stage/Director, and render through a packed draw list consumed by
 a JS WebGPU host. System menus and the dialogue HUD use a retained MoonBit UI
 tree (`std_ui` + optional project `ui_package`). Desktop uses the same web build
@@ -59,7 +59,7 @@ moon run cmd/moonsightc --target native -- build mygame -o dist/mygame
 ```
 
 `new` copies the monorepo **`templates/minimal`** scaffold (`moonsight.json`,
-`main.yuki`, optional `assets/`) into a minimal buildable project. Default UI is
+`main.yuki`, optional `assets/`, and bilingual catalog examples) into a minimal buildable project. Default UI is
 engine `std_ui` (no project `ui/`). You can also pass
 `new <name> -o <parent_dir>`. If the destination already exists, the command
 fails without overwriting.
@@ -149,8 +149,8 @@ interchangeable with browser `localStorage`.
 
 | Path | Role |
 |------|------|
-| `script` | MoonYuki → IR / `MSB1` (rejects project `- screen`) |
-| `runtime` | VM, Director, Stage, UiApp/UiRuntime, prefs, save (v4), tweens + scale |
+| `script` | MoonYuki → IR / deterministic `MSB2` bundle (rejects project `- screen`) |
+| `runtime` | VM, Director, Stage, locale catalogs, rollback, prefs, save v5, tweens + scale |
 | `render` | Draw list pack, text layout, kind+z sort, scale→sprite size, `UiDrawOp` paint |
 | `audio` | Logical BGM/SE mixer (volume / fade) |
 | `std_commands` | Standard `@` host commands (layers, dissolve, ui.show/hide, audio) |
@@ -166,6 +166,7 @@ interchangeable with browser `localStorage`.
 ## Next steps
 
 - Learn the script language: [MoonYuki subset](./moon-yuki)
+- Prepare stable IDs, locales, and compatibility: [Formal 1.0](./formal-1-0)
 - Integrate input correctly: [Play input](./play-input)
 - Package a static site: [Build & Publish (Web)](./publish)
 - Desktop package & saves: [Desktop](./desktop)

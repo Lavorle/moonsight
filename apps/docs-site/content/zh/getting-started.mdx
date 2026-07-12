@@ -9,8 +9,8 @@ description: 安装、WebGPU 配置、构建 demo 并运行 MoonSight
 >
 > 内容提炼自仓库根目录 `README.md` / `README.mbt.md`。若行为不一致，在迁移完成前以仓库 README 与包源码为准。
 
-MoonSight 是基于 MoonBit + WebGPU 的视觉小说引擎（Phase 1–4 + Q1/0.5 可玩核心 +
-Q2 引擎呈现）。MoonYuki 脚本编译为 IR/字节码，在 VM + Stage/Director 上运行，
+MoonSight 是面向 Formal 1.0 的 MoonBit + WebGPU 视觉小说引擎。MoonYuki 脚本编译为
+确定性的 MSB2 可执行/语言目录包，在 VM + Stage/Director 上运行，
 通过打包的绘制列表由 JS WebGPU Host 渲染。系统菜单与对白 HUD 使用保留式
 MoonBit UI 树（`std_ui` + 可选项目 `ui_package`）。桌面端在最小 Tauri 壳中复用
 同一套 Web 构建。
@@ -56,7 +56,7 @@ moon run cmd/moonsightc --target native -- build mygame -o dist/mygame
 ```
 
 `new` 从 monorepo 的 `templates/minimal` 复制最小可 build 工程（`moonsight.json`、
-`main.yuki`、可选 `assets/`）。默认使用引擎 `std_ui`（无项目 `ui/`）。也可
+`main.yuki`、可选 `assets/` 与双语目录示例）。默认使用引擎 `std_ui`（无项目 `ui/`）。也可
 `new <name> -o <parent_dir>` 指定父目录。目标路径已存在时会失败，不会覆盖。
 
 ## Web Host（Svelte）
@@ -143,8 +143,8 @@ Advance。完整语义见 [游玩输入](./play-input)。
 
 | 路径 | 职责 |
 |------|------|
-| `script` | MoonYuki → IR / `MSB1`（拒绝项目 `- screen`） |
-| `runtime` | VM、Director、Stage、UiApp/UiRuntime、prefs、存档（v4）、补间 + scale |
+| `script` | MoonYuki → IR / 确定性 `MSB2` 包（拒绝项目 `- screen`） |
+| `runtime` | VM、Director、Stage、语言目录、rollback、prefs、save v5、补间 + scale |
 | `render` | 绘制列表打包、文本排版、kind+z 排序、scale→精灵尺寸、`UiDrawOp` 绘制 |
 | `audio` | 逻辑 BGM/SE 混音器（音量 / 淡入淡出） |
 | `std_commands` | 标准 `@` Host 命令（图层、dissolve、ui.show/hide、音频） |
@@ -160,6 +160,7 @@ Advance。完整语义见 [游玩输入](./play-input)。
 ## 下一步
 
 - 学习脚本语言：[MoonYuki 子集](./moon-yuki)
+- 准备稳定 ID、语言目录与兼容映射：[Formal 1.0](./formal-1-0)
 - 正确集成输入：[游玩输入](./play-input)
 - 打包静态站：[构建与发布（Web）](./publish)
 - 桌面打包与存档：[桌面端](./desktop)
