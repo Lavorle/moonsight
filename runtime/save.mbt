@@ -424,10 +424,7 @@ fn validate_save_game(
 }
 
 ///|
-fn apply_save_game(
-  eng : Engine,
-  prepared : PreparedEngineLogicalState,
-) -> Unit {
+fn apply_save_game(eng : Engine, prepared : PreparedEngineLogicalState) -> Unit {
   eng.publish_prepared_logical_state(prepared)
   eng.reconcile_backends()
 }
@@ -470,7 +467,11 @@ fn SaveGame::to_logical_state(
       wait_remaining: self.wait_remaining,
       dissolve_phase: self.dissolve_phase,
       dissolve_total: self.dissolve_total,
-      bgm: if fade_out { None } else { self.audio.bgm },
+      bgm: if fade_out {
+        None
+      } else {
+        self.audio.bgm
+      },
       se: self.audio.se,
     },
     audio: self.audio,
