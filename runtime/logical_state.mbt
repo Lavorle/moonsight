@@ -126,10 +126,8 @@ fn StageLogicalState::capture(stage : Stage) -> StageLogicalState {
     vars[key] = value
   }
   let choices = match stage.choices {
-    Some(choice) => Some({
-      options: choice.options.copy(),
-      selected: choice.selected,
-    })
+    Some(choice) =>
+      Some({ options: choice.options.copy(), selected: choice.selected })
     None => None
   }
   {
@@ -150,7 +148,9 @@ fn StageLogicalState::capture(stage : Stage) -> StageLogicalState {
 }
 
 ///|
-fn StageLogicalState::prepare(self : StageLogicalState) -> Stage raise SaveError {
+fn StageLogicalState::prepare(
+  self : StageLogicalState,
+) -> Stage raise SaveError {
   if self.dissolve_phase < 0 || self.dissolve_phase > 2 {
     raise SaveError::InvalidLogicalState(
       message="dissolve_phase must be 0, 1, or 2",
@@ -168,10 +168,8 @@ fn StageLogicalState::prepare(self : StageLogicalState) -> Stage raise SaveError
     vars[key] = value
   }
   let choices = match self.choices {
-    Some(choice) => Some({
-      options: choice.options.copy(),
-      selected: choice.selected,
-    })
+    Some(choice) =>
+      Some({ options: choice.options.copy(), selected: choice.selected })
     None => None
   }
   {
@@ -235,18 +233,18 @@ fn BacklogLogicalState::capture(
   backlog : BacklogStore,
   last_key : String,
 ) -> BacklogLogicalState {
-  {
-    entries: backlog.entries.copy(),
-    capacity: backlog.capacity,
-    last_key,
-  }
+  { entries: backlog.entries.copy(), capacity: backlog.capacity, last_key }
 }
 
 ///|
 fn BacklogLogicalState::prepare(self : BacklogLogicalState) -> BacklogStore {
   {
     entries: self.entries.copy(),
-    capacity: if self.capacity < 1 { 1 } else { self.capacity },
+    capacity: if self.capacity < 1 {
+      1
+    } else {
+      self.capacity
+    },
   }
 }
 
