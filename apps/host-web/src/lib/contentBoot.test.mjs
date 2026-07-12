@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { loadGameContent, validateContentManifest } from "./wasm.ts";
+import {
+  loadGameBundle,
+  loadGameContent,
+  validateContentManifest,
+} from "./wasm.ts";
 
 function response({ ok = true, status = 200, bytes = [], text = "" } = {}) {
   return {
@@ -26,6 +30,40 @@ test("production requires a valid manifest while demo mode permits its absence",
     { name: "game" },
   );
   assert.equal(validateContentManifest(null, "demo", "custom.json"), null);
+});
+
+test("whole-bundle digest mismatch is rejected before runtime mutation", async () => {
+  let mutations = 0;
+  await assert.rejects(
+    loadGameBundle(
+      { load_msb: () => (mutations += 1) },
+      { digests: { "game.msb": "0".repeat(64) } },
+      "production",
+      async () => response({ bytes: [1, 2, 3] }),
+      async () => "f".repeat(64),
+    ),
+    /digest mismatch.*game\.msb/,
+  );
+  assert.equal(mutations, 0);
+});
+
+test("whole-bundle preflight validates every artifact before installing MSB2", async () => {
+  const calls = [];
+  let mutations = 0;
+  const digest = "a".repeat(64);
+  const result = await loadGameBundle(
+    { load_msb: () => (mutations += 1, 0) },
+    { digests: { "game.msb": digest, "assets/bg.png": digest } },
+    "production",
+    async (url) => {
+      calls.push(url);
+      return response({ bytes: [1, 2, 3] });
+    },
+    async () => digest,
+  );
+  assert.equal(result, "game.msb");
+  assert.equal(mutations, 1);
+  assert.deepEqual(calls, ["./game.msb", "./assets/bg.png"]);
 });
 
 test("production content boot rejects a missing game.msb without demo fallback", async () => {
