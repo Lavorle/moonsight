@@ -91,7 +91,7 @@ pub(all) enum BuiltinHost {
 pub(all) struct ChoiceState {
   options : Array[String]
   selected : Int?
-} derive(Eq, @debug.Debug)
+} derive(@debug.Debug)
 
 pub(all) enum CommandEffect {
   Checkpointed
@@ -233,7 +233,7 @@ pub(all) struct ModalInstance {
   name : String
   mode : String?
   focus : Int
-} derive(Eq, @debug.Debug)
+} derive(@debug.Debug)
 
 pub(all) struct Prefs {
   text_speed : Double
