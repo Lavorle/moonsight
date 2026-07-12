@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn register(@runtime.UiApp) -> Unit
+pub fn register(@runtime.UiApp, save_slots? : Int) -> Unit
 
 // Errors
 
