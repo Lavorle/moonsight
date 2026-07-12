@@ -48,6 +48,7 @@ pub(all) suberror SaveError {
   InvalidInstructionPointer(scene~ : String, ip~ : Int, max_ip~ : Int)
   UnsupportedCallStack(depth~ : Int)
   InvalidContinuation(message~ : String)
+  InvalidLogicalState(message~ : String)
 } derive(Eq, @debug.Debug)
 pub impl Show for SaveError
 
@@ -90,7 +91,7 @@ pub(all) enum BuiltinHost {
 pub(all) struct ChoiceState {
   options : Array[String]
   selected : Int?
-} derive(@debug.Debug)
+} derive(Eq, @debug.Debug)
 
 pub(all) enum CommandEffect {
   Checkpointed
@@ -131,6 +132,7 @@ pub(all) struct Engine {
   mut backlog : BacklogStore
   mut backlog_last_key : String
   mut pending_confirm : ConfirmKind?
+  mut pending_backend_audio : AudioLogicState?
 }
 pub fn Engine::boot_title(Self) -> Unit
 pub fn Engine::clear_screens_to_playing(Self) -> Unit
@@ -142,6 +144,7 @@ pub fn Engine::occupied_slots(Self) -> Array[Bool]
 pub fn Engine::pointer_event(Self, Double, Double, phase~ : Int) -> Int
 pub fn Engine::prefs_json(Self) -> String
 pub fn Engine::quit_to_title(Self) -> Unit
+pub fn Engine::reconcile_backends(Self) -> Unit
 pub fn Engine::save(Self, slot? : Int) -> String
 pub fn Engine::set_module_id(Self, String) -> Unit
 pub fn Engine::set_prefs_json(Self, String) -> Int
@@ -230,7 +233,7 @@ pub(all) struct ModalInstance {
   name : String
   mode : String?
   focus : Int
-} derive(@debug.Debug)
+} derive(Eq, @debug.Debug)
 
 pub(all) struct Prefs {
   text_speed : Double
@@ -265,6 +268,8 @@ pub(all) struct SaveGame {
   fade_to : Double
   fade_remaining : Double
   wait_remaining : Double
+  dissolve_phase : Int
+  dissolve_total : Double
   saved_at : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 

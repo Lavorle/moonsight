@@ -8,7 +8,7 @@ priv struct VmLogicalState {
   halted : Bool
   wait : WaitKind
   choose_result_var : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// Stage-owned logical snapshot. Host op queues and save hints are transient.
@@ -26,7 +26,7 @@ priv struct StageLogicalState {
   dissolve_total : Double
   bgm : String?
   se : String?
-} derive(Debug, Eq)
+}
 
 ///|
 /// UI-owned semantic state. Preferences, slots, bind/layout caches, hover,
@@ -36,7 +36,7 @@ priv struct UiLogicalState {
   stack : Array[ModalInstance]
   hud_focus : Int
   scroll_y : Double
-} derive(Debug, Eq)
+}
 
 ///|
 /// Backlog-owned session state used by rollback, but not the save projection.
@@ -44,7 +44,7 @@ priv struct BacklogLogicalState {
   entries : Array[BacklogEntry]
   capacity : Int
   last_key : String
-} derive(Debug, Eq)
+}
 
 ///|
 /// Sole aggregate logical snapshot facade. Save and rollback adapters consume
@@ -57,7 +57,7 @@ priv struct EngineLogicalState {
   backlog : BacklogLogicalState
   audio : AudioLogicState
   auto : Bool
-} derive(Debug, Eq)
+}
 
 ///|
 /// Fully validated replacement objects. Publishing this aggregate performs no
@@ -322,11 +322,6 @@ fn Engine::publish_prepared_logical_state(
   self.auto = prepared.auto
   self.pending_backend_audio = Some(prepared.audio)
   self.pending_confirm = None
-}
-
-///|
-fn Engine::backend_reconcile_pending(self : Engine) -> Bool {
-  self.pending_backend_audio is Some(_)
 }
 
 ///|

@@ -10,6 +10,42 @@ fn logical_state_test_engine() -> Engine raise {
 }
 
 ///|
+fn assert_logical_state_eq(
+  actual : EngineLogicalState,
+  expected : EngineLogicalState,
+) -> Unit raise {
+  assert_eq(actual.module_id, expected.module_id)
+  assert_eq(actual.vm.scene, expected.vm.scene)
+  assert_eq(actual.vm.ip, expected.vm.ip)
+  assert_true(actual.vm.stack == expected.vm.stack)
+  assert_eq(actual.vm.halted, expected.vm.halted)
+  assert_true(actual.vm.wait == expected.vm.wait)
+  assert_true(actual.vm.choose_result_var == expected.vm.choose_result_var)
+  assert_eq(actual.stage.scene, expected.stage.scene)
+  assert_true(actual.stage.vars == expected.stage.vars)
+  assert_true(actual.stage.layers == expected.stage.layers)
+  assert_true(actual.stage.text == expected.stage.text)
+  assert_true(actual.stage.choices == expected.stage.choices)
+  assert_eq(actual.stage.overlay_opacity, expected.stage.overlay_opacity)
+  assert_eq(actual.stage.fade_to, expected.stage.fade_to)
+  assert_eq(actual.stage.fade_remaining, expected.stage.fade_remaining)
+  assert_eq(actual.stage.wait_remaining, expected.stage.wait_remaining)
+  assert_eq(actual.stage.dissolve_phase, expected.stage.dissolve_phase)
+  assert_eq(actual.stage.dissolve_total, expected.stage.dissolve_total)
+  assert_true(actual.stage.bgm == expected.stage.bgm)
+  assert_true(actual.stage.se == expected.stage.se)
+  assert_true(actual.ui.mode == expected.ui.mode)
+  assert_true(actual.ui.stack == expected.ui.stack)
+  assert_eq(actual.ui.hud_focus, expected.ui.hud_focus)
+  assert_eq(actual.ui.scroll_y, expected.ui.scroll_y)
+  assert_true(actual.backlog.entries == expected.backlog.entries)
+  assert_eq(actual.backlog.capacity, expected.backlog.capacity)
+  assert_eq(actual.backlog.last_key, expected.backlog.last_key)
+  assert_true(actual.audio == expected.audio)
+  assert_eq(actual.auto, expected.auto)
+}
+
+///|
 test "save v5 is projected from the logical state facade" {
   let eng = logical_state_test_engine()
   eng.tick(None_)
@@ -46,7 +82,7 @@ test "logical state restores all subsystem snapshots" {
   @audio.global_mixer().stop_bgm()
 
   eng.restore_logical_state(state)
-  assert_true(EngineLogicalState::capture(eng) == state)
+  assert_logical_state_eq(EngineLogicalState::capture(eng), state)
   @audio.reset_global_mixer()
 }
 
@@ -67,7 +103,7 @@ test "logical validation failure is atomic" {
   } noraise {
     _ => fail("expected UnknownScene")
   }
-  assert_true(EngineLogicalState::capture(eng) == before)
+  assert_logical_state_eq(EngineLogicalState::capture(eng), before)
 }
 
 ///|
@@ -79,11 +115,11 @@ test "backend reconciliation retries from the committed snapshot" {
   let state = EngineLogicalState::capture(eng)
   let prepared = eng.prepare_logical_state(state)
   eng.publish_prepared_logical_state(prepared)
-  assert_true(eng.backend_reconcile_pending())
+  assert_true(eng.pending_backend_audio is Some(_))
 
   @audio.global_mixer().stop_bgm()
   eng.reconcile_backends()
-  assert_true(!eng.backend_reconcile_pending())
+  assert_true(eng.pending_backend_audio is None)
   assert_true(@audio.global_mixer().bgm == Some("theme"))
   assert_eq(@audio.global_mixer().bgm_volume, 0.35)
   @audio.reset_global_mixer()

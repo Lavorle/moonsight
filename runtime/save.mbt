@@ -217,8 +217,8 @@ fn SaveGame::from_logical_state(
 /// default to 1.0; v4 is the native scale-aware shape.
 pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
   let game = parse_save_game(blob)
-  let prepared = validate_save_game(self, game)
-  apply_save_game(self, prepared)
+  validate_save_call_stack(game)
+  self.restore_logical_state(game.to_logical_state(self))
   // Spec: load returns to narrative play with no residual modal stack.
   self.clear_screens_to_playing()
   // Session backlog is not part of save; drop lines from the prior playthrough.
@@ -417,16 +417,15 @@ fn validate_save_game(
   eng : Engine,
   game : SaveGame,
 ) -> PreparedEngineLogicalState raise SaveError {
-  if !game.call_stack.is_empty() {
-    raise SaveError::UnsupportedCallStack(depth=game.call_stack.length())
-  }
+  validate_save_call_stack(game)
   eng.prepare_logical_state(game.to_logical_state(eng))
 }
 
 ///|
-fn apply_save_game(eng : Engine, prepared : PreparedEngineLogicalState) -> Unit {
-  eng.publish_prepared_logical_state(prepared)
-  eng.reconcile_backends()
+fn validate_save_call_stack(game : SaveGame) -> Unit raise SaveError {
+  if !game.call_stack.is_empty() {
+    raise SaveError::UnsupportedCallStack(depth=game.call_stack.length())
+  }
 }
 
 ///|
@@ -446,7 +445,6 @@ fn SaveGame::to_logical_state(
     ..base,
     module_id: self.module_id,
     vm: {
-      ..base.vm,
       scene: self.scene,
       ip: self.ip,
       stack: [],
@@ -455,7 +453,6 @@ fn SaveGame::to_logical_state(
       choose_result_var: self.choose_result_var,
     },
     stage: {
-      ..base.stage,
       scene: self.scene,
       vars: self.vars,
       layers: copy_layer_states(self.layers),
