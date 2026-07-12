@@ -149,8 +149,15 @@ fn build_manifest_json(
   for k, v in audio {
     audio_obj[k] = Json::string(v)
   }
+  let locales : Array[Json] = []
+  for locale in cfg.supported_locales {
+    locales.push(Json::string(locale))
+  }
   let root : Map[String, Json] = {
+    "package_schema_version": Json::number(2.0),
     "name": Json::string(cfg.name),
+    "default_locale": Json::string(cfg.default_locale),
+    "supported_locales": Json::array(locales),
     "logical_width": Json::number(cfg.logical_width.to_double()),
     "logical_height": Json::number(cfg.logical_height.to_double()),
     "save_slots": Json::number(cfg.save_slots.to_double()),
