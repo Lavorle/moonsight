@@ -7,7 +7,7 @@
 //! Persistence: prefs + save slots under OS appData (`…/moonsight/`), exposed
 //! via invoke commands consumed by `DesktopSaveStore` in the Svelte host.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -53,7 +53,7 @@ fn remove_if_exists(path: &Path) -> io::Result<bool> {
 
 #[cfg(unix)]
 fn sync_directory(path: &Path) -> io::Result<()> {
-    File::open(path)?.sync_all()
+    fs::File::open(path)?.sync_all()
 }
 
 #[cfg(windows)]
@@ -62,7 +62,9 @@ fn sync_directory(path: &Path) -> io::Result<()> {
 
     const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
     OpenOptions::new()
-        .read(true)
+        // FlushFileBuffers requires GENERIC_WRITE on Windows. Opening a
+        // directory additionally requires FILE_FLAG_BACKUP_SEMANTICS.
+        .write(true)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
         .open(path)?
         .sync_all()
@@ -88,9 +90,9 @@ fn recover_interrupted_replace_locked(path: &Path) -> io::Result<()> {
     let backup = backup_path(path);
     let mut changed = false;
 
-    if path.exists() {
+    if path.try_exists()? {
         changed |= remove_if_exists(&backup)?;
-    } else if backup.exists() {
+    } else if backup.try_exists()? {
         fs::rename(&backup, path)?;
         changed = true;
     }
@@ -123,7 +125,7 @@ fn durable_write(path: &Path, body: &str) -> io::Result<()> {
     durable_write_with_fault(path, body, WriteFault::None)
 }
 
-fn durable_write_with_fault(path: &Path, body: &str, fault: WriteFault) -> io::Result<()> {
+fn durable_write_with_fault(path: &Path, body: &str, _fault: WriteFault) -> io::Result<()> {
     let _guard = WRITE_LOCK
         .lock()
         .map_err(|_| io::Error::other("persistence write lock poisoned"))?;
@@ -135,15 +137,12 @@ fn durable_write_with_fault(path: &Path, body: &str, fault: WriteFault) -> io::R
     let backup = backup_path(path);
     remove_if_exists(&tmp)?;
 
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&tmp)?;
+    let mut file = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
     file.write_all(body.as_bytes())?;
     file.sync_all()?;
     drop(file);
 
-    let had_last_good = path.exists();
+    let had_last_good = path.try_exists()?;
     if had_last_good {
         fs::rename(path, &backup)?;
         if let Err(error) = sync_directory(parent) {
@@ -153,13 +152,13 @@ fn durable_write_with_fault(path: &Path, body: &str, fault: WriteFault) -> io::R
         }
 
         #[cfg(test)]
-        if fault == WriteFault::AfterBackup {
+        if _fault == WriteFault::AfterBackup {
             return Err(io::Error::other("injected interruption after backup"));
         }
     }
 
     #[cfg(test)]
-    let install_result = if fault == WriteFault::InstallRename {
+    let install_result = if _fault == WriteFault::InstallRename {
         Err(io::Error::other("injected install rename failure"))
     } else {
         fs::rename(&tmp, path)
@@ -198,6 +197,14 @@ fn durable_write_with_fault(path: &Path, body: &str, fault: WriteFault) -> io::R
 
 fn atomic_write(path: &Path, body: String) -> Result<(), String> {
     durable_write(path, &body).map_err(|e| e.to_string())
+}
+
+fn flush_directory_tree(dir: &Path) -> io::Result<()> {
+    let _guard = WRITE_LOCK
+        .lock()
+        .map_err(|_| io::Error::other("persistence write lock poisoned"))?;
+    sync_directory(&dir.join("saves"))?;
+    sync_directory(dir)
 }
 
 #[tauri::command]
@@ -260,10 +267,8 @@ mod tests {
     impl TestDir {
         fn new() -> Self {
             let id = NEXT_TEST_DIR.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!(
-                "moonsight-save-tests-{}-{id}",
-                std::process::id()
-            ));
+            let path = std::env::temp_dir()
+                .join(format!("moonsight-save-tests-{}-{id}", std::process::id()));
             fs::create_dir_all(&path).unwrap();
             Self(path)
         }
