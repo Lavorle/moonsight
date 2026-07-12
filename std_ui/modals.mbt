@@ -264,10 +264,6 @@ let slot_icon_h : Double = 48.0
 let slot_icon_x : Double = 684.0
 
 ///|
-/// VBox origin y for save_load body (title starts here).
-let save_load_body_y : Double = 64.0
-
-///|
 /// Title line (64) + spacer (12) before first slot label.
 let save_load_slots_y0 : Double = 140.0
 
@@ -276,21 +272,22 @@ let save_load_slots_y0 : Double = 140.0
 let save_load_slot_stride : Double = 128.0
 
 ///|
-/// Six slots: empty/filled icon + label + Save/Load action, then Back.
-fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
-  let children : Array[@runtime.UiNode] = [
-    @runtime.UiNode::Text(
-      src=@runtime.TextBindSrc::Literal("Save / Load"),
-      x=0.0,
-      y=0.0,
-      font_size=30.0,
-      visible=@runtime.VisiblePred::Always,
-    ),
-    @runtime.UiNode::Spacer(w=800.0, h=12.0),
-  ]
+/// Configured slots: empty/filled icon + label + Save/Load action, then Back.
+fn build_save_load(
+  app : @runtime.UiApp,
+  requested_slots : Int,
+) -> @runtime.UiNode {
+  let slots = if requested_slots < 1 {
+    1
+  } else if requested_slots > 20 {
+    20
+  } else {
+    requested_slots
+  }
+  let children : Array[@runtime.UiNode] = []
   // Absolute icon panels (Panel ignores flow origin); aligned to each slot label.
   let icons : Array[@runtime.UiNode] = []
-  for i in 0..<6 {
+  for i in 0..<slots {
     let slot = i
     let save_id = app.alloc_action(fn(c : &@runtime.Capabilities) {
       c.save_slot(slot)
@@ -351,10 +348,6 @@ fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
       ),
     )
   }
-  children.push(@runtime.UiNode::Spacer(w=400.0, h=8.0))
-  children.push(
-    app.button("Back", fn(c : &@runtime.Capabilities) { c.return_modal() }),
-  )
   let root_children : Array[@runtime.UiNode] = [
     @runtime.UiNode::Panel(
       resource="ui.dialogue_box",
@@ -364,15 +357,33 @@ fn build_save_load(app : @runtime.UiApp) -> @runtime.UiNode {
       h=1000.0,
       visible=@runtime.VisiblePred::Always,
     ),
+    @runtime.UiNode::Text(
+      src=@runtime.TextBindSrc::Literal("Save / Load"),
+      x=640.0,
+      y=64.0,
+      font_size=30.0,
+      visible=@runtime.VisiblePred::Always,
+    ),
   ]
   for n in icons {
     root_children.push(n)
   }
   root_children.push(
+    @runtime.UiNode::ScrollView(
+      x=modal_col_x,
+      y=save_load_slots_y0,
+      w=800.0,
+      h=780.0,
+      children=[@runtime.UiNode::VBox(x=None, y=None, children~)],
+    ),
+  )
+  root_children.push(
     @runtime.UiNode::VBox(
       x=Some(modal_col_x),
-      y=Some(save_load_body_y),
-      children~,
+      y=Some(960.0),
+      children=[
+        app.button("Back", fn(c : &@runtime.Capabilities) { c.return_modal() }),
+      ],
     ),
   )
   @runtime.UiNode::Fixed(
