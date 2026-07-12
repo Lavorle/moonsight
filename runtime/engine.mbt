@@ -613,7 +613,11 @@ fn Engine::relocalize_new_presentation(self : Engine) -> Unit {
         self.ui.prefs.locale,
         partial_visible_utf16=0,
       ) catch {
-        _ => ()
+        _ => {
+          self.vm.last_error = Some("localized presentation resolution failed")
+          self.vm.halted = true
+          self.vm.wait = Halted
+        }
       }
     _ => ()
   }
