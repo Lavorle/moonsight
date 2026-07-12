@@ -58,3 +58,25 @@ pub fn compile_to_identified_ir(
     e => raise CompileError::AuthorId(e)
   }
 }
+
+///|
+/// Compile a localized source. A second locale activates the explicit-ID gate;
+/// the named locale is included in structural diagnostics.
+pub fn compile_localized_to_identified_ir(
+  src : String,
+  file~ : String,
+  locale : String,
+  require_explicit_ids~ : Bool,
+) -> IdentifiedIrModule raise CompileError {
+  let unit = parse_source(src, file~) catch { e => raise CompileError::Parse(e) }
+  let expanded = expand_macros(unit) catch { e => raise CompileError::Macro(e) }
+  let resolved = resolve_unit(expanded, builtin_externs()) catch {
+    e => raise CompileError::Resolve(e)
+  }
+  if require_explicit_ids {
+    validate_localized_ids(resolved, locale) catch {
+      e => raise CompileError::AuthorId(e)
+    }
+  }
+  lower_unit_with_ids(resolved) catch { e => raise CompileError::AuthorId(e) }
+}

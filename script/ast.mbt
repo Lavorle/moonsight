@@ -77,6 +77,7 @@ pub(all) struct AuthorId {
 pub(all) suberror AuthorIdError {
   EmptyAuthorId
   InvalidAuthorId(id~ : String, offset~ : Int, message~ : String)
+  MissingAuthorId(span~ : SourceSpan, locale~ : String, kind~ : String)
 } derive(Debug, Eq)
 
 ///|

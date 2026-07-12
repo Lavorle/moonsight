@@ -156,3 +156,26 @@ test "explicit IDs survive lowering while metadata directives do not execute" {
     fail("meta.id must not reach executable IR")
   }
 }
+
+///|
+test "localized compilation rejects dialogue without author ID" {
+  let src =
+    #|- scene "s"
+    #|y:Hello
+    #|
+  try @script.compile_localized_to_identified_ir(
+    src,
+    file="missing.yuki",
+    locale="ja",
+    require_explicit_ids=true,
+  ) catch {
+    @script.AuthorId(@script.MissingAuthorId(span~, locale~, kind~)) => {
+      assert_eq(span.file, "missing.yuki")
+      assert_eq(locale, "ja")
+      assert_eq(kind, "dialogue")
+    }
+    _ => fail("expected missing author ID")
+  } noraise {
+    _ => fail("localized dialogue without ID must fail")
+  }
+}

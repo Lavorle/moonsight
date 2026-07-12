@@ -64,6 +64,36 @@ pub fn lower_unit_with_ids(
 }
 
 ///|
+/// Localized projects require author identity on every dialogue and choice.
+/// Legacy single-locale compilation intentionally remains compatible.
+pub fn validate_localized_ids(
+  unit : ResolvedUnit,
+  locale : String,
+) -> Unit raise AuthorIdError {
+  for scene in unit.scenes {
+    let mut has_pending_id = false
+    for item in scene.items {
+      match item {
+        Command(cmd="meta.id", ..) => has_pending_id = true
+        Dialogue(span~, ..) => {
+          if !has_pending_id {
+            raise MissingAuthorId(span~, locale~, kind="dialogue")
+          }
+          has_pending_id = false
+        }
+        Command(cmd="flow.choice", span~, ..) => {
+          if !has_pending_id {
+            raise MissingAuthorId(span~, locale~, kind="choice")
+          }
+          has_pending_id = false
+        }
+        Command(..) => has_pending_id = false
+      }
+    }
+  }
+}
+
+///|
 fn parse_id_directive(
   args : Array[Arg],
   span : SourceSpan,
