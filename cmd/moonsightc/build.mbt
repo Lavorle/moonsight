@@ -95,16 +95,20 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
       return 1
     }
 
-    let manifest = build_manifest_json(cfg, resources, audio)
-    let manifest_path = join_path(staging, "manifest.json")
-    write_string_to_file(manifest_path, manifest)
-    println("wrote \{manifest_path}")
-
     // Also ship entry source as demo.yuki for source fallback path.
     if path_exists(entry_path) && is_file(entry_path) {
       copy_file(entry_path, join_path(staging, "demo.yuki"))
       println("copied entry → \{join_path(staging, "demo.yuki")}")
     }
+
+    // Manifest digests cover every staged artifact except manifest.json itself,
+    // whose self-digest cannot be embedded without recursion.
+    let digests : Map[String, String] = {}
+    collect_artifact_digests(staging, "", digests)
+    let manifest = build_manifest_json(cfg, resources, audio, digests)
+    let manifest_path = join_path(staging, "manifest.json")
+    write_string_to_file(manifest_path, manifest)
+    println("wrote \{manifest_path}")
 
     // Promote staging → out_dir only after full success.
     if path_exists(out_dir) {
@@ -140,14 +144,34 @@ fn build_manifest_json(
   cfg : ProjectConfig,
   resources : Map[String, String],
   audio : Map[String, String],
+  digests : Map[String, String],
 ) -> String {
   let res_obj : Map[String, Json] = {}
-  for k, v in resources {
-    res_obj[k] = Json::string(v)
+  let resource_keys : Array[String] = []
+  for k, _ in resources {
+    resource_keys.push(k)
+  }
+  resource_keys.sort()
+  for k in resource_keys {
+    res_obj[k] = Json::string(resources[k])
   }
   let audio_obj : Map[String, Json] = {}
-  for k, v in audio {
-    audio_obj[k] = Json::string(v)
+  let audio_keys : Array[String] = []
+  for k, _ in audio {
+    audio_keys.push(k)
+  }
+  audio_keys.sort()
+  for k in audio_keys {
+    audio_obj[k] = Json::string(audio[k])
+  }
+  let digest_obj : Map[String, Json] = {}
+  let digest_keys : Array[String] = []
+  for k, _ in digests {
+    digest_keys.push(k)
+  }
+  digest_keys.sort()
+  for k in digest_keys {
+    digest_obj[k] = Json::string(digests[k])
   }
   let locales : Array[Json] = []
   for locale in cfg.supported_locales {
@@ -163,8 +187,28 @@ fn build_manifest_json(
     "save_slots": Json::number(cfg.save_slots.to_double()),
     "resources": Json::object(res_obj),
     "audio": Json::object(audio_obj),
+    "digests": Json::object(digest_obj),
   }
   Json::object(root).stringify(indent=2) + "\n"
+}
+
+///|
+/// Recursively enumerate the staged bundle in lexical order and digest every
+/// regular file except manifest.json (which contains this map).
+fn collect_artifact_digests(
+  abs_dir : String,
+  rel_prefix : String,
+  digests : Map[String, String],
+) -> Unit raise IoError {
+  for name in read_dir(abs_dir) {
+    let abs = join_path(abs_dir, name)
+    let rel = if rel_prefix == "" { name } else { join_path(rel_prefix, name) }
+    if is_dir(abs) {
+      collect_artifact_digests(abs, rel, digests)
+    } else if rel != "manifest.json" && is_file(abs) {
+      digests[rel] = sha256_file(abs)
+    }
+  }
 }
 
 ///|

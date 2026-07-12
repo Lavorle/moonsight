@@ -79,6 +79,10 @@ extern "C" fn read_dir_ffi(path : Bytes) -> FileHandle = "moonbit_read_dir_ffi"
 extern "C" fn get_error_message_ffi() -> Bytes = "moonbit_get_error_message"
 
 ///|
+#borrow(path, output)
+extern "C" fn sha256_file_ffi(path : Bytes, output : Bytes) -> Int = "moonsight_sha256_file"
+
+///|
 priv suberror IoError {
   IoError(String)
 } derive(Debug)
@@ -231,7 +235,19 @@ fn read_dir(path : String) -> Array[String] raise IoError {
   let res = read_dir_ffi(c_path(path))
   guard is_null_ffi(res) == 0 else { raise IoError(last_io_error()) }
   let files = Array::from_fixed_array(handler_to_fixed_array(res))
-  files.map(b => @utf8.decode_lossy(b))
+  let names = files.map(b => @utf8.decode_lossy(b))
+  names.sort()
+  names
+}
+
+///|
+/// Return the lowercase raw SHA-256 digest for a regular file.
+fn sha256_file(path : String) -> String raise IoError {
+  let output = Bytes::make(64, 0)
+  guard sha256_file_ffi(c_path(path), output) == 0 else {
+    raise IoError(last_io_error())
+  }
+  @utf8.decode_lossy(output)
 }
 
 ///|
