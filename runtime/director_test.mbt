@@ -80,14 +80,14 @@ test "director unknown host returns Error" {
 ///|
 test "director registrations always expose an effect descriptor" {
   let dir = @runtime.Director::new()
-  dir.register_fn("custom.external", (_stage, _args) => Ok)
+  dir.register_fn("custom.external", (_stage, _args) => { Ok })
   assert_true(
     dir.effect_for("custom.external") ==
     Barrier("rollback.barrier.unknown-command"),
   )
   dir.register_fn_with_effect(
     "audio.bgm",
-    (_stage, _args) => Ok,
+    (_stage, _args) => { Ok },
     CompensatableAudio,
   )
   assert_true(dir.effect_for("audio.bgm") == CompensatableAudio)

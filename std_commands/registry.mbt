@@ -12,29 +12,37 @@ pub fn standard_host_names() -> Array[String] {
 ///|
 /// Director with the full Phase 1 standard host table registered.
 ///
-/// Uses `register_fn` so runtime stays free of a dependency on this package.
+/// Uses explicit Director-owned effect descriptors for every standard command.
 pub fn standard_registry() -> @runtime.Director {
   let dir = @runtime.Director::new()
-  dir.register_fn("text.begin", cmd_text_begin)
-  dir.register_fn("text.type", cmd_text_type)
-  dir.register_fn("text.end", cmd_text_end)
-  dir.register_fn("layer.show", cmd_layer_show)
-  dir.register_fn("layer.hide", cmd_layer_hide)
-  dir.register_fn("layer.move", cmd_layer_move)
-  dir.register_fn("layer.set", cmd_layer_set)
-  dir.register_fn("flow.jump", cmd_flow_jump)
-  dir.register_fn("flow.jump_if", cmd_flow_jump_if)
-  dir.register_fn("flow.jump_if_not", cmd_flow_jump_if_not)
-  dir.register_fn("flow.wait", cmd_flow_wait)
-  dir.register_fn("flow.yield", cmd_flow_yield)
-  dir.register_fn("flow.choice", cmd_flow_choice)
-  dir.register_fn("var.set", cmd_var_set)
-  dir.register_fn("audio.bgm", cmd_audio_bgm)
-  dir.register_fn("audio.se", cmd_audio_se)
-  dir.register_fn("trans.fade", cmd_trans_fade)
-  dir.register_fn("trans.dissolve", cmd_trans_dissolve)
-  dir.register_fn("sys.save_hint", cmd_sys_save_hint)
-  dir.register_fn("ui.show", cmd_ui_show)
-  dir.register_fn("ui.hide", cmd_ui_hide)
+  dir.register_fn_with_effect("text.begin", cmd_text_begin, Checkpointed)
+  dir.register_fn_with_effect("text.type", cmd_text_type, Checkpointed)
+  dir.register_fn_with_effect("text.end", cmd_text_end, Checkpointed)
+  dir.register_fn_with_effect("layer.show", cmd_layer_show, Checkpointed)
+  dir.register_fn_with_effect("layer.hide", cmd_layer_hide, Checkpointed)
+  dir.register_fn_with_effect("layer.move", cmd_layer_move, Checkpointed)
+  dir.register_fn_with_effect("layer.set", cmd_layer_set, Checkpointed)
+  dir.register_fn_with_effect("flow.jump", cmd_flow_jump, Checkpointed)
+  dir.register_fn_with_effect("flow.jump_if", cmd_flow_jump_if, Checkpointed)
+  dir.register_fn_with_effect("flow.jump_if_not", cmd_flow_jump_if_not, Checkpointed)
+  dir.register_fn_with_effect("flow.wait", cmd_flow_wait, Checkpointed)
+  dir.register_fn_with_effect("flow.yield", cmd_flow_yield, Checkpointed)
+  dir.register_fn_with_effect("flow.choice", cmd_flow_choice, Checkpointed)
+  dir.register_fn_with_effect("var.set", cmd_var_set, Checkpointed)
+  dir.register_fn_with_effect("audio.bgm", cmd_audio_bgm, CompensatableAudio)
+  dir.register_fn_with_effect(
+    "audio.se",
+    cmd_audio_se,
+    Barrier("rollback.barrier.audio-se"),
+  )
+  dir.register_fn_with_effect("trans.fade", cmd_trans_fade, Checkpointed)
+  dir.register_fn_with_effect("trans.dissolve", cmd_trans_dissolve, Checkpointed)
+  dir.register_fn_with_effect(
+    "sys.save_hint",
+    cmd_sys_save_hint,
+    Barrier("rollback.barrier.save-hint"),
+  )
+  dir.register_fn_with_effect("ui.show", cmd_ui_show, Checkpointed)
+  dir.register_fn_with_effect("ui.hide", cmd_ui_hide, Checkpointed)
   dir
 }

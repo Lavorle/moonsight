@@ -5,7 +5,23 @@
 /// `@std_commands.standard_registry()` (no runtime→std_commands import).
 pub(all) struct Director {
   handlers : Map[String, HostHandler]
+  effects : Map[String, CommandEffect]
 } derive(Debug)
+
+///|
+/// Rollback policy attached to every Director registration.
+pub(all) enum CommandEffect {
+  /// Pure logical state change captured by the checkpoint kernel.
+  Checkpointed
+  /// External audio state that has an idempotent logical reconciliation path.
+  CompensatableAudio
+  /// Irreversible/unknown effect; successful execution clears older reachability.
+  Barrier(String)
+} derive(Debug, Eq)
+
+///|
+let unknown_command_barrier : CommandEffect =
+  Barrier("rollback.barrier.unknown-command")
 
 ///|
 /// Director with text/layer/var built-ins registered.
@@ -21,13 +37,23 @@ pub fn Director::with_builtins() -> Director {
       "layer.set": Builtin(LayerSet),
       "var.set": Builtin(VarSet),
     },
+    effects: {
+      "text.begin": Checkpointed,
+      "text.type": Checkpointed,
+      "text.end": Checkpointed,
+      "layer.show": Checkpointed,
+      "layer.hide": Checkpointed,
+      "layer.move": Checkpointed,
+      "layer.set": Checkpointed,
+      "var.set": Checkpointed,
+    },
   }
 }
 
 ///|
 /// Empty director (no handlers); useful for tests that inject handlers later.
 pub fn Director::new() -> Director {
-  { handlers: {} }
+  { handlers: {}, effects: {} }
 }
 
 ///|
@@ -38,6 +64,19 @@ pub fn Director::register(
   handler : HostHandler,
 ) -> Unit {
   self.handlers[name] = handler
+  self.effects[name] = unknown_command_barrier
+}
+
+///|
+/// Register or replace a typed handler with an explicit effect policy.
+pub fn Director::register_with_effect(
+  self : Director,
+  name : String,
+  handler : HostHandler,
+  effect : CommandEffect,
+) -> Unit {
+  self.handlers[name] = handler
+  self.effects[name] = effect
 }
 
 ///|
@@ -48,6 +87,28 @@ pub fn Director::register_fn(
   handler : (Stage, Array[Value]) -> HostResult,
 ) -> Unit {
   self.handlers[name] = Handler(handler)
+  self.effects[name] = unknown_command_barrier
+}
+
+///|
+/// Register a function handler with its frozen rollback effect policy.
+pub fn Director::register_fn_with_effect(
+  self : Director,
+  name : String,
+  handler : (Stage, Array[Value]) -> HostResult,
+  effect : CommandEffect,
+) -> Unit {
+  self.handlers[name] = Handler(handler)
+  self.effects[name] = effect
+}
+
+///|
+/// Return the registered effect policy. Unknown commands are barriers.
+pub fn Director::effect_for(self : Director, name : String) -> CommandEffect {
+  match self.effects.get(name) {
+    Some(effect) => effect
+    None => unknown_command_barrier
+  }
 }
 
 ///|
