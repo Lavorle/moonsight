@@ -57,7 +57,11 @@ export class MemorySaveStore implements SaveStore {
 }
 
 export class WebSaveStore implements SaveStore {
-  constructor(private readonly storage: StorageLike = localStorage) {}
+  private readonly storage: StorageLike;
+
+  constructor(storage: StorageLike = localStorage) {
+    this.storage = storage;
+  }
 
   loadPrefs(): string | null {
     try {
@@ -72,10 +76,8 @@ export class WebSaveStore implements SaveStore {
   async savePrefs(json: string): Promise<void> {
     try {
       if (json && json.length) this.storage.setItem(PREFS_KEY, json);
-    } catch (cause) {
-      throw new SaveStoreError("save-prefs", "Unable to save preferences", {
-        cause,
-      });
+    } catch {
+      console.error("[moonsight] savePrefs failed");
     }
   }
 
@@ -93,11 +95,8 @@ export class WebSaveStore implements SaveStore {
   async saveSlot(slot: number, json: string): Promise<void> {
     try {
       if (json && json.length) this.storage.setItem(SAVE_KEY(slot), json);
-    } catch (cause) {
-      throw new SaveStoreError("save-slot", `Unable to save slot ${slot}`, {
-        slot,
-        cause,
-      });
+    } catch {
+      console.error("[moonsight] saveSlot failed", slot);
     }
   }
 
