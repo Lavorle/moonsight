@@ -3,7 +3,7 @@
  * Persistence goes through SaveStore (WebSaveStore is the browser backend).
  */
 
-import { PREFS_KEY, type SaveStore } from "./saveStore";
+import { PREFS_KEY, type SaveStore } from "./saveStore.ts";
 
 export { PREFS_KEY };
 
@@ -13,6 +13,7 @@ export type Prefs = {
   master_volume: number;
   bgm_volume: number;
   se_volume: number;
+  locale: string;
 };
 
 export const DEFAULT_PREFS: Prefs = {
@@ -21,7 +22,35 @@ export const DEFAULT_PREFS: Prefs = {
   master_volume: 1.0,
   bgm_volume: 1.0,
   se_volume: 1.0,
+  locale: "",
 };
+
+const FORMAL_LOCALE_RE = /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|[0-9]{3}))?$/;
+
+/** Frozen Formal 1.0 locale profile; canonical casing is required. */
+export function isFormalLocale(tag: string): boolean {
+  return FORMAL_LOCALE_RE.test(tag);
+}
+
+/** Resolve an exact supported locale, otherwise use the project default. */
+export function resolveLocale(
+  requested: string,
+  supported: readonly string[],
+  defaultLocale: string,
+): string {
+  if (!isFormalLocale(defaultLocale)) {
+    throw new RangeError(`invalid default locale: ${defaultLocale}`);
+  }
+  if (!supported.includes(defaultLocale)) {
+    throw new RangeError(`default locale is not supported: ${defaultLocale}`);
+  }
+  for (const locale of supported) {
+    if (!isFormalLocale(locale)) {
+      throw new RangeError(`invalid supported locale: ${locale}`);
+    }
+  }
+  return supported.includes(requested) ? requested : defaultLocale;
+}
 
 /** Clamp volume to [0, 1]; treat non-finite as 1 (keeps volume 0 valid). */
 export function clampVolume(v: unknown): number {
@@ -38,6 +67,10 @@ export function parsePrefsJson(raw: string, fallback: Prefs = DEFAULT_PREFS): Pr
       master_volume: clampVolume(p.master_volume ?? fallback.master_volume),
       bgm_volume: clampVolume(p.bgm_volume ?? fallback.bgm_volume),
       se_volume: clampVolume(p.se_volume ?? fallback.se_volume),
+      locale:
+        typeof p.locale === "string" && isFormalLocale(p.locale)
+          ? p.locale
+          : fallback.locale,
     };
   } catch {
     return { ...fallback };

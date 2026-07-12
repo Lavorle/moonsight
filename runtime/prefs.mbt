@@ -1,5 +1,5 @@
 ///|
-/// User preferences (text speed, auto mode, volumes).
+/// User preferences (text speed, auto mode, volumes, locale).
 ///
 /// Pure value type: host persists via `to_json_string` / `from_json_string`.
 /// All mutators clamp into valid ranges.
@@ -14,6 +14,8 @@ pub(all) struct Prefs {
   bgm_volume : Double
   /// SE gain 0..1 (relative to master).
   se_volume : Double
+  /// Canonical Formal 1.0 locale tag, or empty until a project default resolves.
+  locale : String
 } derive(Debug, Eq, ToJson)
 
 ///|
@@ -25,6 +27,7 @@ pub fn Prefs::default() -> Prefs {
     master_volume: 1.0,
     bgm_volume: 1.0,
     se_volume: 1.0,
+    locale: "",
   }
 }
 
@@ -48,6 +51,7 @@ pub fn Prefs::clamp(self : Prefs) -> Prefs {
     master_volume: clamp_range(self.master_volume, 0.0, 1.0),
     bgm_volume: clamp_range(self.bgm_volume, 0.0, 1.0),
     se_volume: clamp_range(self.se_volume, 0.0, 1.0),
+    locale: self.locale,
   }
 }
 
@@ -86,6 +90,15 @@ pub fn Prefs::from_json_string(s : String) -> Prefs raise {
     Some(Number(n, ..)) => p = { ..p, se_volume: n }
     _ => ()
   }
+  match map.get("locale") {
+    Some(String(locale)) =>
+      if locale == "" || is_formal_locale(locale) {
+        p = { ..p, locale }
+      } else {
+        fail("invalid prefs locale: \{locale}")
+      }
+    _ => ()
+  }
   p.clamp()
 }
 
@@ -108,7 +121,8 @@ pub fn Prefs::adjust(self : Prefs, key : String, delta : Double) -> Prefs {
 ///|
 /// Set a pref from a runtime `Value`, then clamp.
 ///
-/// Accepts Int/Float for numeric keys and Bool for `auto_mode`.
+/// Accepts Int/Float for numeric keys, Bool for `auto_mode`, and a canonical
+/// Formal 1.0 locale string (or empty) for `locale`.
 /// Unknown keys or wrong types leave prefs unchanged.
 pub fn Prefs::set(self : Prefs, key : String, value : Value) -> Prefs {
   let updated = match (key, value) {
@@ -121,6 +135,7 @@ pub fn Prefs::set(self : Prefs, key : String, value : Value) -> Prefs {
     ("bgm_volume", Int(v)) => { ..self, bgm_volume: v.to_double() }
     ("se_volume", Float(v)) => { ..self, se_volume: v }
     ("se_volume", Int(v)) => { ..self, se_volume: v.to_double() }
+    ("locale", Str(v)) if v == "" || is_formal_locale(v) => { ..self, locale: v }
     _ => self
   }
   updated.clamp()
