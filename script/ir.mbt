@@ -39,3 +39,30 @@ pub(all) struct IrScene {
   name : String
   ops : Array[IrOp]
 } derive(Debug)
+
+///|
+pub(all) enum StablePresentationKind {
+  Dialogue
+  Choice
+  Operation
+} derive(Debug, Eq)
+
+///|
+/// Stable author identity projected alongside executable IR. `operation_id`
+/// identifies the resumable operation; presentation and choice IDs remain
+/// explicit so catalogs and save compatibility never depend on display text.
+pub(all) struct StableOperationId {
+  operation_id : AuthorId
+  presentation_id : AuthorId?
+  choice_ids : Array[AuthorId]
+  scene : String
+  ordinal : Int
+  kind : StablePresentationKind
+  span : SourceSpan
+} derive(Debug, Eq)
+
+///|
+pub(all) struct IdentifiedIrModule {
+  ir : IrModule
+  stable_operations : Array[StableOperationId]
+} derive(Debug)

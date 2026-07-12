@@ -9,6 +9,98 @@ pub fn lower_unit(unit : ResolvedUnit) -> IrModule {
 }
 
 ///|
+/// Lower author-ID directives together with executable IR. Grammar:
+/// `@meta.id "operation.id" presentation="presentation.id" choices="a,b"`
+/// immediately precedes the dialogue, choice, or host operation it identifies.
+/// The directive is metadata only and is removed from executable operations.
+pub fn lower_unit_with_ids(
+  unit : ResolvedUnit,
+) -> IdentifiedIrModule raise AuthorIdError {
+  let stable_operations : Array[StableOperationId] = []
+  let stripped_scenes : Array[SceneDecl] = []
+  for scene in unit.scenes {
+    let items : Array[Stmt] = []
+    let mut pending : (AuthorId, AuthorId?, Array[AuthorId], SourceSpan)? = None
+    let mut ordinal = 0
+    for item in scene.items {
+      match item {
+        Command(cmd="meta.id", args~, span~) =>
+          pending = Some(parse_id_directive(args, span))
+        _ => {
+          match pending {
+            Some((operation_id, presentation_id, choice_ids, span)) => {
+              stable_operations.push({
+                operation_id,
+                presentation_id,
+                choice_ids,
+                scene: scene.name,
+                ordinal,
+                kind: stable_kind(item),
+                span,
+              })
+              pending = None
+            }
+            None => ()
+          }
+          items.push(item)
+          ordinal = ordinal + 1
+        }
+      }
+    }
+    stripped_scenes.push({
+      name: scene.name,
+      parent: scene.parent,
+      items,
+      span: scene.span,
+    })
+  }
+  let stripped : ResolvedUnit = {
+    file: unit.file,
+    externs: unit.externs,
+    scenes: stripped_scenes,
+    scene_table: unit.scene_table,
+  }
+  { ir: lower_unit(stripped), stable_operations }
+}
+
+///|
+fn parse_id_directive(
+  args : Array[Arg],
+  span : SourceSpan,
+) -> (AuthorId, AuthorId?, Array[AuthorId], SourceSpan) raise AuthorIdError {
+  let mut operation = ""
+  let mut presentation : String? = None
+  let choices : Array[AuthorId] = []
+  for arg in args {
+    match arg {
+      Positional(Str(id)) | Positional(Ident(id)) => operation = id
+      Named(name="presentation", Str(id))
+      | Named(name="presentation", Ident(id)) => presentation = Some(id)
+      Named(name="choices", Str(ids)) =>
+        for id in ids.split(",") {
+          choices.push(parse_author_id(id.to_owned()))
+        }
+      _ => ()
+    }
+  }
+  let operation_id = parse_author_id(operation)
+  let presentation_id = match presentation {
+    Some(id) => Some(parse_author_id(id))
+    None => None
+  }
+  (operation_id, presentation_id, choices, span)
+}
+
+///|
+fn stable_kind(stmt : Stmt) -> StablePresentationKind {
+  match stmt {
+    Dialogue(..) => Dialogue
+    Command(cmd="flow.choice", ..) => Choice
+    Command(..) => Operation
+  }
+}
+
+///|
 fn pick_entry(scenes : Array[SceneDecl]) -> String {
   for s in scenes {
     if s.name == "entrypoint" {

@@ -129,3 +129,30 @@ test "lower preserves named host args as marker pairs" {
   guard args[4] is Str("#:duration") else { fail("dur marker") }
   guard args[5] is Float(0.4) else { fail("dur val") }
 }
+
+///|
+test "explicit IDs survive lowering while metadata directives do not execute" {
+  let src =
+    #|- scene "s"
+    #|@meta.id "intro.greeting" presentation="text.intro.greeting"
+    #|y:Hello
+    #|@meta.id "intro.choice" choices="choice.yes,choice.no"
+    #|@flow.choice "Yes" "No" --result c
+    #|
+  let identified = @script.compile_to_identified_ir(src, file="ids.yuki")
+  assert_eq(identified.stable_operations.length(), 2)
+  assert_eq(
+    identified.stable_operations[0].operation_id.value,
+    "intro.greeting",
+  )
+  guard identified.stable_operations[0].presentation_id is Some(id) else {
+    fail("presentation ID")
+  }
+  assert_eq(id.value, "text.intro.greeting")
+  assert_eq(identified.stable_operations[1].choice_ids.length(), 2)
+  let ops = identified.ir.scenes["s"].ops
+  for op in ops {
+    guard op is Host(name="meta.id", ..) else { continue }
+    fail("meta.id must not reach executable IR")
+  }
+}
