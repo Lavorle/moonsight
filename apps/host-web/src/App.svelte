@@ -50,9 +50,11 @@
     }
     let cancelled = false;
     (async () => {
+      const params = new URLSearchParams(location.search);
       const manifestUrl =
-        new URLSearchParams(location.search).get("manifest") ||
-        "./manifest.json";
+        params.get("manifest") || "./manifest.json";
+      const contentMode =
+        params.get("content") === "demo" ? "demo" : "production";
       const manifest = (await loadManifest(manifestUrl)) as Manifest | null;
       const store = await createSaveStore(
         clampSaveSlotCount(manifest?.save_slots),
@@ -62,6 +64,7 @@
         store,
         manifest,
         manifestUrl,
+        contentMode,
         onStatus: (m) => {
           if (!cancelled) status = m;
         },

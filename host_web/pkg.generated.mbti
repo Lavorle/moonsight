@@ -24,6 +24,8 @@ pub fn boot_title() -> Int
 
 pub fn clear_pending_glyphs() -> Int
 
+pub fn consume_slot_load_error() -> String
+
 pub fn export_frame(Int, Float, Int) -> Int
 
 pub fn export_pointer(Float, Float, Int) -> Int
@@ -81,6 +83,8 @@ pub fn set_prefs_json(String) -> Int
 pub fn set_save_slots(Int) -> Int
 
 pub fn set_slot_json(Int, String) -> Int
+
+pub fn slot_load_error_slot() -> Int
 
 // Errors
 

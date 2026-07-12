@@ -49,7 +49,13 @@ import {
   type SaveSlotState,
 } from "./saveSlots";
 import { loadTheme } from "./theme";
-import { bytesToBinaryString, loadManifest, loadWasm } from "./wasm";
+import {
+  loadGameContent,
+  loadManifest,
+  loadWasm,
+  validateContentManifest,
+  type ContentMode,
+} from "./wasm";
 
 const PACK_HEADER = 4;
 const SPRITE_STRIDE = 7;
@@ -100,6 +106,8 @@ export type HostExports = WebAssembly.Exports & {
   save_json?: (slot: number) => string;
   load_json?: (json: string) => number;
   load_error?: () => string;
+  slot_load_error_slot?: () => number;
+  consume_slot_load_error?: () => string;
   audio_event_count?: () => number;
   audio_event_kind?: (i: number) => number;
   audio_event_resource?: (i: number) => string;
@@ -119,6 +127,8 @@ export type GameSessionOptions = {
   store?: SaveStore;
   /** Preloaded manifest, used so desktop slot preload matches save_slots. */
   manifest?: Manifest | null;
+  /** Production fails closed; demo explicitly permits development fallback. */
+  contentMode?: ContentMode;
   onSaveSlotState?: (state: SaveSlotState) => void;
 };
 
@@ -476,55 +486,37 @@ export class GameSession {
       : `running · ${issues.length} save slot issue${issues.length === 1 ? "" : "s"}`;
   }
 
-  /**
-   * Prefer compiled multi-file game.msb when present; fallback demo.yuki / init_demo.
-   */
+  /** Load packaged content under the caller's explicit production/demo policy. */
   private async maybeLoadSource(
     manifest: Manifest | null | undefined,
+    contentMode: ContentMode,
   ): Promise<void> {
-    let loaded = false;
-    try {
-      const msbRes = await fetch("./game.msb");
-      if (
-        msbRes.ok &&
-        this.exports_ &&
-        typeof this.exports_.load_msb === "function"
-      ) {
-        const buf = new Uint8Array(await msbRes.arrayBuffer());
-        if (buf.length > 0) {
-          const rc = this.exports_.load_msb(bytesToBinaryString(buf));
-          console.info("load_msb game.msb rc=", rc, "bytes=", buf.length);
-          stopBgm(this.audio);
-          if (rc === 0) {
-            loaded = true;
-          } else {
-            console.warn("load_msb failed; falling back to demo.yuki");
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("game.msb load error", e);
-    }
-    if (!loaded) {
-      try {
-        const res = await fetch("./demo.yuki");
-        if (res.ok && this.exports_) {
-          const src = await res.text();
-          const rc = this.exports_.load_source?.(src) ?? -1;
-          console.info("load_source demo.yuki rc=", rc);
-          stopBgm(this.audio);
-          loaded = rc === 0;
-        }
-      } catch {
-        /* fall through */
-      }
-    }
-    if (!loaded && this.exports_) {
-      this.exports_.init_demo?.();
-      console.info("init_demo()");
-      stopBgm(this.audio);
-    }
+    if (!this.exports_) throw new Error("MoonSight: runtime is unavailable");
+    await loadGameContent(this.exports_, contentMode);
+    stopBgm(this.audio);
     this.afterEngineReady(manifest);
+  }
+
+  private consumeRuntimeSlotLoadFailure(): void {
+    const exports_ = this.exports_;
+    if (
+      typeof exports_?.slot_load_error_slot !== "function" ||
+      typeof exports_.consume_slot_load_error !== "function"
+    ) {
+      return;
+    }
+    const slot = exports_.slot_load_error_slot() | 0;
+    const message = exports_.consume_slot_load_error();
+    if (slot < 0 || !message) return;
+
+    const prior = this.slotStates_.get(slot);
+    const formatVersion =
+      prior && "formatVersion" in prior ? prior.formatVersion : 0;
+    const failure = classifyRuntimeLoadFailure(slot, formatVersion, message);
+    this.setSlotState(failure);
+    this.setStatus(
+      `running · cannot load slot ${slot + 1} (${failure.state}: ${message})`,
+    );
   }
 
   /**
@@ -823,6 +815,7 @@ export class GameSession {
     this.pointerDirty = false;
     try {
       this.exports_.export_frame(intent, dt, this.ctrlHeld ? 1 : 0);
+      if (syncAfterAction) this.consumeRuntimeSlotLoadFailure();
       flushPendingGlyphs(this.exports_);
       flushAudio(this.audio, this.exports_);
       // After UI actions (keyboard intent or pointer down): prefs + multi-slot.
@@ -930,16 +923,22 @@ export class GameSession {
 
       const manifestUrl =
         options.manifestUrl || params.get("manifest") || "./manifest.json";
+      const contentMode = options.contentMode ?? "production";
       this.setStatus("loading manifest…");
-      const manifest =
+      const loadedManifest =
         options.manifest ??
-        ((await loadManifest(manifestUrl)) as Manifest | null);
+        (await loadManifest(manifestUrl));
+      const manifest = validateContentManifest(
+        loadedManifest,
+        contentMode,
+        manifestUrl,
+      ) as Manifest | null;
 
       // Preconfigure identity + slot count before engine construction.
       this.applySaveSlotsFromManifest(manifest);
       this.applyModuleIdFromManifest(manifest);
       this.setStatus("init engine…");
-      await this.maybeLoadSource(manifest);
+      await this.maybeLoadSource(manifest, contentMode);
       this.setStatus("loading assets…");
       await this.applyManifest(manifest);
 

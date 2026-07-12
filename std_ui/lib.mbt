@@ -6,7 +6,7 @@
 
 ///|
 /// Install default HUD and title / game_menu / save_load / settings / confirm / backlog modals.
-pub fn register(app : @runtime.UiApp, save_slots~ : Int = 6) -> Unit {
+pub fn register(app : @runtime.UiApp, save_slots? : Int = 6) -> Unit {
   app.set_hud(build_hud(app))
   app.register_modal("title", build_title(app))
   app.register_modal("game_menu", build_game_menu(app))

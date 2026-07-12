@@ -217,7 +217,10 @@ pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
 ///
 /// Hosts should use this for slot classification so version, identity, scene,
 /// instruction-position, and continuation rules remain runtime-authoritative.
-pub fn Engine::validate_save(self : Engine, blob : String) -> Unit raise SaveError {
+pub fn Engine::validate_save(
+  self : Engine,
+  blob : String,
+) -> Unit raise SaveError {
   let game = parse_save_game(blob)
   ignore(validate_save_game(self, game))
 }
@@ -273,7 +276,7 @@ fn ensure_layer_scale_default(json : Json) -> Json {
   match json {
     Object(map) => {
       match map.get("layers") {
-        Some(Array(layers)) => {
+        Some(Array(layers)) =>
           for layer in layers {
             match layer {
               Object(lm) =>
@@ -283,7 +286,6 @@ fn ensure_layer_scale_default(json : Json) -> Json {
               _ => ()
             }
           }
-        }
         _ => ()
       }
       json
@@ -493,8 +495,16 @@ fn audio_logic_from_mixer(bgm : String?, se : String?) -> AudioLogicState {
     se,
     bgm_volume: Some(m.bgm_volume),
     bgm_fade_to: fade_to,
-    bgm_fade_remaining: if fade_rem > 0.0 { Some(fade_rem) } else { None },
-    bgm_fade_stop: if fade_stop { Some(true) } else { None },
+    bgm_fade_remaining: if fade_rem > 0.0 {
+      Some(fade_rem)
+    } else {
+      None
+    },
+    bgm_fade_stop: if fade_stop {
+      Some(true)
+    } else {
+      None
+    },
   }
 }
 
@@ -514,7 +524,7 @@ fn restore_mixer_from_audio(audio : AudioLogicState) -> Unit {
           Some(true) => true
           _ => false
         }
-        m.fade_bgm_to(target, rem, stop=stop)
+        m.fade_bgm_to(target, rem, stop~)
       }
     _ => ()
   }

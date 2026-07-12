@@ -231,7 +231,7 @@ scale 可见；Ctrl 快进 vs `@flow.wait`；blur 清除快进；强制错误路
 **推迟到人工浏览器**（与 Pointer Theme 相同的诚实策略）— 不在 CI/agent 无头环境
 宣称通过。
 
-### Q4 / 1.0 候选（发布）— 自动化联合门禁绿
+### Q4 / 1.0 候选（发布）— 历史自动化联合门禁
 
 **包含：** 从 [`templates/minimal`](./templates/minimal) 的
 `moonsightc new <name> [-o parent]`；`moonsightc build` **硬依赖**
@@ -244,7 +244,7 @@ scale 可见；Ctrl 快进 vs `@flow.wait`；blur 清除快进；强制错误路
 `./scripts/publish-web.sh` + `./scripts/publish-desktop.sh`；作者文档（仓库 +
 Fumadocs 中英：new / publish / desktop）；可选 `check` 未知 `@flow.jump` 场景目标。
 
-**自动化门禁（1.0 候选）：** `export CC=gcc` 后 `moon check`、`moon test`、
+**历史自动化门禁（Q4 候选）：** `export CC=gcc` 后 `moon check`、`moon test`、
 `moon build --target wasm-gc --release host_web`、`apps/host-web` `npm run build`、
 `moonsightc new` + `check` + `build`、`moonsightc build demo/game -o dist/demo`、
 `apps/docs-site` `npm run build`、无 Svelte dist 时 build **失败**、
@@ -260,7 +260,12 @@ Esc 存档 → 重载 → 读档。agent CI 中 **推迟**：无头 Chromium 有
 无交互 GUI 会话 / 同样 WebGPU 限制时 **推迟** — 清单见
 [`host_desktop/README.md`](./host_desktop/README.md)。禁止假绿。
 
-正式 **1.0 发布**（硬化、Host 全量收口、rollback/i18n 缓冲）仍属 **Q5**。
+正式 **1.0 发布**当前只跟踪 release-critical 收口；rollback、完整产品 i18n 与
+其他增强仍在范围外。仓库 CI 现强制执行格式、全 target 检查与测试、WASM、Host
+测试/类型检查/构建、CLI 正负 fixtures、package smoke、文档以及 desktop Rust
+门禁；但 CI 绿不能替代真实 WebGPU/Tauri/完整样章证据。W1、D1、C1 尚未对同一
+不可变候选 SHA 完成，因此正式 1.0 仍为 **BLOCKED**。执行字段、步骤和当前诚实
+状态见 [`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md)。
 
 ### 范围外 / 推迟到 Q5+
 

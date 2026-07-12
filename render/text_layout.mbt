@@ -22,8 +22,8 @@ pub fn approximate_advance_em(ch : Char) -> Float {
   let cp = ch.to_int()
   // CJK Unified Ideographs and common fullwidth ranges → 1.0 em
   if (cp >= 0x2E80 && cp <= 0x9FFF) ||
-      (cp >= 0xF900 && cp <= 0xFAFF) ||
-      (cp >= 0xFF00 && cp <= 0xFFEF) {
+    (cp >= 0xF900 && cp <= 0xFAFF) ||
+    (cp >= 0xFF00 && cp <= 0xFFEF) {
     return 1.0
   }
   noto_advance_em(ch)

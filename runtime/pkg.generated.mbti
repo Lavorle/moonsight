@@ -112,12 +112,15 @@ pub(all) struct Engine {
   mut ui : UiRuntime
   ir_entry : String
   mut slot_blobs : Array[String?]
+  mut slot_load_error_slot : Int
+  mut slot_load_error_message : String
   mut backlog : BacklogStore
   mut backlog_last_key : String
   mut pending_confirm : ConfirmKind?
 }
 pub fn Engine::boot_title(Self) -> Unit
 pub fn Engine::clear_screens_to_playing(Self) -> Unit
+pub fn Engine::consume_slot_load_error(Self) -> String
 pub fn Engine::from_ir(@script.IrModule, entry~ : String, director? : Director, app? : UiApp, save_slots? : Int, module_id? : String) -> Self
 pub fn Engine::get_slot_blob(Self, Int) -> String?
 pub fn Engine::load(Self, String) -> Unit raise SaveError
@@ -130,6 +133,7 @@ pub fn Engine::set_module_id(Self, String) -> Unit
 pub fn Engine::set_prefs_json(Self, String) -> Int
 pub fn Engine::set_save_slots(Self, Int) -> Unit
 pub fn Engine::set_slot_blob(Self, Int, String) -> Unit
+pub fn Engine::slot_load_error_slot(Self) -> Int
 pub fn Engine::start_game(Self) -> Unit
 pub fn Engine::sync_ui_bind(Self) -> Unit
 pub fn Engine::tick(Self, Intent, dt? : Double, skip_held? : Bool) -> Unit

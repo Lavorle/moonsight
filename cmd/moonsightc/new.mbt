@@ -50,7 +50,9 @@ fn cmd_new(name : String, parent_dir : String) -> Int {
   }
   match find_minimal_template() {
     None => {
-      println("error: templates/minimal not found (run from moonsight monorepo)")
+      println(
+        "error: templates/minimal not found (run from moonsight monorepo)",
+      )
       1
     }
     Some(tmpl) =>

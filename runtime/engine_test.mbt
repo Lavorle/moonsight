@@ -145,11 +145,9 @@ test "dissolve dual-phase veil out then in" {
   )
   eng.tick(None_, dt=0.0)
   ignore(
-    @std_commands.standard_registry().call(
-      "trans.dissolve",
-      eng.stage,
-      [Float(1.0)],
-    ),
+    @std_commands.standard_registry().call("trans.dissolve", eng.stage, [
+      Float(1.0),
+    ]),
   )
   assert_eq(eng.stage.dissolve_phase, 1)
   assert_eq(eng.stage.overlay_opacity, 0.0)
@@ -193,11 +191,9 @@ test "dissolve advances during wait; skip does not snap" {
   eng.tick(None_, dt=0.0)
   assert_true(eng.stage.wait_remaining > 0.0)
   ignore(
-    @std_commands.standard_registry().call(
-      "trans.dissolve",
-      eng.stage,
-      [Float(1.0)],
-    ),
+    @std_commands.standard_registry().call("trans.dissolve", eng.stage, [
+      Float(1.0),
+    ]),
   )
   // During wait, dissolve still ticks on presentation clock.
   eng.tick(None_, dt=0.25)
@@ -387,15 +383,19 @@ test "sync_ui_bind fills slot_labels" {
   let bare =
     #|{"format_version":3,"module_id":"","scene":"s","ip":0,"call_stack":[],"vars":{},"layers":[],"overlay_opacity":0,"audio":{},"wait":"Running","auto":false,"fade_to":0,"fade_remaining":0,"wait_remaining":0}
   eng.set_slot_blob(2, bare)
+  eng.set_slot_blob(3, "not-json")
   eng.sync_ui_bind()
   assert_eq(eng.ui.bind.slot_labels[1], "Slot 1 · 2026-07-10T12:00:00Z")
   assert_eq(eng.ui.bind.slot_labels[2], "Slot 2 · saved")
-  assert_eq(eng.ui.bind.slot_labels[3], "Slot 3 (empty)")
+  assert_eq(eng.ui.bind.slot_labels[3], "Slot 3 · invalid")
   assert_eq(
     @runtime.TextBindSrc::SlotLabel(1).resolve(eng.ui.bind),
     "Slot 1 · 2026-07-10T12:00:00Z",
   )
-  assert_eq(@runtime.TextBindSrc::SlotLabel(99).resolve(eng.ui.bind), "Slot 99 (empty)")
+  assert_eq(
+    @runtime.TextBindSrc::SlotLabel(99).resolve(eng.ui.bind),
+    "Slot 99 (empty)",
+  )
 }
 
 ///|
@@ -521,13 +521,9 @@ fn app_game_menu_continue() -> @runtime.UiApp {
   let app = @runtime.UiApp::new()
   app.register_modal(
     "game_menu",
-    @runtime.UiNode::VBox(
-      x=None,
-      y=None,
-      children=[
-        app.button("Continue", fn(c : &@runtime.Capabilities) { c.return_modal() }),
-      ],
-    ),
+    @runtime.UiNode::VBox(x=None, y=None, children=[
+      app.button("Continue", fn(c : &@runtime.Capabilities) { c.return_modal() }),
+    ]),
   )
   app
 }
@@ -538,13 +534,9 @@ fn app_backlog_close() -> @runtime.UiApp {
   let app = @runtime.UiApp::new()
   app.register_modal(
     "backlog",
-    @runtime.UiNode::VBox(
-      x=None,
-      y=None,
-      children=[
-        app.button("Close", fn(c : &@runtime.Capabilities) { c.return_modal() }),
-      ],
-    ),
+    @runtime.UiNode::VBox(x=None, y=None, children=[
+      app.button("Close", fn(c : &@runtime.Capabilities) { c.return_modal() }),
+    ]),
   )
   app
 }
@@ -555,13 +547,9 @@ fn app_title_start() -> @runtime.UiApp {
   let app = @runtime.UiApp::new()
   app.register_modal(
     "title",
-    @runtime.UiNode::VBox(
-      x=None,
-      y=None,
-      children=[
-        app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
-      ],
-    ),
+    @runtime.UiNode::VBox(x=None, y=None, children=[
+      app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
+    ]),
   )
   app
 }
@@ -572,27 +560,18 @@ fn app_title_with_settings() -> @runtime.UiApp {
   let app = @runtime.UiApp::new()
   app.register_modal(
     "title",
-    @runtime.UiNode::VBox(
-      x=None,
-      y=None,
-      children=[
-        app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
-        app.button(
-          "Settings",
-          fn(c : &@runtime.Capabilities) { c.show_modal("settings", mode=None) },
-        ),
-      ],
-    ),
+    @runtime.UiNode::VBox(x=None, y=None, children=[
+      app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
+      app.button("Settings", fn(c : &@runtime.Capabilities) {
+        c.show_modal("settings", mode=None)
+      }),
+    ]),
   )
   app.register_modal(
     "settings",
-    @runtime.UiNode::VBox(
-      x=None,
-      y=None,
-      children=[
-        app.button("Back", fn(c : &@runtime.Capabilities) { c.return_modal() }),
-      ],
-    ),
+    @runtime.UiNode::VBox(x=None, y=None, children=[
+      app.button("Back", fn(c : &@runtime.Capabilities) { c.return_modal() }),
+    ]),
   )
   app
 }
@@ -603,23 +582,15 @@ fn app_title_and_menu() -> @runtime.UiApp {
   let app = @runtime.UiApp::new()
   app.register_modal(
     "title",
-    @runtime.UiNode::VBox(
-      x=None,
-      y=None,
-      children=[
-        app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
-      ],
-    ),
+    @runtime.UiNode::VBox(x=None, y=None, children=[
+      app.button("Start", fn(c : &@runtime.Capabilities) { c.start_game() }),
+    ]),
   )
   app.register_modal(
     "game_menu",
-    @runtime.UiNode::VBox(
-      x=None,
-      y=None,
-      children=[
-        app.button("Continue", fn(c : &@runtime.Capabilities) { c.return_modal() }),
-      ],
-    ),
+    @runtime.UiNode::VBox(x=None, y=None, children=[
+      app.button("Continue", fn(c : &@runtime.Capabilities) { c.return_modal() }),
+    ]),
   )
   app
 }
@@ -632,7 +603,11 @@ test "open menu freezes vm ip until continue" {
     #|y:There
     #|
   let ir = @script.compile_to_ir(src, file="menu_gate.yuki")
-  let eng = @runtime.Engine::from_ir(ir, entry="s", app=app_game_menu_continue())
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    app=app_game_menu_continue(),
+  )
   eng.tick(None_, dt=0.0)
   assert_true(eng.vm.wait == Yield)
   let ip0 = eng.vm.ip
@@ -735,7 +710,11 @@ test "menu open pauses narrative advance" {
     #|y:There
     #|
   let ir = @script.compile_to_ir(src, file="menu_pause.yuki")
-  let eng = @runtime.Engine::from_ir(ir, entry="s", app=app_game_menu_continue())
+  let eng = @runtime.Engine::from_ir(
+    ir,
+    entry="s",
+    app=app_game_menu_continue(),
+  )
   eng.tick(None_, dt=0.0)
   eng.tick(Advance) // complete typewriter
   assert_true(eng.vm.wait == Yield)
@@ -1000,6 +979,102 @@ test "save_slot occupied opens confirm without overwriting" {
 }
 
 ///|
+/// Menu-triggered loads must surface runtime validation failures without
+/// mutating the active playthrough or closing the load screen.
+test "load_slot records semantic failure and preserves active state" {
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let ir = @script.compile_to_ir(src, file="menu_load_failure.yuki")
+  let app = @runtime.UiApp::new()
+  app.register_modal("load", @runtime.UiNode::VBox(x=None, y=None, children=[]))
+  let foreign = @runtime.Engine::from_ir(ir, entry="s", module_id="foreign")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", module_id="active", app~)
+  eng.tick(None_)
+  eng.stage.set_var("keep", Int(7))
+  eng.stage.overlay_opacity = 0.42
+  eng.ui.show_modal("load")
+  let scene_before = eng.vm.scene
+  let ip_before = eng.vm.ip
+  let wait_before = eng.vm.wait
+  let stack_depth_before = eng.ui.stack_depth()
+  eng.set_slot_blob(0, foreign.save())
+  let caps : &@runtime.Capabilities = eng
+  caps.load_slot(0)
+  assert_eq(eng.slot_load_error_slot(), 0)
+  assert_true(eng.consume_slot_load_error().contains("module_id mismatch"))
+  assert_eq(eng.slot_load_error_slot(), -1)
+  assert_eq(eng.consume_slot_load_error(), "")
+  assert_eq(eng.vm.scene, scene_before)
+  assert_eq(eng.vm.ip, ip_before)
+  assert_true(eng.vm.wait == wait_before)
+  assert_true(eng.stage.get_var("keep") == Int(7))
+  assert_eq(eng.stage.overlay_opacity, 0.42)
+  assert_eq(eng.ui.stack_depth(), stack_depth_before)
+  assert_eq(eng.ui.stack[0].name, "load")
+
+  let base = @runtime.parse_save_game(eng.save())
+  let unknown = { ..base, scene: "missing" }.to_json().stringify()
+  eng.set_slot_blob(1, unknown)
+  caps.load_slot(1)
+  assert_eq(eng.slot_load_error_slot(), 1)
+  assert_true(eng.consume_slot_load_error().contains("unknown scene"))
+
+  let stale = { ..base, ip: 999 }.to_json().stringify()
+  eng.set_slot_blob(2, stale)
+  caps.load_slot(2)
+  assert_eq(eng.slot_load_error_slot(), 2)
+  assert_true(
+    eng.consume_slot_load_error().contains("instruction pointer 999 is invalid"),
+  )
+
+  let inconsistent = {
+      ..base,
+      wait: Choose,
+      choices: None,
+      choose_result_var: None,
+    }
+    .to_json()
+    .stringify()
+  eng.set_slot_blob(3, inconsistent)
+  caps.load_slot(3)
+  assert_eq(eng.slot_load_error_slot(), 3)
+  assert_true(
+    eng.consume_slot_load_error().contains("invalid save continuation"),
+  )
+
+  let unsupported = { ..base, format_version: 99 }.to_json().stringify()
+  eng.set_slot_blob(4, unsupported)
+  caps.load_slot(4)
+  assert_eq(eng.slot_load_error_slot(), 4)
+  assert_true(
+    eng.consume_slot_load_error().contains("unsupported save format_version"),
+  )
+}
+
+///|
+test "successful load_slot clears stale failure and consumes no diagnostic" {
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let ir = @script.compile_to_ir(src, file="menu_load_recovery.yuki")
+  let foreign = @runtime.Engine::from_ir(ir, entry="s", module_id="foreign")
+  let eng = @runtime.Engine::from_ir(ir, entry="s", module_id="active")
+  eng.set_slot_blob(0, foreign.save())
+  let caps : &@runtime.Capabilities = eng
+  caps.load_slot(0)
+  assert_eq(eng.slot_load_error_slot(), 0)
+  eng.set_slot_blob(0, eng.save())
+  caps.load_slot(0)
+  assert_eq(eng.slot_load_error_slot(), -1)
+  assert_eq(eng.consume_slot_load_error(), "")
+  assert_eq(eng.ui.stack_depth(), 0)
+  assert_true(eng.ui.mode is Playing)
+}
+
+///|
 test "confirm_yes overwrites save" {
   let src =
     #|- scene "s"
@@ -1049,25 +1124,23 @@ test "confirm_no cancels" {
 test "confirm default focus is No; Advance cancels overwrite" {
   let app = @runtime.UiApp::new()
   let no_id = app.alloc_action(fn(c : &@runtime.Capabilities) { c.confirm_no() })
-  let yes_id = app.alloc_action(fn(c : &@runtime.Capabilities) { c.confirm_yes() })
+  let yes_id = app.alloc_action(fn(c : &@runtime.Capabilities) {
+    c.confirm_yes()
+  })
   app.register_modal(
     "confirm",
-    @runtime.UiNode::VBox(
-      x=Some(0.0),
-      y=Some(0.0),
-      children=[
-        @runtime.UiNode::Button(
-          label="No",
-          action_id=no_id,
-          visible=@runtime.VisiblePred::Always,
-        ),
-        @runtime.UiNode::Button(
-          label="Yes",
-          action_id=yes_id,
-          visible=@runtime.VisiblePred::Always,
-        ),
-      ],
-    ),
+    @runtime.UiNode::VBox(x=Some(0.0), y=Some(0.0), children=[
+      @runtime.UiNode::Button(
+        label="No",
+        action_id=no_id,
+        visible=@runtime.VisiblePred::Always,
+      ),
+      @runtime.UiNode::Button(
+        label="Yes",
+        action_id=yes_id,
+        visible=@runtime.VisiblePred::Always,
+      ),
+    ]),
   )
   let src =
     #|- scene "s"
@@ -1306,13 +1379,9 @@ test "pointer phase 2 ends scroll drag without Advance" {
   }
   app.register_modal(
     "sv",
-    @runtime.UiNode::ScrollView(
-      x=100.0,
-      y=100.0,
-      w=400.0,
-      h=200.0,
-      children=[@runtime.UiNode::VBox(x=None, y=None, children=lines)],
-    ),
+    @runtime.UiNode::ScrollView(x=100.0, y=100.0, w=400.0, h=200.0, children=[
+      @runtime.UiNode::VBox(x=None, y=None, children=lines),
+    ]),
   )
   let src =
     #|- scene "s"
@@ -1396,25 +1465,12 @@ fn app_backlog_scroll() -> @runtime.UiApp {
   }
   app.register_modal(
     "backlog",
-    @runtime.UiNode::Fixed(
-      x=0.0,
-      y=0.0,
-      w=Some(1920.0),
-      h=Some(1080.0),
-      children=[
-        @runtime.UiNode::ScrollView(
-          x=100.0,
-          y=100.0,
-          w=400.0,
-          h=200.0,
-          children=[@runtime.UiNode::VBox(x=None, y=None, children=lines)],
-        ),
-        app.button(
-          "Close",
-          fn(c : &@runtime.Capabilities) { c.return_modal() },
-        ),
-      ],
-    ),
+    @runtime.UiNode::Fixed(x=0.0, y=0.0, w=Some(1920.0), h=Some(1080.0), children=[
+      @runtime.UiNode::ScrollView(x=100.0, y=100.0, w=400.0, h=200.0, children=[
+        @runtime.UiNode::VBox(x=None, y=None, children=lines),
+      ]),
+      app.button("Close", fn(c : &@runtime.Capabilities) { c.return_modal() }),
+    ]),
   )
   app
 }
@@ -1470,5 +1526,7 @@ test "MenuUp on backlog decreases scroll_y toward older" {
   assert_eq(eng.ui.stack[0].focus, 0)
   assert_true(eng.ui.scroll_y < before)
   let expected = before - @runtime.ui_scroll_line_h
-  assert_true(eng.ui.scroll_y > expected - 0.1 && eng.ui.scroll_y < expected + 0.1)
+  assert_true(
+    eng.ui.scroll_y > expected - 0.1 && eng.ui.scroll_y < expected + 0.1,
+  )
 }

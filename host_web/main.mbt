@@ -103,6 +103,24 @@ pub fn load_error() -> String {
 }
 
 ///|
+/// Slot index for a pending menu-triggered load failure, or -1 when absent.
+pub fn slot_load_error_slot() -> Int {
+  match session.val.engine {
+    None => -1
+    Some(eng) => eng.slot_load_error_slot()
+  }
+}
+
+///|
+/// Return and clear the pending menu-triggered load failure message.
+pub fn consume_slot_load_error() -> String {
+  match session.val.engine {
+    None => ""
+    Some(eng) => eng.consume_slot_load_error()
+  }
+}
+
+///|
 fn load_msb_inner(raw : String) -> Result[Unit, String] {
   let n = raw.length()
   let bytes = Bytes::makei(n, i => raw[i].to_byte())

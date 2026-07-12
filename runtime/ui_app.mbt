@@ -24,7 +24,11 @@ pub fn UiApp::set_hud(self : UiApp, root : UiNode) -> Unit {
 
 ///|
 /// Register or replace a named modal root.
-pub fn UiApp::register_modal(self : UiApp, name : String, root : UiNode) -> Unit {
+pub fn UiApp::register_modal(
+  self : UiApp,
+  name : String,
+  root : UiNode,
+) -> Unit {
   self.modals[name] = root
 }
 

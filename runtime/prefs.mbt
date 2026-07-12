@@ -62,9 +62,7 @@ pub fn Prefs::to_json_string(self : Prefs) -> String {
 ///
 /// Raises on invalid JSON or non-object root.
 pub fn Prefs::from_json_string(s : String) -> Prefs raise {
-  let json = @json.parse(s) catch {
-    err => fail("invalid prefs JSON: \{err}")
-  }
+  let json = @json.parse(s) catch { err => fail("invalid prefs JSON: \{err}") }
   guard json is Object(map) else { fail("invalid prefs JSON: expected object") }
   let mut p = Prefs::default()
   match map.get("text_speed") {

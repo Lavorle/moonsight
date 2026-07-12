@@ -129,6 +129,12 @@ on both; only the Host persistence backend differs.
 
 ### Manual desktop save checklist
 
+This checklist is the D1 real-environment gate. Record the candidate commit,
+OS/WebView/GPU, tester, UTC timestamp, actual results, logs/screenshots, and a
+redacted appData listing in
+[`docs/release-1.0-verification.md`](../docs/release-1.0-verification.md).
+Running `cargo check` or serving the static assets does **not** make D1 pass.
+
 1. Build the web host + package demo into `dist/demo` (see Prerequisites).
 2. From `host_desktop/tauri`: `npm install && npm run tauri dev`.
 3. Play → open menu → **save slot 0** (or Ctrl+S) → quit the app fully.
@@ -140,6 +146,8 @@ on both; only the Host persistence backend differs.
    # expect prefs.json and/or saves/0.json after a save
    ```
 6. Change a preference (volume / text speed), quit, relaunch — prefs should stick.
+7. Mark D1 `PASS` only after the full-exit/relaunch flow succeeds on the exact
+   recorded candidate commit. Otherwise record `FAIL`, `BLOCKED`, or `NOT RUN`.
 
 ## Design notes
 

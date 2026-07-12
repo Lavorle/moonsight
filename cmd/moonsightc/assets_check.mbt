@@ -1,7 +1,9 @@
 ///|
 /// Split flattened IR host args into positionals only, stripping `#:key` pairs
 /// (same encoding as `@runtime.split_host_args` / `lower_args`).
-fn split_ir_positionals(args : Array[@script.IrValue]) -> Array[@script.IrValue] {
+fn split_ir_positionals(
+  args : Array[@script.IrValue],
+) -> Array[@script.IrValue] {
   let pos : Array[@script.IrValue] = []
   let mut i = 0
   while i < args.length() {
@@ -35,7 +37,7 @@ fn collect_literal_resource_refs(
   for _, scene in ir.scenes {
     for op in scene.ops {
       match op {
-        Host(name~, args~) => {
+        Host(name~, args~) =>
           if name == "layer.show" {
             let pos = split_ir_positionals(args)
             if pos.length() >= 2 {
@@ -53,7 +55,6 @@ fn collect_literal_resource_refs(
               }
             }
           }
-        }
         _ => ()
       }
     }

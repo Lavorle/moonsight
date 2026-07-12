@@ -121,11 +121,9 @@ test "save during dissolve does not restore dual-phase" {
   let eng = load_min_demo_engine()
   // Start dual-phase dissolve and advance into Out half.
   ignore(
-    @std_commands.standard_registry().call(
-      "trans.dissolve",
-      eng.stage,
-      [Float(1.0)],
-    ),
+    @std_commands.standard_registry().call("trans.dissolve", eng.stage, [
+      Float(1.0),
+    ]),
   )
   eng.tick(None_, dt=0.25)
   assert_eq(eng.stage.dissolve_phase, 1)
@@ -272,7 +270,14 @@ test "slot_label empty and filled" {
     layers: [],
     text: None,
     overlay_opacity: 0.0,
-    audio: { bgm: None, se: None, bgm_volume: None, bgm_fade_to: None, bgm_fade_remaining: None, bgm_fade_stop: None },
+    audio: {
+      bgm: None,
+      se: None,
+      bgm_volume: None,
+      bgm_fade_to: None,
+      bgm_fade_remaining: None,
+      bgm_fade_stop: None,
+    },
     wait: Running,
     choices: None,
     choose_result_var: None,
@@ -301,7 +306,10 @@ test "save mid fade-out restores audible fade toward stop" {
   @audio.global_mixer().fade_bgm_to(0.0, 1.0, stop=true)
   @audio.global_mixer().tick(0.5)
   assert_true(@audio.global_mixer().bgm is Some(_))
-  assert_true(@audio.global_mixer().bgm_volume > 0.4 && @audio.global_mixer().bgm_volume < 0.6)
+  assert_true(
+    @audio.global_mixer().bgm_volume > 0.4 &&
+    @audio.global_mixer().bgm_volume < 0.6,
+  )
   let blob = eng.save()
   let game = @runtime.parse_save_game(blob)
   // Blob must carry mixer identity + fade-stop mid-state (not null bgm).
@@ -317,7 +325,9 @@ test "save mid fade-out restores audible fade toward stop" {
   eng2.load(blob)
   // Stage stays clear during restored fade-out; mixer still holds the id.
   assert_true(eng2.stage.bgm is None)
-  guard @audio.global_mixer().bgm is Some(id) else { fail("mixer bgm after load") }
+  guard @audio.global_mixer().bgm is Some(id) else {
+    fail("mixer bgm after load")
+  }
   assert_eq(id, "bgm_soft")
   assert_true(@audio.global_mixer().bgm_fade_stop)
   assert_true(@audio.global_mixer().bgm_fade_remaining > 0.0)
@@ -494,10 +504,9 @@ test "load rejects unknown scene and stale ip before mutating state" {
 test "load rejects unsupported stack and inconsistent choice continuation" {
   let eng = load_min_demo_engine_for("project-a")
   let base = @runtime.parse_save_game(eng.save())
-  let stacked = {
-    ..base,
-    call_stack: [{ scene: "s", ip: 0 }],
-  }.to_json().stringify()
+  let stacked = { ..base, call_stack: [{ scene: "s", ip: 0 }] }
+    .to_json()
+    .stringify()
   try eng.load(stacked) catch {
     SaveError::UnsupportedCallStack(depth~) => assert_eq(depth, 1)
     err => fail("unexpected error: \{err}")
@@ -505,11 +514,13 @@ test "load rejects unsupported stack and inconsistent choice continuation" {
     _ => fail("expected UnsupportedCallStack")
   }
   let inconsistent = {
-    ..base,
-    wait: Choose,
-    choices: None,
-    choose_result_var: None,
-  }.to_json().stringify()
+      ..base,
+      wait: Choose,
+      choices: None,
+      choose_result_var: None,
+    }
+    .to_json()
+    .stringify()
   try eng.load(inconsistent) catch {
     SaveError::InvalidContinuation(message~) =>
       assert_true(message.contains("Choose"))
