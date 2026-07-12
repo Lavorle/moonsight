@@ -326,4 +326,30 @@ mod tests {
         assert!(!backup_path(&path).exists());
         assert!(!temporary_path(&path).exists());
     }
+
+    #[test]
+    fn failed_first_install_leaves_no_partial_file_or_artifacts() {
+        let dir = TestDir::new();
+        let path = dir.file();
+
+        let result = durable_write_with_fault(&path, "new", WriteFault::InstallRename);
+
+        assert!(result.is_err());
+        assert!(!path.exists());
+        assert!(!backup_path(&path).exists());
+        assert!(!temporary_path(&path).exists());
+    }
+
+    #[test]
+    fn read_keeps_primary_and_cleans_stale_replace_artifacts() {
+        let dir = TestDir::new();
+        let path = dir.file();
+        fs::write(&path, "current").unwrap();
+        fs::write(backup_path(&path), "stale-backup").unwrap();
+        fs::write(temporary_path(&path), "partial").unwrap();
+
+        assert_eq!(read_durable(&path).unwrap().as_deref(), Some("current"));
+        assert!(!backup_path(&path).exists());
+        assert!(!temporary_path(&path).exists());
+    }
 }

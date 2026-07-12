@@ -71,3 +71,72 @@ test("manifest slot counts share the 1..20 clamp contract", async () => {
   assert.equal(slots.clampSaveSlotCount(21), 20);
   assert.equal(slots.clampSaveSlotCount("not-a-number"), 6);
 });
+
+test("v2 through v4 remain compatible while older and future saves do not", async () => {
+  const slots = await import("./saveSlots.ts");
+
+  for (const formatVersion of [2, 3, 4]) {
+    assert.equal(
+      slots.classifyStoredSlot(
+        formatVersion,
+        JSON.stringify({ format_version: formatVersion }),
+      ).state,
+      "occupied-valid",
+    );
+  }
+  for (const formatVersion of [1, 5, 99]) {
+    assert.equal(
+      slots.classifyStoredSlot(
+        formatVersion,
+        JSON.stringify({ format_version: formatVersion }),
+      ).state,
+      "occupied-incompatible",
+    );
+  }
+});
+
+test("hydration clamps and enumerates exactly 1, 6, or 20 slots", async () => {
+  const slots = await import("./saveSlots.ts");
+
+  for (const slotCount of [1, 6, 20]) {
+    const loads = [];
+    const states = slots.hydrateStoredSlots(
+      {
+        loadPrefs: () => null,
+        savePrefs: async () => {},
+        loadSlot: (slot) => {
+          loads.push(slot);
+          return null;
+        },
+        saveSlot: async () => {},
+        flush: async () => {},
+      },
+      slotCount,
+      () => assert.fail("empty slots must not be seeded"),
+    );
+
+    assert.deepEqual(loads, Array.from({ length: slotCount }, (_, i) => i));
+    assert.equal(states.length, slotCount);
+  }
+});
+
+test("hydration reports read failures without treating them as empty", async () => {
+  const slots = await import("./saveSlots.ts");
+  const states = slots.hydrateStoredSlots(
+    {
+      loadPrefs: () => null,
+      savePrefs: async () => {},
+      loadSlot: () => {
+        throw new Error("permission denied");
+      },
+      saveSlot: async () => {},
+      flush: async () => {},
+    },
+    1,
+    () => assert.fail("failed reads must not be seeded"),
+  );
+
+  assert.deepEqual(states, [
+    { slot: 0, state: "read-failed", message: "permission denied" },
+  ]);
+});

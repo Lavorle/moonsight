@@ -84,3 +84,40 @@ test("write failures reject both the write and the next flush", async () => {
   await assert.rejects(store.saveSlot(2, "broken"), failure);
   await assert.rejects(store.flush(), failure);
 });
+
+test("failed desktop writes restore the last committed in-memory value", async () => {
+  const failure = new Error("disk full");
+  let failWrites = false;
+  const store = await DesktopSaveStore.create(async (cmd, args) => {
+    if (cmd === "read_prefs") return "old-prefs";
+    if (cmd === "read_save_slot") return args.slot === 0 ? "last-good" : null;
+    if (cmd === "write_prefs" || cmd === "write_save_slot") {
+      if (failWrites) throw failure;
+      return;
+    }
+    if (cmd === "flush_persistence") return;
+    throw new Error(`unexpected command: ${cmd}`);
+  }, 1);
+  failWrites = true;
+
+  await assert.rejects(store.savePrefs("new-prefs"), failure);
+  await assert.rejects(store.saveSlot(0, "uncommitted"), failure);
+
+  assert.equal(store.loadPrefs(), "old-prefs");
+  assert.equal(store.loadSlot(0), "last-good");
+});
+
+test("desktop preload enumerates configured 1, 6, and 20 slot counts", async () => {
+  for (const slotCount of [1, 6, 20]) {
+    const reads = [];
+    await DesktopSaveStore.create(async (cmd, args) => {
+      if (cmd === "read_prefs") return null;
+      if (cmd === "read_save_slot") {
+        reads.push(args.slot);
+        return null;
+      }
+      throw new Error(`unexpected command: ${cmd}`);
+    }, slotCount);
+    assert.deepEqual(reads, Array.from({ length: slotCount }, (_, i) => i));
+  }
+});
