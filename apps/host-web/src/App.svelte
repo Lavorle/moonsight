@@ -5,8 +5,14 @@
     getTauriInvoke,
     isTauriRuntime,
   } from "./lib/desktopSaveStore";
-  import { startGameSession, type GameSessionHandle } from "./lib/gameSession";
+  import {
+    startGameSession,
+    type GameSessionHandle,
+    type Manifest,
+  } from "./lib/gameSession";
   import { WebSaveStore, type SaveStore } from "./lib/saveStore";
+  import { clampSaveSlotCount } from "./lib/saveSlots";
+  import { loadManifest } from "./lib/wasm";
 
   let status = $state("loading…");
   let canvasEl: HTMLCanvasElement | undefined = $state();
@@ -26,13 +32,13 @@
   }
 
   /** Web → WebSaveStore; desktop Tauri → DesktopSaveStore (appData). */
-  async function createSaveStore(): Promise<SaveStore> {
+  async function createSaveStore(slotCount: number): Promise<SaveStore> {
     if (isTauriRuntime()) {
       const invoke = getTauriInvoke();
       if (!invoke) {
         throw new Error("Tauri runtime detected but invoke is unavailable");
       }
-      return DesktopSaveStore.create(invoke);
+      return DesktopSaveStore.create(invoke, slotCount);
     }
     return new WebSaveStore();
   }
@@ -44,10 +50,18 @@
     }
     let cancelled = false;
     (async () => {
-      const store = await createSaveStore();
+      const manifestUrl =
+        new URLSearchParams(location.search).get("manifest") ||
+        "./manifest.json";
+      const manifest = (await loadManifest(manifestUrl)) as Manifest | null;
+      const store = await createSaveStore(
+        clampSaveSlotCount(manifest?.save_slots),
+      );
       if (cancelled) return;
       const h = await startGameSession(canvasEl!, {
         store,
+        manifest,
+        manifestUrl,
         onStatus: (m) => {
           if (!cancelled) status = m;
         },
@@ -65,7 +79,9 @@
 
     return () => {
       cancelled = true;
-      handle?.stop();
+      void handle?.stop().catch((e) => {
+        console.error("[moonsight] shutdown flush failed", e);
+      });
       handle = null;
     };
   });

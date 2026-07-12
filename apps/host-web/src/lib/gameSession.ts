@@ -461,6 +461,19 @@ export class GameSession {
     }
   }
 
+  private runningStatus(): string {
+    const issues = Array.from(this.slotStates_.values()).filter(
+      (state) =>
+        state.state === "occupied-corrupt" ||
+        state.state === "occupied-incompatible" ||
+        state.state === "read-failed" ||
+        state.state === "write-failed",
+    );
+    return issues.length === 0
+      ? "running"
+      : `running · ${issues.length} save slot issue${issues.length === 1 ? "" : "s"}`;
+  }
+
   /**
    * Prefer compiled multi-file game.msb when present; fallback demo.yuki / init_demo.
    */
@@ -537,32 +550,63 @@ export class GameSession {
     }
   }
 
-  doSave = (): void => {
+  doSave = async (): Promise<void> => {
     if (!this.exports_ || typeof this.exports_.save_json !== "function") return;
     let json = this.exports_.save_json(this.saveSlot);
     if (json && json.length) {
       json = this.stampSavedAt(json);
-      this.store.saveSlot(this.saveSlot, json);
       if (typeof this.exports_.set_slot_json === "function") {
         this.exports_.set_slot_json(this.saveSlot, json);
       }
+      await this.persistSlot(this.saveSlot, json);
       console.info("saved", SAVE_KEY(this.saveSlot), json.length, "bytes");
     }
   };
 
-  doLoad = (): void => {
+  doLoad = async (): Promise<void> => {
     if (!this.exports_) return;
-    const json = this.store.loadSlot(this.saveSlot);
-    if (!json) {
-      console.warn("no save at", SAVE_KEY(this.saveSlot));
+    let state: SaveSlotState;
+    try {
+      state = classifyStoredSlot(
+        this.saveSlot,
+        this.store.loadSlot(this.saveSlot),
+      );
+    } catch (error) {
+      state = {
+        slot: this.saveSlot,
+        state: "read-failed",
+        message: this.errorMessage(error),
+      };
+    }
+    this.setSlotState(state);
+    if (state.state !== "occupied-valid") {
+      const detail = "message" in state ? `: ${state.message}` : "";
+      this.setStatus(
+        `running · cannot load slot ${this.saveSlot + 1} (${state.state}${detail})`,
+      );
       return;
     }
+    const json = state.json;
     if (typeof this.exports_.set_slot_json === "function") {
       this.exports_.set_slot_json(this.saveSlot, json);
     }
     const rc = this.exports_.load_json?.(json);
     console.info("load", SAVE_KEY(this.saveSlot), "rc=", rc);
   };
+
+  private async persistAfterAction(): Promise<void> {
+    try {
+      this.prefs = await savePrefsToStorage(
+        this.store,
+        this.exports_,
+        this.prefs,
+      );
+      applyPrefsToAudio(this.audio);
+      await this.syncSlotsToStorage();
+    } catch (error) {
+      console.error("[moonsight] persistence sync failed", error);
+    }
+  }
 
   private bindInput(canvas: HTMLCanvasElement): void {
     // First pointer/key unlocks autoplay policy for BGM/SE.
@@ -600,7 +644,9 @@ export class GameSession {
         case "S":
           // Plain S is MenuDown; Ctrl/Cmd+S is quick-save.
           if (ev.ctrlKey || ev.metaKey) {
-            this.doSave();
+            void this.doSave().catch((error) => {
+              console.error("[moonsight] quick save failed", error);
+            });
             ev.preventDefault();
           } else {
             this.pendingIntent = INTENT_MENU_DOWN;
@@ -630,7 +676,9 @@ export class GameSession {
         case "l":
         case "L":
           if (ev.ctrlKey || ev.metaKey) {
-            this.doLoad();
+            void this.doLoad().catch((error) => {
+              console.error("[moonsight] quick load failed", error);
+            });
             ev.preventDefault();
           }
           break;
@@ -710,7 +758,12 @@ export class GameSession {
       this.ctrlHeld = false;
     };
     const onVis = () => {
-      if (document.visibilityState === "hidden") this.ctrlHeld = false;
+      if (document.visibilityState === "hidden") {
+        this.ctrlHeld = false;
+        void this.store.flush().catch((error) => {
+          this.setStatus(`running · save flush failed: ${this.errorMessage(error)}`);
+        });
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -758,9 +811,7 @@ export class GameSession {
       flushAudio(this.audio, this.exports_);
       // After UI actions (keyboard intent or pointer down): prefs + multi-slot.
       if (syncAfterAction) {
-        this.prefs = savePrefsToStorage(this.store, this.exports_, this.prefs);
-        applyPrefsToAudio(this.audio);
-        this.syncSlotsToStorage();
+        void this.persistAfterAction();
       }
       // Glyphs marked ready appear next frame (Phase 1; no second export/tick).
       const pack = copyFrame(this.exports_);
@@ -778,8 +829,9 @@ export class GameSession {
     canvas: HTMLCanvasElement,
     options: GameSessionOptions = {},
   ): Promise<GameSessionHandle> {
-    if (options.store) this.store = options.store;
+    if (options.store) this.store = this.trackStore(options.store);
     this.onStatus = options.onStatus ?? null;
+    this.onSaveSlotState = options.onSaveSlotState ?? null;
     this.audio.setStatus = (m) => this.setStatus(m);
     this.running = true;
 
@@ -863,16 +915,20 @@ export class GameSession {
       const manifestUrl =
         options.manifestUrl || params.get("manifest") || "./manifest.json";
       this.setStatus("loading manifest…");
-      const manifest = (await loadManifest(manifestUrl)) as Manifest | null;
+      const manifest =
+        options.manifest ??
+        ((await loadManifest(manifestUrl)) as Manifest | null);
 
-      // Pass manifest so save_slots applies before slot hydration / boot_title.
+      // Preconfigure identity + slot count before engine construction.
+      this.applySaveSlotsFromManifest(manifest);
+      this.applyModuleIdFromManifest(manifest);
       this.setStatus("init engine…");
       await this.maybeLoadSource(manifest);
       this.setStatus("loading assets…");
       await this.applyManifest(manifest);
 
       // Delay first frame one rAF so font/GPU state settles before typewriter.
-      this.setStatus("running");
+      this.setStatus(this.runningStatus());
       requestAnimationFrame(() => {
         if (this.running) {
           this.rafId = requestAnimationFrame(this.frame);
@@ -897,11 +953,12 @@ export class GameSession {
       setIntent: (code: number) => {
         this.pendingIntent = code | 0;
       },
+      slotStates: () => Array.from(this.slotStates_.values()),
       stop: () => this.stop(),
     };
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     this.running = false;
     if (this.rafId) {
       cancelAnimationFrame(this.rafId);
@@ -912,6 +969,12 @@ export class GameSession {
     this.unbindResize?.();
     this.unbindResize = null;
     stopBgm(this.audio);
+    try {
+      await this.store.flush();
+    } catch (error) {
+      this.setStatus(`running · save flush failed: ${this.errorMessage(error)}`);
+      throw error;
+    }
   }
 }
 
@@ -923,7 +986,7 @@ export async function startGameSession(
   options: GameSessionOptions = {},
 ): Promise<GameSessionHandle> {
   if (defaultSession) {
-    defaultSession.stop();
+    await defaultSession.stop();
   }
   defaultSession = new GameSession(options.store ?? new WebSaveStore());
   return defaultSession.start(canvas, options);
