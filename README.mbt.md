@@ -2,9 +2,9 @@
 
 **中文** | [English](./README.en.md)
 
-基于 MoonBit + WebGPU 的视觉小说引擎（Phase 1–4 + Q1/0.5 + Q2 多轨 + Q3/0.8
-系统 UI + **Q4 / 1.0 候选**发布路径：`moonsightc new`、仅 Svelte 构建、
-SaveStore Web/桌面、样章、发布脚本）。
+基于 MoonBit + WebGPU 的视觉小说引擎，现跟踪 **Formal 1.0** 作者与发布内容：
+可移植稳定 ID、确定性 MSB2 locale catalogs、存档 v5、原子运行时语言切换、
+有界 rollback / effect barriers、Web/desktop 打包与可留存的发布证据流程。
 
 MoonYuki 脚本编译为 IR/字节码，在 VM + Stage/Director 上运行，经打包后的
 draw list 由 JS WebGPU Host 绘制。系统菜单与对白 HUD 使用常驻 MoonBit UI 树
@@ -120,8 +120,8 @@ Host 纯色 + 可选 PNG）。作者说明：
 
 | 路径 | 职责 |
 |------|------|
-| `script` | MoonYuki → IR / `MSB1`（拒绝项目 `- screen`） |
-| `runtime` | VM、Director、Stage、UiApp/UiRuntime、prefs、存档 (v4)、tween + scale |
+| `script` | MoonYuki → identified IR / 内嵌 locale catalogs 的确定性 `MSB2`（拒绝项目 `- screen`） |
+| `runtime` | VM、Director、Stage、UiApp/UiRuntime、prefs、存档 v5（读取 v2-v5）、语言切换、rollback |
 | `render` | draw list 打包、文字布局、kind+z 排序、scale→精灵尺寸、`UiDrawOp` 绘制 |
 | `audio` | 逻辑 BGM/SE 混音（音量 / 淡入淡出） |
 | `std_commands` | 标准 `@` Host 命令（图层、dissolve、ui.show/hide、音频） |
@@ -147,6 +147,9 @@ Host 纯色 + 可选 PNG）。作者说明：
 - [`docs/host-commands.md`](./docs/host-commands.md) — Host 命令表 + intents
 - [`docs/play-input.md`](./docs/play-input.md) — intents、快进按住、wait 门控、履历/确认
 - [`docs/project-layout.md`](./docs/project-layout.md) — 仓库布局与 `moonsight.json`
+- [`docs/formal-1.0-author-guide.md`](./docs/formal-1.0-author-guide.md) — Formal 1.0 ID、catalog、迁移审阅、MSB2、存档 v5、语言切换、rollback 与预算
+- [`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md) — 精确 SHA 发布证据模板
+- [`CHANGELOG.md`](./CHANGELOG.md) — Formal 1.0 跟踪内容摘要
 - [`docs/draw-list-pack.md`](./docs/draw-list-pack.md) — 帧打包格式
 - [`docs/screen-language.md`](./docs/screen-language.md) — 已废弃的 Phase 3 Screen DSL 存档
 
@@ -231,7 +234,7 @@ scale 可见；Ctrl 快进 vs `@flow.wait`；blur 清除快进；强制错误路
 **推迟到人工浏览器**（与 Pointer Theme 相同的诚实策略）— 不在 CI/agent 无头环境
 宣称通过。
 
-### Q4 / 1.0 候选（发布）— 历史自动化联合门禁
+### Formal 1.0 跟踪发布内容
 
 **包含：** 从 [`templates/minimal`](./templates/minimal) 的
 `moonsightc new <name> [-o parent]`；`moonsightc build` **硬依赖**
@@ -240,7 +243,7 @@ scale 可见；Ctrl 快进 vs `@flow.wait`；blur 清除快进；强制错误路
 [`archive/js_glue`](./archive/js_glue)）；Host **SaveStore**
 （`WebSaveStore` = 不变的 `localStorage` 键；`DesktopSaveStore` = Tauri appData
 `…/moonsight/prefs.json` + `saves/{n}.json`；Web 槽位 ≠ 桌面）；引擎存档 JSON
-仍为 **v4**；demo 样章骨架（约 30–60 分钟弧）在 [`demo/game`](./demo/game)；
+写入 **v5**、读取兼容 **v2-v5**；demo 样章骨架（约 30–60 分钟弧）在 [`demo/game`](./demo/game)；
 `./scripts/publish-web.sh` + `./scripts/publish-desktop.sh`；作者文档（仓库 +
 Fumadocs 中英：new / publish / desktop）；可选 `check` 未知 `@flow.jump` 场景目标。
 
@@ -260,8 +263,10 @@ Esc 存档 → 重载 → 读档。agent CI 中 **推迟**：无头 Chromium 有
 无交互 GUI 会话 / 同样 WebGPU 限制时 **推迟** — 清单见
 [`host_desktop/README.md`](./host_desktop/README.md)。禁止假绿。
 
-正式 **1.0 发布**当前只跟踪 release-critical 收口；rollback、完整产品 i18n 与
-其他增强仍在范围外。仓库 CI 现强制执行格式、全 target 检查与测试、WASM、Host
+Formal 1.0 同时跟踪严格完整的双语 catalogs、无文本 fallback 的原子热切换、
+聚合 `EngineLogicalState` rollback、`Checkpointed` / `CompensatableAudio` /
+`Barrier(reason_code)` effect 策略，以及 64 条 / 16 MiB rollback 环。这些是产品
+契约，不代表已经创建 tag、发布或获得授权。仓库 CI 现强制执行格式、全 target 检查与测试、WASM、Host
 测试/类型检查/构建、CLI 正负 fixtures、package smoke、文档以及 desktop Rust
 门禁；但 CI 绿不能替代真实 WebGPU/Tauri/完整样章证据。W1、D1、C1 尚未对同一
 不可变候选 SHA 完成，因此正式 1.0 仍为 **BLOCKED**。执行字段、步骤和当前诚实
@@ -269,10 +274,10 @@ Esc 存档 → 重载 → 读档。agent CI 中 **推迟**：无头 Chromium 有
 
 ### 范围外 / 推迟到 Q5+
 
-可视化编辑器、超出 docs-site 语言环境的完整产品 i18n、成就、Live2D / 3D、
+可视化编辑器、成就、Live2D / 3D、
 粒子/后处理栈、完整时间轴 / 动画队列、阻塞式呈现 DSL、旋转/锚点、语音轨、
 槽位截图、横向 / 嵌套 ScrollView、列表虚拟化、惯性/橡皮筋、履历写入存档槽、
-rollback、DOM 游戏菜单、第二套原生 GPU 后端、第二套 wasm / 动态 UI 加载、运行时
+DOM 游戏菜单、第二套原生 GPU 后端、第二套 wasm / 动态 UI 加载、运行时
 主题切换器 / 多主题商店、变换动画栈、开放 Host 字符串 UI 动作、官方 Yukimi
 字节码兼容、长期 Screen DSL 下沉兼容、Host adapter 零 JS / 全量收口、交互式
 WebGPU CI、将 wasm 构建产物提交进 git、云存档 / Web↔桌面槽位迁移。

@@ -2,9 +2,10 @@
 
 [中文](./README.mbt.md) | **English**
 
-MoonBit + WebGPU visual novel engine (Phases 1–4 + Q1/0.5 + Q2 multi-track +
-Q3/0.8 system UI + **Q4 / 1.0 candidate** publish path: `moonsightc new`,
-Svelte-only build, SaveStore Web/desktop, sample chapter, publish scripts).
+MoonBit + WebGPU visual novel engine with tracked **Formal 1.0** authoring and
+release content: portable stable IDs, deterministic MSB2 locale catalogs,
+save v5, atomic runtime locale switching, bounded rollback/effect barriers,
+Web/desktop packaging, and retained release evidence procedures.
 
 MoonYuki scripts compile to IR/bytecode, run on a VM + Stage/Director, and
 render through a packed draw list consumed by a JS WebGPU host. System menus and
@@ -123,8 +124,8 @@ roles; host solids + optional PNGs). Author notes:
 
 | Path | Role |
 |------|------|
-| `script` | MoonYuki → IR / `MSB1` (rejects project `- screen`) |
-| `runtime` | VM, Director, Stage, UiApp/UiRuntime, prefs, save (v4), tweens + scale |
+| `script` | MoonYuki → identified IR / deterministic `MSB2` with embedded locale catalogs (rejects project `- screen`) |
+| `runtime` | VM, Director, Stage, UiApp/UiRuntime, prefs, save v5 (reads v2-v5), locale switching, rollback |
 | `render` | Draw list pack, text layout, kind+z sort, scale→sprite size, `UiDrawOp` paint |
 | `audio` | Logical BGM/SE mixer (volume / fade) |
 | `std_commands` | Standard `@` host commands (layers, dissolve, ui.show/hide, audio) |
@@ -151,6 +152,9 @@ on the site are authoritative for listed topics):
 - [`docs/host-commands.md`](./docs/host-commands.md) — host command table + intents
 - [`docs/play-input.md`](./docs/play-input.md) — intents, skip hold, wait gate, backlog/confirm
 - [`docs/project-layout.md`](./docs/project-layout.md) — repo & `moonsight.json`
+- [`docs/formal-1.0-author-guide.md`](./docs/formal-1.0-author-guide.md) — Formal 1.0 IDs, catalogs, migration review, MSB2, save v5, locale switching, rollback, and budgets
+- [`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md) — exact-SHA release evidence template
+- [`CHANGELOG.md`](./CHANGELOG.md) — tracked Formal 1.0 content summary
 - [`docs/draw-list-pack.md`](./docs/draw-list-pack.md) — frame pack format
 - [`docs/screen-language.md`](./docs/screen-language.md) — obsolete Phase 3 Screen DSL archive
 
@@ -240,7 +244,7 @@ confirm defaults No; dissolve + scale visible; Ctrl skip vs `@flow.wait`; blur
 clears skip; force error path message. **Deferred to human browser** (same
 honest pattern as Pointer Theme) — not claimed pass in CI/agent headless.
 
-### Q4 / 1.0 candidate (publish) — automated joint gate green
+### Formal 1.0 tracked release content
 
 **In:** `moonsightc new <name> [-o parent]` from [`templates/minimal`](./templates/minimal);
 `moonsightc build` **hard-requires** [`apps/host-web/dist`](./apps/host-web)
@@ -248,7 +252,7 @@ honest pattern as Pointer Theme) — not claimed pass in CI/agent headless.
 fallback; retired sources under [`archive/js_glue`](./archive/js_glue)); Host
 **SaveStore** (`WebSaveStore` = `localStorage` keys unchanged; `DesktopSaveStore`
 = Tauri appData `…/moonsight/prefs.json` + `saves/{n}.json`; Web slots ≠
-desktop); engine save JSON remains **v4**; demo sample chapter skeleton
+desktop); engine save writers emit **v5** and readers accept **v2-v5**; demo sample chapter skeleton
 (~30–60 min arc) in [`demo/game`](./demo/game); `./scripts/publish-web.sh` +
 `./scripts/publish-desktop.sh`; author docs (repo + Fumadocs zh/en: new /
 publish / desktop); optional `check` unknown `@flow.jump` scene targets.
@@ -272,16 +276,24 @@ appData. **Deferred** when no interactive GUI session / same WebGPU limit —
 checklist in [`host_desktop/README.md`](./host_desktop/README.md). Do not
 fake-pass.
 
-Formal **1.0 release** (hardening, Host full closeout, rollback/i18n buffer)
-remains **Q5**.
+Formal 1.0 also tracks strict complete bilingual catalogs, atomic hot locale
+switching with no text fallback, aggregate `EngineLogicalState` rollback,
+`Checkpointed` / `CompensatableAudio` / `Barrier(reason_code)` effect policy,
+and a 64-entry / 16 MiB rollback ring. These are product contracts, not proof
+that a release was tagged or authorized.
+
+The release remains **BLOCKED** until W1, D1, and C1 are all executed against
+the same immutable candidate SHA and retained artifacts. See
+[`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md); all
+unexecuted fields remain `NOT RUN`.
 
 ### Out of scope / deferred to Q5+
 
-Visual editor, full product i18n beyond docs-site locales, achievements,
+Visual editor, achievements,
 Live2D / 3D, particle/postprocess stack, full timeline / animation queues,
 blocking presentation DSL, rotate/anchor, voice track, slot screenshots,
 horizontal / nested ScrollView, list virtualization, fling/rubber-band, saving
-backlog into slots, rollback, DOM game menus, second native GPU backend, second
+backlog into slots, DOM game menus, second native GPU backend, second
 wasm / dynamic UI load, runtime theme switcher / multi-theme store, transform
 animation stack, open host-string UI actions, official Yukimi bytecode
 compatibility, long-term Screen DSL lower compatibility, Host adapter zero-JS /
