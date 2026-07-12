@@ -1,14 +1,18 @@
 # MoonYuki subset (Phase 1–4)
 
 MoonYuki is a line-oriented visual-novel DSL compiled by the `script` package
-into IR / bytecode (`MSB1`). **UI is not authored in MoonYuki** (Phase 4: MoonBit
+into IR and deterministic MSB2 executable/catalog bundles. **UI is not authored in MoonYuki** (Phase 4: MoonBit
 `std_ui` / `ui_package` — see [`ui-moonbit.md`](./ui-moonbit.md)). This document
 describes **the subset that is implemented and exercised by tests and the demo**.
 
-Out of scope (do not invent): visual editor, i18n, achievements, Live2D / 3D,
-full timeline / animation queues, blocking presentation DSL, official
-YukimiScript bytecode compatibility, `trans.dissolve`, backlog, confirm dialogs,
-slot screenshots, DOM menus, project `- screen` / Screen DSL.
+Formal 1.0 adds author-owned stable presentation IDs, complete locale catalogs,
+MSB2 packaging, save v5, and rollback/effect contracts. The canonical explicit-ID
+grammar and migration output are owned by `moonsightc`; see
+[`formal-1.0-author-guide.md`](./formal-1.0-author-guide.md).
+
+Still out of scope: visual editor, achievements, Live2D / 3D, full timeline /
+animation queues, blocking presentation DSL, official YukimiScript bytecode
+compatibility, slot screenshots, DOM menus, and project `- screen` / Screen DSL.
 
 ## Phase notes
 
@@ -22,7 +26,7 @@ slot screenshots, DOM menus, project `- screen` / Screen DSL.
 | `layer.set` | Change props without rebinding resource; errors if id missing |
 | `flow.wait` | Real wall-clock timing; Advance ignored during timed wait |
 | `trans.fade` | Wall-clock `fade_remaining`; pair with `@flow.wait` to pause script |
-| Save | Format **v3** (tweens, fade_remaining, wait_remaining); v2 still loads |
+| Save | Writers emit **v5**; readers accept v2-v5; v5 persists stable presentation identity and dissolve continuation |
 
 Bare keywords work for string-valued named args after resolve/lower
 (`kind=background` or `kind="background"`). Prefer bare for kinds/enums in demos.

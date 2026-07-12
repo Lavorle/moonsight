@@ -9,14 +9,14 @@ description: Phase 1–4 已实现的行式视觉小说 DSL 子集
 >
 > 自 `docs/moon-yuki-subset.md` 迁入并翻译。未迁入主题仍指向仓库 `docs/`。
 
-MoonYuki 是由 `script` 包编译为 IR / 字节码（`MSB1`）的**行式**视觉小说 DSL。
+MoonYuki 是由 `script` 包编译为 IR 与确定性 MSB2 可执行/语言目录包的**行式**视觉小说 DSL。
 **UI 不在 MoonYuki 中编写**（Phase 4：MoonBit `std_ui` / `ui_package` — 见仓库
 `docs/ui-moonbit.md`）。本文描述**已实现并由测试与 demo 覆盖的子集**。
 
-不在范围内（请勿臆造）：可视化编辑器、i18n、成就、Live2D / 3D、完整时间轴 /
-动画队列、阻塞式呈现 DSL、官方 YukimiScript 字节码兼容、将 `trans.dissolve`
-当作仅 MoonYuki 文档项（引擎 dissolve 属 Q2 host-commands 范畴）、历史记录
-作者语法、确认对话框、槽位截图、DOM 菜单、项目 `- screen` / Screen DSL。
+Formal 1.0 新增作者拥有的稳定呈现 ID、完整语言目录、MSB2、save v5 与
+rollback/effect 契约，见 [Formal 1.0](./formal-1-0)。仍不在范围内：可视化编辑器、
+成就、Live2D / 3D、完整时间轴 / 动画队列、阻塞式呈现 DSL、官方
+YukimiScript 字节码兼容、槽位截图、DOM 菜单、项目 `- screen` / Screen DSL。
 
 ## 分阶段说明
 
@@ -30,7 +30,7 @@ MoonYuki 是由 `script` 包编译为 IR / 字节码（`MSB1`）的**行式**视
 | `layer.set` | 改属性不重新绑定资源；id 不存在则报错 |
 | `flow.wait` | 真实墙钟计时；定时等待期间忽略 Advance |
 | `trans.fade` | 墙钟 `fade_remaining`；配合 `@flow.wait` 暂停脚本 |
-| 存档 | 格式 **v3**（补间、fade_remaining、wait_remaining）；v2 仍可加载 |
+| 存档 | 写入 v5，读取 v2-v5；v5 保存稳定呈现身份与 dissolve 延续 |
 
 字符串值命名参数在 resolve/lower 后支持裸关键字（`kind=background` 或
 `kind="background"`）。demo 中种类/枚举优先用裸形式。
