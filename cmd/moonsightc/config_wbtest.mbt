@@ -63,6 +63,8 @@ test "package manifest emits the frozen locale and schema fields" {
     fail("expected supported_locales array")
   }
   assert_eq(locales.length(), 2)
-  assert_eq(locales[0], Json::string("en"))
-  assert_eq(locales[1], Json::string("zh-Hans-CN"))
+  guard locales[0] is String(first) else { fail("expected locale string") }
+  guard locales[1] is String(second) else { fail("expected locale string") }
+  assert_eq(first, "en")
+  assert_eq(second, "zh-Hans-CN")
 }
