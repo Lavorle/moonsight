@@ -38,6 +38,28 @@ if manifest_path.is_file() and manifest_path.stat().st_size:
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         errors.append(f"manifest.json is not valid UTF-8 JSON: {error}")
     else:
+        if "package_schema_version" in manifest:
+            if manifest["package_schema_version"] != 2:
+                errors.append("manifest package_schema_version must equal 2")
+            default_locale = manifest.get("default_locale")
+            supported_locales = manifest.get("supported_locales")
+            if not isinstance(default_locale, str) or not default_locale:
+                errors.append("manifest default_locale must be a non-empty string")
+            if (
+                not isinstance(supported_locales, list)
+                or not supported_locales
+                or any(not isinstance(locale, str) or not locale for locale in supported_locales)
+            ):
+                errors.append(
+                    "manifest supported_locales must be a non-empty array of strings"
+                )
+            else:
+                if len(set(supported_locales)) != len(supported_locales):
+                    errors.append("manifest supported_locales must not contain duplicates")
+                if default_locale not in supported_locales:
+                    errors.append(
+                        "manifest default_locale must appear in supported_locales"
+                    )
         for section in ("resources", "audio"):
             entries = manifest.get(section, {})
             if not isinstance(entries, dict):
