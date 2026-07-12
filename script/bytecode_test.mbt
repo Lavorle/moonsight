@@ -47,3 +47,40 @@ test "bytecode roundtrip multi scene with jump host" {
   }
   guard args is [Str("b")] else { fail("target b") }
 }
+
+///|
+test "MSB1 encoding is deterministic across scene insertion order" {
+  let a : Map[String, IrScene] = {}
+  a["z"] = { name: "z", ops: [Return] }
+  a["a"] = { name: "a", ops: [Return] }
+  let b : Map[String, IrScene] = {}
+  b["a"] = { name: "a", ops: [Return] }
+  b["z"] = { name: "z", ops: [Return] }
+  assert_eq(
+    @script.encode_module({ scenes: a, entry: "a" }),
+    @script.encode_module({ scenes: b, entry: "a" }),
+  )
+}
+
+///|
+test "MSB2 catalog encoding is deterministic across map and locale order" {
+  let ir = @script.compile_to_ir(minimal_src(), file="t.yuki")
+  let en1 : Map[String, String] = {}
+  en1["line.z"] = "Z"
+  en1["line.a"] = "A"
+  let en2 : Map[String, String] = {}
+  en2["line.a"] = "A"
+  en2["line.z"] = "Z"
+  let ja : Map[String, String] = { "line.a": "あ", "line.z": "ん" }
+  let first = @script.encode_msb2({
+    ir,
+    catalogs: [{ locale: "ja", entries: ja }, { locale: "en", entries: en1 }],
+  })
+  let second = @script.encode_msb2({
+    ir,
+    catalogs: [{ locale: "en", entries: en2 }, { locale: "ja", entries: ja }],
+  })
+  assert_eq(first, second)
+  assert_eq(first[0], b'M')
+  assert_eq(first[3], b'2')
+}

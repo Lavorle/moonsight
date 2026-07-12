@@ -58,6 +58,22 @@ let val_none : Byte = 5
 let msb_version : Int = 1
 
 ///|
+/// One locale's stable presentation catalog. Keys are author-owned IDs and
+/// values are the localized strings presented by the Host.
+pub(all) struct LocaleCatalog {
+  locale : String
+  entries : Map[String, String]
+} derive(Debug, Eq)
+
+///|
+/// Deterministic MSB2 payload. The executable module remains independently
+/// decodable while catalogs are ordered by locale and stable presentation ID.
+pub(all) struct Msb2Bundle {
+  ir : IrModule
+  catalogs : Array[LocaleCatalog]
+} derive(Debug)
+
+///|
 /// Encode an IR module as little-endian MSB1 bytecode.
 ///
 /// Layout:
@@ -77,13 +93,51 @@ pub fn encode_module(ir : IrModule) -> Bytes {
   write_u32(buf, msb_version)
   write_string(buf, ir.entry)
   write_u32(buf, ir.scenes.length())
-  for name, scene in ir.scenes {
+  let scene_names : Array[String] = []
+  for name, _ in ir.scenes {
+    scene_names.push(name)
+  }
+  scene_names.sort()
+  for name in scene_names {
+    let scene = ir.scenes[name]
     // name should match scene.name; prefer map key for stability
     write_string(buf, name)
     let ops = linearize_ops(scene.ops)
     write_u32(buf, ops.length())
     for op in ops {
       encode_op(buf, op)
+    }
+  }
+  buf.to_bytes()
+}
+
+///|
+/// Encode deterministic MSB2 bytes with an executable section and locale
+/// catalog section. Map insertion order never affects the encoded bytes.
+///
+/// Layout: `MSB2`, version 2, length-prefixed MSB1 module, catalog count,
+/// followed by sorted locale/name/value strings.
+pub fn encode_msb2(bundle : Msb2Bundle) -> Bytes {
+  let buf = Buffer(size_hint=512)
+  buf.write_bytes(b"MSB2")
+  write_u32(buf, 2)
+  let module_bytes = encode_module(bundle.ir)
+  write_u32(buf, module_bytes.length())
+  buf.write_bytes(module_bytes)
+  let catalogs = bundle.catalogs.copy()
+  catalogs.sort_by((a, b) => a.locale.compare(b.locale))
+  write_u32(buf, catalogs.length())
+  for catalog in catalogs {
+    write_string(buf, catalog.locale)
+    let ids : Array[String] = []
+    for id, _ in catalog.entries {
+      ids.push(id)
+    }
+    ids.sort()
+    write_u32(buf, ids.length())
+    for id in ids {
+      write_string(buf, id)
+      write_string(buf, catalog.entries[id])
     }
   }
   buf.to_bytes()
