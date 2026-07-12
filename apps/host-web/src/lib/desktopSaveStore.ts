@@ -95,4 +95,17 @@ export class DesktopSaveStore implements SaveStore {
     this.firstWriteFailure = null;
     if (failure !== null) throw failure;
   }
+
+  /**
+   * Wait for all writes queued before this call, then cross a Rust-side lock
+   * and directory-sync barrier. Rejects with the first write/barrier failure.
+   */
+  async flush(): Promise<void> {
+    const barrier = this.enqueue(() => this.invoke("flush_persistence"));
+    await barrier.catch(() => undefined);
+
+    const failure = this.firstWriteFailure;
+    this.firstWriteFailure = null;
+    if (failure !== null) throw failure;
+  }
 }
