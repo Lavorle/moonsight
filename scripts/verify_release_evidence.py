@@ -64,7 +64,7 @@ def validate_manifest(data: Any, require_release_ready: bool) -> list[str]:
         require_text(name, "candidate.toolchains key", errors)
         require_text(version, f"candidate.toolchains.{name}", errors)
 
-    artifact_paths: set[str] = set()
+    artifact_digests: dict[str, str] = {}
     artifacts = require_list(candidate.get("artifacts"), "candidate.artifacts", errors)
     if not artifacts:
         errors.append("candidate.artifacts must not be empty")
@@ -73,10 +73,13 @@ def validate_manifest(data: Any, require_release_ready: bool) -> list[str]:
         artifact = require_object(raw_artifact, path, errors)
         artifact_path = require_text(artifact.get("path"), f"{path}.path", errors)
         if artifact_path:
-            if artifact_path in artifact_paths:
+            if artifact_path in artifact_digests:
                 errors.append(f"{path}.path duplicates {artifact_path}")
-            artifact_paths.add(artifact_path)
-        require_pattern(artifact.get("sha256"), f"{path}.sha256", DIGEST_PATTERN, errors)
+        digest = require_pattern(
+            artifact.get("sha256"), f"{path}.sha256", DIGEST_PATTERN, errors
+        )
+        if artifact_path and digest:
+            artifact_digests[artifact_path] = digest
         if "normalized_sha256" in artifact:
             require_pattern(
                 artifact.get("normalized_sha256"),
@@ -127,11 +130,25 @@ def validate_manifest(data: Any, require_release_ready: bool) -> list[str]:
         if candidate_commit and commit and commit != candidate_commit:
             errors.append(f"{path}.commit must equal candidate.commit")
         references = require_list(check.get("artifacts"), f"{path}.artifacts", errors)
-        for index, reference in enumerate(references):
-            artifact = require_text(reference, f"{path}.artifacts[{index}]", errors)
-            if artifact and artifact not in artifact_paths:
+        for index, raw_reference in enumerate(references):
+            reference_path = f"{path}.artifacts[{index}]"
+            reference = require_object(raw_reference, reference_path, errors)
+            artifact = require_text(
+                reference.get("path"), f"{reference_path}.path", errors
+            )
+            digest = require_pattern(
+                reference.get("sha256"),
+                f"{reference_path}.sha256",
+                DIGEST_PATTERN,
+                errors,
+            )
+            if artifact and artifact not in artifact_digests:
                 errors.append(
-                    f"{path}.artifacts[{index}] does not reference candidate.artifacts"
+                    f"{reference_path}.path does not reference candidate.artifacts"
+                )
+            elif artifact and digest and digest != artifact_digests[artifact]:
+                errors.append(
+                    f"{reference_path}.sha256 must equal candidate artifact"
                 )
         if require_release_ready and status != "PASS":
             errors.append(f"{path}.status must be PASS")
