@@ -39,7 +39,8 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     }
     let identified = compile_yuki_paths_with_ids(yuki[:], entry_file=entry_path)
     let ir = identified.ir
-    let bytecode = @script.encode_msb2({ identified, catalogs: [] })
+    let catalogs = build_default_catalogs(identified, cfg.default_locale)
+    let bytecode = @script.encode_msb2({ identified, catalogs })
 
     // Link optional project UI into host_web/project_ui, then rebuild wasm when set.
     // Mark linked before prepare so catch restores even if prepare mutates then fails
@@ -106,7 +107,13 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     // whose self-digest cannot be embedded without recursion.
     let digests : Map[String, String] = {}
     collect_artifact_digests(staging, "", digests)
-    let manifest = build_manifest_json(cfg, resources, audio, digests)
+    let manifest = build_manifest_json(
+      cfg,
+      resources,
+      audio,
+      digests,
+      build_legacy_save_compatibility(identified),
+    )
     let manifest_path = join_path(staging, "manifest.json")
     write_string_to_file(manifest_path, manifest)
     println("wrote \{manifest_path}")
@@ -141,11 +148,176 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
 }
 
 ///|
+/// Project source is the default-locale catalog. Explicit presentation/choice
+/// IDs are paired with their deterministic lowered literal display strings.
+fn build_default_catalogs(
+  identified : @script.IdentifiedIrModule,
+  default_locale : String,
+) -> Array[@script.LocaleCatalog] {
+  let entries : Map[String, String] = {}
+  for scene, ir_scene in identified.ir.scenes {
+    let dialogue : Array[@script.StableOperationId] = []
+    let choices : Array[@script.StableOperationId] = []
+    for stable in identified.stable_operations {
+      if stable.scene == scene {
+        match stable.kind {
+          @script.StablePresentationKind::Dialogue => dialogue.push(stable)
+          @script.StablePresentationKind::Choice => choices.push(stable)
+          @script.StablePresentationKind::Operation => ()
+        }
+      }
+    }
+    dialogue.sort_by((a, b) => a.ordinal.compare(b.ordinal))
+    choices.sort_by((a, b) => a.ordinal.compare(b.ordinal))
+    let ops = @script.linearize_ops(ir_scene.ops)
+    let mut dialogue_i = 0
+    let mut choice_i = 0
+    for ip in 0..<ops.length() {
+      match ops[ip] {
+        @script.IrOp::Host(name="text.begin", ..) if dialogue_i < dialogue.length() => {
+          let stable = dialogue[dialogue_i]
+          dialogue_i += 1
+          match (stable.presentation_id, dialogue_literal(ops, ip)) {
+            (Some(id), Some(text)) => entries[id.value] = text
+            _ => ()
+          }
+        }
+        @script.IrOp::Choose(options~, ..) if choice_i < choices.length() => {
+          let stable = choices[choice_i]
+          choice_i += 1
+          for index, id in stable.choice_ids {
+            if index < options.length() {
+              entries[id.value] = options[index]
+            }
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+  if entries.is_empty() {
+    []
+  } else {
+    [{ locale: default_locale, entries }]
+  }
+}
+
+///|
+fn dialogue_literal(ops : Array[@script.IrOp], begin_ip : Int) -> String? {
+  let mut text = ""
+  for ip = begin_ip + 1; ip < ops.length(); ip = ip + 1 {
+    match ops[ip] {
+      @script.IrOp::Host(name="text.type", args=[@script.IrValue::Str(s)]) =>
+        text = text + s
+      @script.IrOp::Host(name="text.type", ..) => return None
+      @script.IrOp::Yield => return Some(text)
+      _ => ()
+    }
+  }
+  None
+}
+
+///|
+/// Deterministic compatibility projection for legacy v2-v4 save authority.
+/// The saved resume `(scene, ip)` and resolved display strings are guarded
+/// against the stable operation/presentation/choice IDs installed by MSB2.
+fn build_legacy_save_compatibility(
+  identified : @script.IdentifiedIrModule,
+) -> Json {
+  let entries : Array[Json] = []
+  let scenes : Array[String] = []
+  for scene, _ in identified.ir.scenes {
+    scenes.push(scene)
+  }
+  scenes.sort()
+  for scene in scenes {
+    let dialogue : Array[@script.StableOperationId] = []
+    let choices : Array[@script.StableOperationId] = []
+    for stable in identified.stable_operations {
+      if stable.scene == scene {
+        match stable.kind {
+          @script.StablePresentationKind::Dialogue => dialogue.push(stable)
+          @script.StablePresentationKind::Choice => choices.push(stable)
+          @script.StablePresentationKind::Operation => ()
+        }
+      }
+    }
+    dialogue.sort_by((a, b) => a.ordinal.compare(b.ordinal))
+    choices.sort_by((a, b) => a.ordinal.compare(b.ordinal))
+    let ops = @script.linearize_ops(identified.ir.scenes[scene].ops)
+    let mut dialogue_i = 0
+    let mut choice_i = 0
+    for ip in 0..<ops.length() {
+      match ops[ip] {
+        @script.IrOp::Host(name="text.begin", args~) if dialogue_i < dialogue.length() => {
+          let stable = dialogue[dialogue_i]
+          dialogue_i += 1
+          let row : Map[String, Json] = {
+            "scene": Json::string(scene),
+            "legacy_ip": Json::number(dialogue_resume_ip(ops, ip).to_double()),
+            "operation_id": Json::string(stable.operation_id.value),
+          }
+          match stable.presentation_id {
+            Some(id) => row["presentation_id"] = Json::string(id.value)
+            None => ()
+          }
+          match args {
+            [@script.IrValue::Str(speaker), ..] =>
+              row["legacy_speaker"] = Json::string(speaker)
+            _ => ()
+          }
+          match dialogue_literal(ops, ip) {
+            Some(text) => row["legacy_text"] = Json::string(text)
+            None => ()
+          }
+          entries.push(Json::object(row))
+        }
+        @script.IrOp::Choose(options~, ..) if choice_i < choices.length() => {
+          let stable = choices[choice_i]
+          choice_i += 1
+          let old_options : Array[Json] = []
+          for option in options {
+            old_options.push(Json::string(option))
+          }
+          let stable_ids : Array[Json] = []
+          for id in stable.choice_ids {
+            stable_ids.push(Json::string(id.value))
+          }
+          entries.push(Json::object({
+            "scene": Json::string(scene),
+            "legacy_ip": Json::number((ip + 1).to_double()),
+            "operation_id": Json::string(stable.operation_id.value),
+            "legacy_choices": Json::array(old_options),
+            "choice_ids": Json::array(stable_ids),
+          }))
+        }
+        _ => ()
+      }
+    }
+  }
+  Json::object({
+    "schema_version": Json::number(1.0),
+    "entries": Json::array(entries),
+  })
+}
+
+///|
+fn dialogue_resume_ip(ops : Array[@script.IrOp], begin_ip : Int) -> Int {
+  for ip = begin_ip + 1; ip < ops.length(); ip = ip + 1 {
+    if ops[ip] is @script.IrOp::Yield {
+      return ip + 1
+    }
+  }
+  begin_ip + 1
+}
+
+///|
 fn build_manifest_json(
   cfg : ProjectConfig,
   resources : Map[String, String],
   audio : Map[String, String],
   digests : Map[String, String],
+  legacy_save_compatibility : Json,
 ) -> String {
   let res_obj : Map[String, Json] = {}
   let resource_keys : Array[String] = []
@@ -189,6 +361,7 @@ fn build_manifest_json(
     "resources": Json::object(res_obj),
     "audio": Json::object(audio_obj),
     "digests": Json::object(digest_obj),
+    "legacy_save_compatibility": legacy_save_compatibility,
   }
   Json::object(root).stringify(indent=2) + "\n"
 }

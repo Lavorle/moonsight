@@ -86,6 +86,21 @@ type ContentResponse = Pick<
 type FetchContent = (url: string) => Promise<ContentResponse>;
 type DigestContent = (bytes: Uint8Array) => Promise<string>;
 
+type LegacyCompatibilityEntry = {
+  scene: string;
+  legacy_ip: number;
+  operation_id: string;
+  presentation_id?: string;
+  legacy_speaker?: string;
+  legacy_text?: string;
+  legacy_choices?: string[];
+  choice_ids?: string[];
+};
+
+export type LegacySaveUpgrade =
+  | { ok: true; json: string }
+  | { ok: false; message: string };
+
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const input = new Uint8Array(bytes).buffer;
   const digest = await crypto.subtle.digest("SHA-256", input);
@@ -109,6 +124,87 @@ export function validateContentManifest(
     );
   }
   return valid ? (manifest as Record<string, unknown>) : null;
+}
+
+/** Validate and project v2-v4 display authority onto the additive v5 stable IDs. */
+export function upgradeLegacySave(
+  raw: string,
+  manifest: Record<string, unknown> | null,
+): LegacySaveUpgrade {
+  let save: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { ok: false, message: "Legacy save is not a JSON object" };
+    }
+    save = parsed as Record<string, unknown>;
+  } catch {
+    return { ok: false, message: "Legacy save JSON is invalid" };
+  }
+  const version = save.format_version;
+  if (version === 5) return { ok: true, json: raw };
+  if (version !== 2 && version !== 3 && version !== 4) {
+    return { ok: true, json: raw };
+  }
+  const compatibility = manifest?.legacy_save_compatibility;
+  if (
+    typeof compatibility !== "object" ||
+    compatibility === null ||
+    Array.isArray(compatibility) ||
+    (compatibility as Record<string, unknown>).schema_version !== 1 ||
+    !Array.isArray((compatibility as Record<string, unknown>).entries)
+  ) {
+    return { ok: false, message: "Bundle has no valid legacy save compatibility map" };
+  }
+  const scene = save.scene;
+  const ip = save.ip;
+  const entries = (compatibility as { entries: unknown[] }).entries;
+  const matches = entries.filter((candidate): candidate is LegacyCompatibilityEntry => {
+    if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) return false;
+    const entry = candidate as Record<string, unknown>;
+    return entry.scene === scene && entry.legacy_ip === ip;
+  });
+  const hasPresentation = save.text != null || save.choices != null;
+  if (!hasPresentation) return { ok: true, json: raw };
+  if (matches.length !== 1) {
+    return {
+      ok: false,
+      message: `Legacy save location '${String(scene)}#${String(ip)}' is ${matches.length ? "ambiguous" : "not compatible"}`,
+    };
+  }
+  const entry = matches[0];
+  if (typeof entry.operation_id !== "string" || !entry.operation_id) {
+    return { ok: false, message: "Legacy compatibility entry has no stable operation ID" };
+  }
+  if (save.text != null) {
+    if (typeof save.text !== "object" || Array.isArray(save.text) || !entry.presentation_id) {
+      return { ok: false, message: "Legacy dialogue has no stable presentation mapping" };
+    }
+    const text = save.text as Record<string, unknown>;
+    if (entry.legacy_text != null && text.full_text !== entry.legacy_text) {
+      return { ok: false, message: "Legacy dialogue text does not match the stable mapping" };
+    }
+    if (entry.legacy_speaker != null && text.speaker !== entry.legacy_speaker) {
+      return { ok: false, message: "Legacy dialogue speaker does not match the stable mapping" };
+    }
+    text.text_id = entry.presentation_id;
+  }
+  if (save.choices != null) {
+    if (!Array.isArray(save.choices) || !Array.isArray(entry.choice_ids)) {
+      return { ok: false, message: "Legacy choices have no stable choice mapping" };
+    }
+    if (
+      !Array.isArray(entry.legacy_choices) ||
+      entry.legacy_choices.length !== save.choices.length ||
+      entry.legacy_choices.some((choice, index) => choice !== save.choices?.[index]) ||
+      entry.choice_ids.length !== save.choices.length
+    ) {
+      return { ok: false, message: "Legacy choices do not match the stable mapping" };
+    }
+    save.choice_ids = entry.choice_ids;
+  }
+  save.format_version = 5;
+  return { ok: true, json: JSON.stringify(save) };
 }
 
 function errorMessage(error: unknown): string {

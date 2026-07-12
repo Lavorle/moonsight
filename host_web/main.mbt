@@ -124,11 +124,39 @@ pub fn consume_slot_load_error() -> String {
 fn load_msb_inner(raw : String) -> Result[Unit, String] {
   let n = raw.length()
   let bytes = Bytes::makei(n, i => raw[i].to_byte())
-  let ir = @script.decode_module(bytes) catch {
+  let bundle = @script.decode_msb2(bytes) catch {
     _ => return Err("msb decode failed")
   }
-  install_engine_from_ir(ir)
+  install_engine_from_msb2(bundle) catch {
+    _ => return Err("msb install failed")
+  }
   Ok(())
+}
+
+///|
+fn install_engine_from_msb2(bundle : @script.Msb2Bundle) -> Unit raise {
+  if bundle.identified.stable_operations.is_empty() {
+    install_engine_from_ir(bundle.identified.ir)
+    return
+  }
+  let entry = bundle.identified.ir.entry
+  let app = @runtime.UiApp::new()
+  @std_ui.register(app)
+  @project_ui.register(app)
+  let default_locale = match bundle.catalogs {
+    [first, ..] => first.locale
+    [] => "en"
+  }
+  let eng = @runtime.Engine::from_identified_ir(
+    bundle.identified,
+    entry~,
+    catalogs=bundle.catalogs,
+    default_locale~,
+    requested_locale=default_locale,
+    director=@std_commands.standard_registry(),
+    app~,
+  )
+  install_engine(eng)
 }
 
 ///|
@@ -153,6 +181,11 @@ fn install_engine_from_ir(ir : @script.IrModule) -> Unit {
     director=@std_commands.standard_registry(),
     app~,
   )
+  install_engine(eng)
+}
+
+///|
+fn install_engine(eng : @runtime.Engine) -> Unit {
   let s = session.val
   s.engine = Some(eng)
   s.atlas = @render.GlyphAtlas::new()

@@ -163,6 +163,74 @@ pub fn encode_msb2(bundle : Msb2Bundle) -> Bytes {
 }
 
 ///|
+/// Decode the deterministic MSB2 envelope, preserving executable IR, stable
+/// operation identities, and embedded locale catalogs as one install unit.
+pub fn decode_msb2(bytes : Bytes) -> Msb2Bundle raise BytecodeError {
+  let r = ByteReader::new(bytes)
+  if r.read_bytes(4) != b"MSB2" {
+    raise InvalidMagic
+  }
+  let version = r.read_u32()
+  if version != 2 {
+    raise UnsupportedVersion(version)
+  }
+  let module_len = r.read_u32()
+  if module_len < 0 {
+    raise Truncated(message="negative MSB1 section length")
+  }
+  let ir = decode_module(r.read_bytes(module_len))
+  let stable_operations : Array[StableOperationId] = []
+  let stable_count = r.read_u32()
+  for _ in 0..<stable_count {
+    let operation_id : AuthorId = { value: r.read_string() }
+    let presentation = r.read_string()
+    let choice_count = r.read_u32()
+    let choice_ids : Array[AuthorId] = []
+    for _ in 0..<choice_count {
+      choice_ids.push({ value: r.read_string() })
+    }
+    let scene = r.read_string()
+    let ordinal = r.read_u32()
+    let presentation_id : AuthorId? = if presentation == "" {
+      None
+    } else {
+      Some({ value: presentation })
+    }
+    let kind = if !choice_ids.is_empty() {
+      StablePresentationKind::Choice
+    } else if presentation_id is Some(_) {
+      StablePresentationKind::Dialogue
+    } else {
+      StablePresentationKind::Operation
+    }
+    stable_operations.push({
+      operation_id,
+      presentation_id,
+      choice_ids,
+      scene,
+      ordinal,
+      kind,
+      span: { file: "<msb2>", line: 1, col: 1, end_line: 1, end_col: 1 },
+    })
+  }
+  let catalogs : Array[LocaleCatalog] = []
+  let catalog_count = r.read_u32()
+  for _ in 0..<catalog_count {
+    let locale = r.read_string()
+    let entries : Map[String, String] = {}
+    let entry_count = r.read_u32()
+    for _ in 0..<entry_count {
+      entries[r.read_string()] = r.read_string()
+    }
+    catalogs.push({ locale, entries })
+  }
+  if r.remain() != 0 {
+    raise Truncated(message="unexpected trailing MSB2 bytes")
+  }
+  { identified: { ir, stable_operations }, catalogs }
+}
+
+///|
 /// Decode MSB1 bytecode back to an IR module.
 pub fn decode_module(bytes : Bytes) -> IrModule raise BytecodeError {
   let r = ByteReader::new(bytes)
