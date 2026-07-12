@@ -401,12 +401,9 @@ test "load rejects a save from another module before mutating runtime state" {
   target.stage.overlay_opacity = 0.37
   target.auto = true
   target.ui.mode = Title
-  ignore(
-    target.set_prefs_json(
-      #|{"text_speed":1.5,"auto_mode":true,"master_volume":0.25,"bgm_volume":0.5,"se_volume":0.75}
-      ,
-    ),
-  )
+  let prefs_json =
+    #|{"text_speed":1.5,"auto_mode":true,"master_volume":0.25,"bgm_volume":0.5,"se_volume":0.75}
+  ignore(target.set_prefs_json(prefs_json))
   target.stage.bgm = Some("keep-bgm")
   @audio.global_mixer().play_bgm("keep-bgm", volume=0.6)
   let scene_before = target.vm.scene
