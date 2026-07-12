@@ -2,141 +2,147 @@
 # Merged by moonsightc with main.yuki + other scenes/*.yuki into game.msb.
 
 - scene "chapter2"
+@meta.id "chapter2.resource_op.r1" resource="resource.bg_room"
 @layer.show "bg" "bg_room" kind=background
+@meta.id "chapter2.resource_op.r2" resource="resource.char_y"
 @layer.show "y" "char_y" kind=character z=10 x=200 y=0 opacity=1.0
 @trans.dissolve 0.8
 @flow.wait 0.5
-@meta.id "chapter2.op1"
+@meta.id "chapter2.op1" presentation="chapter2.op1.text" speaker="speaker.y"
 y:Chapter two. Still the same room art.
-@meta.id "chapter2.op2"
+@meta.id "chapter2.op2" presentation="chapter2.op2.text" speaker="speaker.y"
 y:Placeholder assets, real pacing skeleton.
-@meta.id "chapter2.op3"
+@meta.id "chapter2.op3" presentation="chapter2.op3.text" speaker="speaker.y"
 y:I can talk while you skim.
-@meta.id "chapter2.op4"
+@meta.id "chapter2.op4" presentation="chapter2.op4.text" speaker="speaker.y"
 y:MoonYuki is the script surface.
-@meta.id "chapter2.op5"
+@meta.id "chapter2.op5" presentation="chapter2.op5.text" speaker="speaker.y"
 y:Host commands drive layers, audio, flow.
-@meta.id "chapter2.op6"
+@meta.id "chapter2.op6" presentation="chapter2.op6.text" speaker="speaker.y"
 y:Choices write into variables.
-@meta.id "chapter2.op7"
+@meta.id "chapter2.op7" presentation="chapter2.op7.text" speaker="speaker.y"
 y:Jumps stitch scenes into a graph.
-@meta.id "chapter2.op8"
+@meta.id "chapter2.op8" presentation="chapter2.op8.text" speaker="speaker.y"
 y:You already saw branch A and branch B.
-@meta.id "chapter2.op9"
+@meta.id "chapter2.op9" presentation="chapter2.op9.text" speaker="speaker.y"
 y:They met at mid_common.
-@meta.id "chapter2.op10"
+@meta.id "chapter2.op10" presentation="chapter2.op10.text" speaker="speaker.y"
 y:Now we walk a longer corridor of lines.
-@meta.id "chapter2.op11"
+@meta.id "chapter2.op11" presentation="chapter2.op11.text" speaker="speaker.y"
 y:Line after line, nothing fancy.
-@meta.id "chapter2.op12"
+@meta.id "chapter2.op12" presentation="chapter2.op12.text" speaker="speaker.y"
 y:That's intentional — volume without new art.
-@meta.id "chapter2.op13"
+@meta.id "chapter2.op13" presentation="chapter2.op13.text" speaker="speaker.y"
 y:Feel free to hold Ctrl if you want speed.
-@meta.id "chapter2.op14"
+@meta.id "chapter2.op14" presentation="chapter2.op14.text" speaker="speaker.y"
 y:Or open history with H if you missed a beat.
-@meta.id "chapter2.op15"
+@meta.id "chapter2.op15" presentation="chapter2.op15.text" speaker="speaker.y"
 y:Esc still works. Save whenever you like.
-@meta.id "chapter2.op16"
+@meta.id "chapter2.op16" presentation="chapter2.op16.text" speaker="speaker.y"
 y:…A soft dissolve, then we continue.
 @trans.dissolve 0.6
 @flow.wait 0.5
-@meta.id "chapter2.op17"
+@meta.id "chapter2.op17" presentation="chapter2.op17.text" speaker="speaker.y"
 y:Still here. Good.
-@meta.id "chapter2.op18"
+@meta.id "chapter2.op18" presentation="chapter2.op18.text" speaker="speaker.y"
 y:Imagine this hall has windows.
-@meta.id "chapter2.op19"
+@meta.id "chapter2.op19" presentation="chapter2.op19.text" speaker="speaker.y"
 y:Afternoon light. Dust in the beams.
-@meta.id "chapter2.op20"
+@meta.id "chapter2.op20" presentation="chapter2.op20.text" speaker="speaker.y"
 y:A clock you cannot hear ticking.
-@meta.id "chapter2.op21"
+@meta.id "chapter2.op21" presentation="chapter2.op21.text" speaker="speaker.y"
 y:Somewhere, a kettle finishes boiling.
-@meta.id "chapter2.op22"
+@meta.id "chapter2.op22" presentation="chapter2.op22.text" speaker="speaker.y"
 y:None of that is drawn yet.
-@meta.id "chapter2.op23"
+@meta.id "chapter2.op23" presentation="chapter2.op23.text" speaker="speaker.y"
 y:Words hold the place until art arrives.
-@meta.id "chapter2.op24"
+@meta.id "chapter2.op24" presentation="chapter2.op24.text" speaker="speaker.y"
 y:That's how sample chapters often start.
-@meta.id "chapter2.op25"
+@meta.id "chapter2.op25" presentation="chapter2.op25.text" speaker="speaker.y"
 y:One more stretch, then chapter three.
-@meta.id "chapter2.op26"
+@meta.id "chapter2.op26" presentation="chapter2.op26.text" speaker="speaker.y"
 y:Any last look around?
-@meta.id "chapter2.op27"
+@meta.id "chapter2.op27" choices="choice.chapter2.pace.walk,choice.chapter2.pace.linger"
 @flow.choice "Keep walking" "Linger a second" --result c2_act
+@meta.id "chapter2.resource_op.r3" resource="resource.se_click"
 @audio.se "se_click"
 @flow.jump_if c2_act 0 "chapter2_walk"
 @flow.jump "chapter2_linger"
 
 - scene "chapter2_walk"
-@meta.id "chapter2_walk.op1"
+@meta.id "chapter2_walk.op1" presentation="chapter2_walk.op1.text" speaker="speaker.y"
 y:Straight through. Efficient.
 @var.set "c2_pace" "walk"
-@meta.id "chapter2_walk.op2"
+@meta.id "chapter2_walk.op2" presentation="chapter2_walk.op2.text" speaker="speaker.y"
 y:The hall narrows, then opens again.
-@meta.id "chapter2_walk.op3"
+@meta.id "chapter2_walk.op3" presentation="chapter2_walk.op3.text" speaker="speaker.y"
 y:You pass a window that only exists in text.
-@meta.id "chapter2_walk.op4"
+@meta.id "chapter2_walk.op4" presentation="chapter2_walk.op4.text" speaker="speaker.y"
 y:Footsteps echo a little longer than they should.
 @flow.jump "chapter2_close"
 
 - scene "chapter2_linger"
-@meta.id "chapter2_linger.op1"
+@meta.id "chapter2_linger.op1" presentation="chapter2_linger.op1.text" speaker="speaker.y"
 y:You pause by the wall.
 @var.set "c2_pace" "linger"
-@meta.id "chapter2_linger.op2"
+@meta.id "chapter2_linger.op2" presentation="chapter2_linger.op2.text" speaker="speaker.y"
 y:Paint peels in a soft curl.
-@meta.id "chapter2_linger.op3"
+@meta.id "chapter2_linger.op3" presentation="chapter2_linger.op3.text" speaker="speaker.y"
 y:Someone penciled a tiny star near the trim.
-@meta.id "chapter2_linger.op4"
+@meta.id "chapter2_linger.op4" presentation="chapter2_linger.op4.text" speaker="speaker.y"
 y:You smile without meaning to.
-@meta.id "chapter2_linger.op5"
+@meta.id "chapter2_linger.op5" presentation="chapter2_linger.op5.text" speaker="speaker.y"
 y:Then you catch up.
 @flow.jump "chapter2_close"
 
 - scene "chapter2_close"
-@meta.id "chapter2_close.op1"
+@meta.id "chapter2_close.op1" presentation="chapter2_close.op1.text" speaker="speaker.y"
 y:Chapter two is almost done.
-@meta.id "chapter2_close.op2"
+@meta.id "chapter2_close.op2" presentation="chapter2_close.op2.text" speaker="speaker.y"
 y:One scale beat for presentation polish.
 @layer.set "y" scale=0.9 duration=0.25
 @flow.wait 0.3
 @layer.set "y" scale=1.0 duration=0.25
 @flow.wait 0.25
-@meta.id "chapter2_close.op3"
+@meta.id "chapter2_close.op3" presentation="chapter2_close.op3.text" speaker="speaker.y"
 y:There. Small, but it reads on screen.
-@meta.id "chapter2_close.op4"
+@meta.id "chapter2_close.op4" presentation="chapter2_close.op4.text" speaker="speaker.y"
 y:On to chapter three.
 @flow.jump "chapter3"
 
 - scene "chapter3"
+@meta.id "chapter3.resource_op.r1" resource="resource.bg_room"
 @layer.show "bg" "bg_room" kind=background
+@meta.id "chapter3.resource_op.r2" resource="resource.char_y"
 @layer.show "y" "char_y" kind=character z=10 x=200 y=0 opacity=1.0
 @trans.fade 0.0 0.35 0.3
 @flow.wait 0.3
 @trans.fade 0.35 0.0 0.4
 @flow.wait 0.4
-@meta.id "chapter3.op1"
+@meta.id "chapter3.op1" presentation="chapter3.op1.text" speaker="speaker.y"
 y:Chapter three. Last stretch before the end.
-@meta.id "chapter3.op2"
+@meta.id "chapter3.op2" presentation="chapter3.op2.text" speaker="speaker.y"
 y:We've reused bg, character, BGM, and a click SE.
-@meta.id "chapter3.op3"
+@meta.id "chapter3.op3" presentation="chapter3.op3.text" speaker="speaker.y"
 y:That's the demo budget — and it's enough.
-@meta.id "chapter3.op4"
+@meta.id "chapter3.op4" presentation="chapter3.op4.text" speaker="speaker.y"
 y:A felt chapter is mostly structure and rhythm.
-@meta.id "chapter3.op5"
+@meta.id "chapter3.op5" presentation="chapter3.op5.text" speaker="speaker.y"
 y:Intro. Branch. Join. Mid. Late. Finale.
-@meta.id "chapter3.op6"
+@meta.id "chapter3.op6" presentation="chapter3.op6.text" speaker="speaker.y"
 y:You are near the finale now.
-@meta.id "chapter3.op7"
+@meta.id "chapter3.op7" presentation="chapter3.op7.text" speaker="speaker.y"
 y:I have two endings prepared.
-@meta.id "chapter3.op8"
+@meta.id "chapter3.op8" presentation="chapter3.op8.text" speaker="speaker.y"
 y:Neither is a novel. Both are distinct lines.
-@meta.id "chapter3.op9"
+@meta.id "chapter3.op9" presentation="chapter3.op9.text" speaker="speaker.y"
 y:Pick the tone you want to leave on.
-@meta.id "chapter3.op10"
+@meta.id "chapter3.op10" presentation="chapter3.op10.text" speaker="speaker.y"
 y:Warm and clear, or quiet and alternate.
-@meta.id "chapter3.op11"
+@meta.id "chapter3.op11" choices="choice.chapter3.ending.good,choice.chapter3.ending.alt"
 @flow.choice "Good ending" "Alternate ending" --result end_act
 @var.set "ending_choice" end_act
+@meta.id "chapter3.resource_op.r3" resource="resource.se_click"
 @audio.se "se_click"
 @flow.jump_if end_act 0 "finale"
 @flow.jump "finale_alt"

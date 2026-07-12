@@ -1,47 +1,50 @@
 # Endings — two distinct finale paths. Merged multi-file sample.
 
 - scene "finale"
+@meta.id "finale.resource_op.r1" resource="resource.bg_room"
 @layer.show "bg" "bg_room" kind=background
+@meta.id "finale.resource_op.r2" resource="resource.char_y"
 @layer.show "y" "char_y" kind=character z=10 x=200 y=0 opacity=1.0
 @trans.dissolve 0.7
 @flow.wait 0.5
-@meta.id "finale.op1"
+@meta.id "finale.op1" presentation="dialogue.finale.good" speaker="speaker.y"
 y:So this is the good ending.
 @var.set "ending" "good"
-@meta.id "finale.op2"
+@meta.id "finale.op2" presentation="finale.op2.text" speaker="speaker.y"
 y:You walked the full spine of the sample chapter.
-@meta.id "finale.op3"
+@meta.id "finale.op3" presentation="finale.op3.text" speaker="speaker.y"
 y:Intro, a real branch, mid_common, chapters two and three.
-@meta.id "finale.op4"
+@meta.id "finale.op4" presentation="finale.op4.text" speaker="speaker.y"
 y:Dissolve waits, a scale beat, a mid-game save hint.
-@meta.id "finale.op5"
+@meta.id "finale.op5" presentation="finale.op5.text" speaker="speaker.y"
 y:Thanks for playing the MoonSight demo.
-@meta.id "finale.op6"
+@meta.id "finale.op6" presentation="finale.op6.text" speaker="speaker.y"
 y:May your next project compile clean on the first check.
 @trans.fade 0.0 1.0 0.6
 @flow.wait 0.6
 @flow.yield
 
 - scene "finale_alt"
+@meta.id "finale_alt.resource_op.r1" resource="resource.bg_room"
 @layer.show "bg" "bg_room" kind=background
 @layer.hide "y" duration=0.35
 @flow.wait 0.35
 @trans.dissolve 0.8
 @flow.wait 0.5
-@meta.id "finale_alt.op1"
+@meta.id "finale_alt.op1" presentation="dialogue.finale.alt" speaker="speaker.y"
 y:Alternate ending — the room empties first.
 @var.set "ending" "alt"
-@meta.id "finale_alt.op2"
+@meta.id "finale_alt.op2" presentation="finale_alt.op2.text" speaker="speaker.y"
 y:BGM keeps a soft loop under the last lines.
-@meta.id "finale_alt.op3"
+@meta.id "finale_alt.op3" presentation="finale_alt.op3.text" speaker="speaker.y"
 y:You chose the quieter close.
-@meta.id "finale_alt.op4"
+@meta.id "finale_alt.op4" presentation="finale_alt.op4.text" speaker="speaker.y"
 y:The sample chapter still counts as complete.
-@meta.id "finale_alt.op5"
+@meta.id "finale_alt.op5" presentation="finale_alt.op5.text" speaker="speaker.y"
 y:Same graph, different last words.
-@meta.id "finale_alt.op6"
+@meta.id "finale_alt.op6" presentation="finale_alt.op6.text" speaker="speaker.y"
 y:Thanks for trying the other door.
-@meta.id "finale_alt.op7"
+@meta.id "finale_alt.op7" presentation="finale_alt.op7.text" speaker="speaker.y"
 y:MoonSight will be here when you return.
 @trans.fade 0.0 1.0 0.6
 @flow.wait 0.6

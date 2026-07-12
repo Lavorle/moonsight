@@ -3,7 +3,7 @@
 # so browser play works. This file keeps a distinct side scene for merge tests.
 
 - scene "side_room"
-@meta.id "side_room.op1"
+@meta.id "side_room.op1" presentation="side_room.op1.text" speaker="speaker.y"
 y:Side room — present only in the multi-file project graph.
 @var.set "saw_side" true
 @flow.yield
