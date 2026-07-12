@@ -13,6 +13,7 @@ fn format_compile_error(err : @script.CompileError) -> String {
     Resolve(@script.UnknownParent(name~, parent~, span~)) =>
       "\{span.file}:\{span.line}:\{span.col}: scene `\{name}` unknown parent `\{parent}`"
     Bytecode(e) => "bytecode error: \{to_repr(e)}"
+    AuthorId(e) => "author ID error: \{to_repr(e)}"
   }
 }
 
