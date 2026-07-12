@@ -42,3 +42,19 @@ test "project config requires a unique supported locale set containing the defau
     }
   }
 }
+
+///|
+test "package manifest emits the frozen locale and schema fields" {
+  let cfg = parse_project_config(
+    "{\"name\":\"demo\",\"default_locale\":\"zh-Hans-CN\",\"supported_locales\":[\"en\",\"zh-Hans-CN\"]}",
+  )
+  let manifest = build_manifest_json(cfg, {}, {})
+  let json = @json.parse(manifest)
+  guard json is Object(fields) else { fail("expected manifest object") }
+  assert_eq(fields["package_schema_version"], Json::number(2.0))
+  assert_eq(fields["default_locale"], Json::string("zh-Hans-CN"))
+  assert_eq(
+    fields["supported_locales"],
+    Json::array([Json::string("en"), Json::string("zh-Hans-CN")]),
+  )
+}
