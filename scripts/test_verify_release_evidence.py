@@ -48,7 +48,9 @@ def valid_manifest() -> dict[str, object]:
             name: {
                 "status": "NOT_RUN",
                 "commit": SHA,
-                "artifacts": ["dist/demo/game.msb"],
+                "artifacts": [
+                    {"path": "dist/demo/game.msb", "sha256": DIGEST}
+                ],
             }
             for name in ("W1", "D1", "C1")
         },
@@ -93,6 +95,18 @@ class VerifyReleaseEvidenceTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("candidate.artifacts[0].sha256", result.stderr)
+
+    def test_rejects_external_artifact_digest_from_another_build(self) -> None:
+        manifest = valid_manifest()
+        manifest["external_checks"]["W1"]["artifacts"][0]["sha256"] = "b" * 64  # type: ignore[index]
+
+        result = run_verifier(manifest)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "external_checks.W1.artifacts[0].sha256 must equal candidate artifact",
+            result.stderr,
+        )
 
     def test_release_ready_requires_real_environment_passes(self) -> None:
         result = run_verifier(valid_manifest(), "--require-release-ready")
