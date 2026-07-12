@@ -174,7 +174,8 @@ fn build_default_catalogs(
     let mut choice_i = 0
     for ip in 0..<ops.length() {
       match ops[ip] {
-        @script.IrOp::Host(name="text.begin", ..) if dialogue_i < dialogue.length() => {
+        @script.IrOp::Host(name="text.begin", ..) if dialogue_i <
+          dialogue.length() => {
           let stable = dialogue[dialogue_i]
           dialogue_i += 1
           match (stable.presentation_id, dialogue_literal(ops, ip)) {
@@ -249,7 +250,8 @@ fn build_legacy_save_compatibility(
     let mut choice_i = 0
     for ip in 0..<ops.length() {
       match ops[ip] {
-        @script.IrOp::Host(name="text.begin", args~) if dialogue_i < dialogue.length() => {
+        @script.IrOp::Host(name="text.begin", args~) if dialogue_i <
+          dialogue.length() => {
           let stable = dialogue[dialogue_i]
           dialogue_i += 1
           let row : Map[String, Json] = {
@@ -283,13 +285,15 @@ fn build_legacy_save_compatibility(
           for id in stable.choice_ids {
             stable_ids.push(Json::string(id.value))
           }
-          entries.push(Json::object({
-            "scene": Json::string(scene),
-            "legacy_ip": Json::number((ip + 1).to_double()),
-            "operation_id": Json::string(stable.operation_id.value),
-            "legacy_choices": Json::array(old_options),
-            "choice_ids": Json::array(stable_ids),
-          }))
+          entries.push(
+            Json::object({
+              "scene": Json::string(scene),
+              "legacy_ip": Json::number((ip + 1).to_double()),
+              "operation_id": Json::string(stable.operation_id.value),
+              "legacy_choices": Json::array(old_options),
+              "choice_ids": Json::array(stable_ids),
+            }),
+          )
         }
         _ => ()
       }

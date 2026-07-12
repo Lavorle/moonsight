@@ -276,6 +276,7 @@ test "slot_label empty and filled" {
     },
     wait: Running,
     choices: None,
+    choice_ids: [],
     choose_result_var: None,
     auto: false,
     fade_to: 0.0,

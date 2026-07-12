@@ -515,7 +515,11 @@ pub fn Stage::complete_text(self : Stage) -> Unit {
   match self.text {
     None => ()
     Some(t) =>
-      self.text = Some({ ..t, visible_chars: t.full_text.length(), complete: true })
+      self.text = Some({
+        ..t,
+        visible_chars: t.full_text.length(),
+        complete: true,
+      })
   }
 }
 
@@ -663,11 +667,12 @@ pub fn Stage::relocalize(
         full_text.length()
       } else if text.text_id is Some(_) {
         match partial_visible_utf16 {
-          Some(boundary) => if boundary < 0 || boundary > full_text.length() {
-            fail("localized grapheme boundary is outside resolved text")
-          } else {
-            boundary
-          }
+          Some(boundary) =>
+            if boundary < 0 || boundary > full_text.length() {
+              fail("localized grapheme boundary is outside resolved text")
+            } else {
+              boundary
+            }
           None => fail("partial locale switch requires grapheme boundary")
         }
       } else {
@@ -684,12 +689,14 @@ pub fn Stage::relocalize(
       }
       let options : Array[String] = []
       for i in 0..<choices.options.length() {
-        options.push(match choices.option_ids[i] {
-          Some(id) => catalogs.resolve(locale, id)
-          None => choices.options[i]
-        })
+        options.push(
+          match choices.option_ids[i] {
+            Some(id) => catalogs.resolve(locale, id)
+            None => choices.options[i]
+          },
+        )
       }
-      Some({ ..choices, options })
+      Some({ ..choices, options, })
     }
   }
   self.text = next_text

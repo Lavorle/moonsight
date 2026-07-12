@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import struct
 import subprocess
 import tempfile
 import unittest
@@ -16,7 +17,7 @@ def package(root: Path, manifest: dict[str, object] | None = None) -> dict[str, 
     (root / "index.html").write_text('<script src="app.js"></script>', encoding="utf-8")
     (root / "app.js").write_text("ok", encoding="utf-8")
     (root / "host_web.wasm").write_bytes(b"wasm")
-    (root / "game.msb").write_bytes(b"MSB2fixture")
+    (root / "game.msb").write_bytes(b"MSB2" + struct.pack("<III", 2, 0, 0))
     if manifest is None:
         manifest = {
             "package_schema_version": 2,
@@ -24,6 +25,7 @@ def package(root: Path, manifest: dict[str, object] | None = None) -> dict[str, 
             "supported_locales": ["en"],
             "resources": {},
             "audio": {},
+            "legacy_save_compatibility": {"schema_version": 1, "entries": []},
         }
     manifest["digests"] = {
         path.name: hashlib.sha256(path.read_bytes()).hexdigest()
@@ -53,6 +55,7 @@ class VerifyPackageTests(unittest.TestCase):
                     "supported_locales": ["en"],
                     "resources": {},
                     "audio": {},
+                    "legacy_save_compatibility": {"schema_version": 1, "entries": []},
                 },
             )
             result = subprocess.run([str(VERIFY), str(root)], text=True, capture_output=True, check=False)

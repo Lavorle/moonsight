@@ -60,6 +60,8 @@ pub(all) struct SaveGame {
   wait : WaitKind
   /// Active choice labels when `wait` is Choose (None when no choice UI).
   choices : Array[String]?
+  /// Stable choice identities (additive v5 field; legacy saves default empty).
+  choice_ids : Array[String]
   /// Variable that receives the choice index while waiting Choose.
   choose_result_var : String?
   /// Auto-advance flag.
@@ -184,6 +186,23 @@ fn SaveGame::from_logical_state(
     Some(choice) => Some(choice.options.copy())
     None => None
   }
+  let choice_ids = match state.stage.choices {
+    Some(choice) => {
+      let ids : Array[String] = []
+      for id in choice.option_ids {
+        match id {
+          Some(value) => ids.push(value)
+          None => ()
+        }
+      }
+      if ids.length() == choice.options.length() {
+        ids
+      } else {
+        []
+      }
+    }
+    None => []
+  }
   {
     format_version: save_format_version,
     module_id: state.module_id,
@@ -197,6 +216,7 @@ fn SaveGame::from_logical_state(
     audio: state.audio,
     wait: state.vm.wait,
     choices,
+    choice_ids,
     choose_result_var: state.vm.choose_result_var,
     auto: state.auto,
     fade_to: state.stage.fade_to,
@@ -264,6 +284,7 @@ pub fn parse_save_game(blob : String) -> SaveGame raise SaveError {
   let json = ensure_saved_at_default(json)
   let json = ensure_layer_scale_default(json)
   let json = ensure_dissolve_defaults(json)
+  let json = ensure_choice_ids_default(json)
   let game : SaveGame = @json.from_json(json) catch {
     err => raise SaveError::DecodeFailed(message=err.to_string())
   }
@@ -271,6 +292,19 @@ pub fn parse_save_game(blob : String) -> SaveGame raise SaveError {
     raise SaveError::UnsupportedVersion(version=game.format_version)
   }
   game
+}
+
+///|
+fn ensure_choice_ids_default(json : Json) -> Json {
+  match json {
+    Object(map) => {
+      if map.get("choice_ids") is None {
+        map["choice_ids"] = Json::array([])
+      }
+      json
+    }
+    _ => json
+  }
 }
 
 ///|
@@ -403,6 +437,7 @@ fn save_game_from_v2(v2 : SaveGameV2) -> SaveGame {
     audio: v2.audio,
     wait: v2.wait,
     choices: v2.choices,
+    choice_ids: [],
     choose_result_var: v2.choose_result_var,
     auto: v2.auto,
     fade_to: 0.0,
@@ -439,11 +474,14 @@ fn SaveGame::to_logical_state(
 ) -> EngineLogicalState {
   let base = EngineLogicalState::capture(eng)
   let choices = match self.choices {
-    Some(options) => Some({
-      options: options.copy(),
-      option_ids: options.map(_ => None),
-      selected: None,
-    })
+    Some(options) => {
+      let option_ids = if self.choice_ids.length() == options.length() {
+        self.choice_ids.map(id => Some(id))
+      } else {
+        options.map(_ => None)
+      }
+      Some({ options: options.copy(), option_ids, selected: None })
+    }
     None => None
   }
   let fade_out = self.audio.bgm_fade_stop is Some(true)

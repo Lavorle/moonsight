@@ -630,10 +630,7 @@ fn Engine::relocalize_new_presentation(self : Engine) -> Unit {
 /// Enforce Director-owned rollback semantics after command execution.
 fn Engine::enforce_completed_effects(self : Engine) -> Unit {
   for completed in self.director.drain_completed_effects() {
-    self.rollback.after_effect(
-      completed.effect,
-      succeeded=completed.succeeded,
-    )
+    self.rollback.after_effect(completed.effect, succeeded=completed.succeeded)
   }
 }
 
@@ -663,11 +660,7 @@ pub fn Engine::switch_locale(
     catalogs.default_locale,
   )
   let next_stage = StageLogicalState::capture(self.stage).prepare()
-  next_stage.relocalize(
-    catalogs,
-    locale,
-    partial_visible_utf16?,
-  )
+  next_stage.relocalize(catalogs, locale, partial_visible_utf16?)
   let next_backlog = BacklogLogicalState::capture(
     self.backlog,
     self.backlog_last_key,
@@ -683,10 +676,8 @@ pub fn Engine::switch_locale(
 /// Capture through the sole aggregate logical-state facade.
 fn Engine::capture_rollback_checkpoint(self : Engine) -> Unit {
   let state = EngineLogicalState::capture(self)
-  match self.rollback.push(
-    state,
-    estimated_bytes=state.estimated_rollback_bytes(),
-  ) {
+  match
+    self.rollback.push(state, estimated_bytes=state.estimated_rollback_bytes()) {
     Accepted(_) => self.rollback_unavailable_reason = ""
     RejectedOversize(_) =>
       self.rollback_unavailable_reason = "rollback.unavailable.checkpoint-oversize"
@@ -703,10 +694,12 @@ fn Engine::rollback_latest(self : Engine) -> Unit {
     Checkpoint(state) => {
       self.restore_rollback_logical_state(state) catch {
         _ => {
-          ignore(self.rollback.push(
-            state,
-            estimated_bytes=state.estimated_rollback_bytes(),
-          ))
+          ignore(
+            self.rollback.push(
+              state,
+              estimated_bytes=state.estimated_rollback_bytes(),
+            ),
+          )
           self.rollback_unavailable_reason = "rollback.unavailable.restore"
           return
         }
@@ -1028,11 +1021,12 @@ pub fn StageView::from_stage(
 ) -> StageView {
   let choices = match stage.choices {
     None => None
-    Some(c) => Some({
-      options: c.options.copy(),
-      option_ids: c.option_ids.copy(),
-      selected: c.selected,
-    })
+    Some(c) =>
+      Some({
+        options: c.options.copy(),
+        option_ids: c.option_ids.copy(),
+        selected: c.selected,
+      })
   }
   {
     layers: stage.snapshot_layers(),

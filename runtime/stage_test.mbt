@@ -168,10 +168,7 @@ test "stage stable dialogue and choices relocalize atomically" {
   )
   stage.type_more("Hello")
   stage.complete_text()
-  stage.set_localized_choices(
-    ["Yes", "No"],
-    ["choice.yes", "choice.no"],
-  )
+  stage.set_localized_choices(["Yes", "No"], ["choice.yes", "choice.no"])
   let catalogs = @runtime.LocaleCatalogs::new(default_locale="en", catalogs={
     "en": {
       "speaker.alice": "Alice",

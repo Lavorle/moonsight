@@ -193,11 +193,12 @@ export function upgradeLegacySave(
     if (!Array.isArray(save.choices) || !Array.isArray(entry.choice_ids)) {
       return { ok: false, message: "Legacy choices have no stable choice mapping" };
     }
+    const legacySaveChoices = save.choices;
     if (
       !Array.isArray(entry.legacy_choices) ||
-      entry.legacy_choices.length !== save.choices.length ||
-      entry.legacy_choices.some((choice, index) => choice !== save.choices?.[index]) ||
-      entry.choice_ids.length !== save.choices.length
+      entry.legacy_choices.length !== legacySaveChoices.length ||
+      entry.legacy_choices.some((choice, index) => choice !== legacySaveChoices[index]) ||
+      entry.choice_ids.length !== legacySaveChoices.length
     ) {
       return { ok: false, message: "Legacy choices do not match the stable mapping" };
     }
