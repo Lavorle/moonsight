@@ -335,6 +335,19 @@ test "registry keys match script.builtin_externs exactly" {
 }
 
 ///|
+test "standard registry freezes rollback effect policy" {
+  let reg = @std_commands.standard_registry()
+  assert_true(reg.effect_for("text.type") == Checkpointed)
+  assert_true(reg.effect_for("audio.bgm") == CompensatableAudio)
+  assert_true(
+    reg.effect_for("audio.se") == Barrier("rollback.barrier.audio-se"),
+  )
+  assert_true(
+    reg.effect_for("sys.save_hint") == Barrier("rollback.barrier.save-hint"),
+  )
+}
+
+///|
 test "unknown host returns Error" {
   let stage = @runtime.Stage::new()
   let reg = @std_commands.standard_registry()
