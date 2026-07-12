@@ -87,7 +87,8 @@ type FetchContent = (url: string) => Promise<ContentResponse>;
 type DigestContent = (bytes: Uint8Array) => Promise<string>;
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const input = new Uint8Array(bytes).buffer;
+  const digest = await crypto.subtle.digest("SHA-256", input);
   return Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, "0"),
   ).join("");
