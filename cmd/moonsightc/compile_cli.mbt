@@ -15,6 +15,12 @@ fn format_compile_error(err : @script.CompileError) -> String {
     Bytecode(e) => "bytecode error: \{to_repr(e)}"
     AuthorId(@script.MissingAuthorId(span~, locale~, kind~)) =>
       "\{span.file}:\{span.line}:\{span.col}: missing author ID for \{kind} in locale `\{locale}`"
+    AuthorId(@script.DuplicateAuthorId(span~, locale~, id~, kind~)) =>
+      "\{span.file}:\{span.line}:\{span.col}: duplicate \{kind} ID `\{id}` in locale `\{locale}`"
+    AuthorId(
+      @script.InvalidLocalizedAuthorId(span~, locale~, id~, offset~, message~)
+    ) =>
+      "\{span.file}:\{span.line}:\{span.col}: invalid author ID `\{id}` at offset \{offset} in locale `\{locale}`: \{message}"
     AuthorId(e) => "author ID error: \{to_repr(e)}"
   }
 }

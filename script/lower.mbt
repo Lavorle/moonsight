@@ -70,27 +70,159 @@ pub fn validate_localized_ids(
   unit : ResolvedUnit,
   locale : String,
 ) -> Unit raise AuthorIdError {
+  let seen_operations : Map[String, Unit] = {}
+  let seen_presentations : Map[String, Unit] = {}
+  let seen_choices : Map[String, Unit] = {}
   for scene in unit.scenes {
-    let mut has_pending_id = false
+    let mut pending : (
+      String,
+      String?,
+      Array[String],
+      String?,
+      String?,
+      SourceSpan,
+    )? = None
     for item in scene.items {
       match item {
-        Command(cmd="meta.id", ..) => has_pending_id = true
-        Dialogue(span~, ..) => {
-          if !has_pending_id {
+        Command(cmd="meta.id", args~, span~) => {
+          let meta = localized_id_fields(args, span, locale)
+          let (operation, presentation, choices, _, _, _) = meta
+          check_duplicate_id(
+            seen_operations, operation, "operation", span, locale,
+          )
+          match presentation {
+            Some(id) =>
+              check_duplicate_id(
+                seen_presentations, id, "presentation", span, locale,
+              )
+            None => ()
+          }
+          for id in choices {
+            check_duplicate_id(seen_choices, id, "choice", span, locale)
+          }
+          pending = Some(meta)
+        }
+        Dialogue(speaker~, span~, ..) => {
+          guard pending is Some((_, presentation, _, speaker_id, _, _)) else {
             raise MissingAuthorId(span~, locale~, kind="dialogue")
           }
-          has_pending_id = false
+          if presentation is None {
+            raise MissingAuthorId(span~, locale~, kind="dialogue presentation")
+          }
+          if speaker is Some(_) && speaker_id is None {
+            raise MissingAuthorId(span~, locale~, kind="speaker")
+          }
+          pending = None
         }
         Command(cmd="flow.choice", span~, ..) => {
-          if !has_pending_id {
+          guard pending is Some((_, _, choices, _, _, _)) else {
             raise MissingAuthorId(span~, locale~, kind="choice")
           }
-          has_pending_id = false
+          if choices.length() == 0 {
+            raise MissingAuthorId(span~, locale~, kind="choice options")
+          }
+          pending = None
         }
-        Command(..) => has_pending_id = false
+        Command(cmd~, span~, ..) => {
+          if is_localized_resource_command(cmd) {
+            guard pending is Some((_, _, _, _, resource, _)) else {
+              raise MissingAuthorId(span~, locale~, kind="resource operation")
+            }
+            if resource is None {
+              raise MissingAuthorId(span~, locale~, kind="resource")
+            }
+          }
+          pending = None
+        }
       }
     }
   }
+}
+
+///|
+fn check_duplicate_id(
+  seen : Map[String, Unit],
+  id : String,
+  kind : String,
+  span : SourceSpan,
+  locale : String,
+) -> Unit raise AuthorIdError {
+  if seen.contains(id) {
+    raise DuplicateAuthorId(span~, locale~, id~, kind~)
+  }
+  seen[id] = ()
+}
+
+///|
+fn localized_id_fields(
+  args : Array[Arg],
+  span : SourceSpan,
+  locale : String,
+) -> (String, String?, Array[String], String?, String?, SourceSpan) raise AuthorIdError {
+  let mut operation = ""
+  let mut presentation : String? = None
+  let choices : Array[String] = []
+  let mut speaker : String? = None
+  let mut resource : String? = None
+  for arg in args {
+    match arg {
+      Positional(Str(id)) | Positional(Ident(id)) => operation = id
+      Named(name="presentation", Str(id))
+      | Named(name="presentation", Ident(id)) => presentation = Some(id)
+      Named(name="speaker", Str(id)) | Named(name="speaker", Ident(id)) =>
+        speaker = Some(id)
+      Named(name="resource", Str(id)) | Named(name="resource", Ident(id)) =>
+        resource = Some(id)
+      Named(name="choices", Str(ids)) =>
+        for id in ids.split(",") {
+          choices.push(id.to_owned())
+        }
+      _ => ()
+    }
+  }
+  validate_localized_id(operation, span, locale)
+  match presentation {
+    Some(id) => validate_localized_id(id, span, locale)
+    None => ()
+  }
+  match speaker {
+    Some(id) => validate_localized_id(id, span, locale)
+    None => ()
+  }
+  match resource {
+    Some(id) => validate_localized_id(id, span, locale)
+    None => ()
+  }
+  for id in choices {
+    validate_localized_id(id, span, locale)
+  }
+  (operation, presentation, choices, speaker, resource, span)
+}
+
+///|
+fn validate_localized_id(
+  id : String,
+  span : SourceSpan,
+  locale : String,
+) -> Unit raise AuthorIdError {
+  (parse_author_id(id) |> ignore) catch {
+    EmptyAuthorId =>
+      raise InvalidLocalizedAuthorId(
+        span~,
+        locale~,
+        id~,
+        offset=0,
+        message="ID is empty",
+      )
+    InvalidAuthorId(offset~, message~, ..) =>
+      raise InvalidLocalizedAuthorId(span~, locale~, id~, offset~, message~)
+    other => raise other
+  }
+}
+
+///|
+fn is_localized_resource_command(cmd : String) -> Bool {
+  cmd == "layer.show" || cmd == "audio.bgm" || cmd == "audio.se"
 }
 
 ///|
