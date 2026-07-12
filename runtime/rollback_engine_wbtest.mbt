@@ -115,3 +115,31 @@ test "compensatable BGM effect preserves rollback reachability" {
   eng.tick(Rollback)
   assert_eq(eng.rollback.count(), 0)
 }
+
+///|
+test "locale hot switch prepares stage and backlog before atomic publication" {
+  let eng = rollback_test_engine()
+  eng.stage.begin_text(
+    speaker="Alice",
+    speaker_id="speaker.alice",
+    text_id="dialogue.greeting",
+  )
+  eng.stage.type_more("Hello")
+  eng.stage.complete_text()
+  eng.backlog.push(
+    speaker=Some("Alice"),
+    text="Hello",
+    speaker_id="speaker.alice",
+    text_id="dialogue.greeting",
+  )
+  let catalogs = LocaleCatalogs::new(default_locale="en", catalogs={
+    "en": { "speaker.alice": "Alice", "dialogue.greeting": "Hello" },
+    "zh-CN": { "speaker.alice": "爱丽丝", "dialogue.greeting": "你好" },
+  })
+  eng.switch_locale(catalogs, "zh-CN")
+  guard eng.stage.text is Some(text) else { fail("localized stage") }
+  assert_eq(text.full_text, "你好")
+  assert_eq(eng.backlog.get(0).text, "你好")
+  assert_eq(eng.ui.prefs.locale, "zh-CN")
+  assert_true(eng.locale_catalogs is Some(_))
+}

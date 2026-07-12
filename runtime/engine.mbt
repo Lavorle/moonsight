@@ -46,6 +46,8 @@ pub(all) struct Engine {
   rollback : RollbackRing[EngineLogicalState]
   /// Stable diagnostic for the most recent blocked rollback attempt.
   mut rollback_unavailable_reason : String
+  /// Installed strict catalogs are preference-owned, not rollback payload.
+  mut locale_catalogs : LocaleCatalogs?
 }
 
 ///|
@@ -95,6 +97,7 @@ pub fn Engine::from_ir(
     pending_backend_audio: None,
     rollback: RollbackRing::new_default(),
     rollback_unavailable_reason: "",
+    locale_catalogs: None,
   }
   eng.sync_mixer_prefs()
   eng
@@ -574,6 +577,42 @@ fn Engine::enforce_completed_effects(self : Engine) -> Unit {
 /// Return the stable reason from the most recent blocked rollback attempt.
 pub fn Engine::rollback_unavailable(self : Engine) -> String {
   self.rollback_unavailable_reason
+}
+
+///|
+/// Atomically hot-switch live Stage, choices, backlog, and locale preference.
+/// `partial_visible_utf16` must come from a true grapheme segmenter when the
+/// active stable dialogue is incomplete.
+pub fn Engine::switch_locale(
+  self : Engine,
+  catalogs : LocaleCatalogs,
+  requested_locale : String,
+  partial_visible_utf16? : Int,
+) -> Unit raise {
+  let supported : Array[String] = []
+  for locale, _ in catalogs.catalogs {
+    supported.push(locale)
+  }
+  let locale = resolve_locale(
+    requested_locale,
+    supported,
+    catalogs.default_locale,
+  )
+  let next_stage = StageLogicalState::capture(self.stage).prepare()
+  next_stage.relocalize(
+    catalogs,
+    locale,
+    partial_visible_utf16?,
+  )
+  let next_backlog = BacklogLogicalState::capture(
+    self.backlog,
+    self.backlog_last_key,
+  ).prepare()
+  next_backlog.relocalize(catalogs, locale)
+  self.stage = next_stage
+  self.backlog = next_backlog
+  self.ui.prefs = self.ui.prefs.set("locale", Str(locale))
+  self.locale_catalogs = Some(catalogs)
 }
 
 ///|
