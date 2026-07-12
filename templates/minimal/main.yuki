@@ -4,16 +4,21 @@
 @flow.jump "intro"
 
 - scene "intro"
+@meta.id "intro.op1"
 y:Welcome. This project was created with moonsightc new.
+@meta.id "intro.op2"
 y:Edit main.yuki and rebuild.
+@meta.id "intro.op3"
 @flow.choice "Continue" "Quit path" --result act
 @flow.jump_if act 0 "end_a"
 @flow.jump "end_b"
 
 - scene "end_a"
+@meta.id "end_a.op1"
 y:You chose Continue. Thanks for playing.
 @flow.yield
 
 - scene "end_b"
+@meta.id "end_b.op1"
 y:You chose the other path. Thanks for playing.
 @flow.yield

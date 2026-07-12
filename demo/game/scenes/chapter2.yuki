@@ -6,64 +6,104 @@
 @layer.show "y" "char_y" kind=character z=10 x=200 y=0 opacity=1.0
 @trans.dissolve 0.8
 @flow.wait 0.5
+@meta.id "chapter2.op1"
 y:Chapter two. Still the same room art.
+@meta.id "chapter2.op2"
 y:Placeholder assets, real pacing skeleton.
+@meta.id "chapter2.op3"
 y:I can talk while you skim.
+@meta.id "chapter2.op4"
 y:MoonYuki is the script surface.
+@meta.id "chapter2.op5"
 y:Host commands drive layers, audio, flow.
+@meta.id "chapter2.op6"
 y:Choices write into variables.
+@meta.id "chapter2.op7"
 y:Jumps stitch scenes into a graph.
+@meta.id "chapter2.op8"
 y:You already saw branch A and branch B.
+@meta.id "chapter2.op9"
 y:They met at mid_common.
+@meta.id "chapter2.op10"
 y:Now we walk a longer corridor of lines.
+@meta.id "chapter2.op11"
 y:Line after line, nothing fancy.
+@meta.id "chapter2.op12"
 y:That's intentional — volume without new art.
+@meta.id "chapter2.op13"
 y:Feel free to hold Ctrl if you want speed.
+@meta.id "chapter2.op14"
 y:Or open history with H if you missed a beat.
+@meta.id "chapter2.op15"
 y:Esc still works. Save whenever you like.
+@meta.id "chapter2.op16"
 y:…A soft dissolve, then we continue.
 @trans.dissolve 0.6
 @flow.wait 0.5
+@meta.id "chapter2.op17"
 y:Still here. Good.
+@meta.id "chapter2.op18"
 y:Imagine this hall has windows.
+@meta.id "chapter2.op19"
 y:Afternoon light. Dust in the beams.
+@meta.id "chapter2.op20"
 y:A clock you cannot hear ticking.
+@meta.id "chapter2.op21"
 y:Somewhere, a kettle finishes boiling.
+@meta.id "chapter2.op22"
 y:None of that is drawn yet.
+@meta.id "chapter2.op23"
 y:Words hold the place until art arrives.
+@meta.id "chapter2.op24"
 y:That's how sample chapters often start.
+@meta.id "chapter2.op25"
 y:One more stretch, then chapter three.
+@meta.id "chapter2.op26"
 y:Any last look around?
+@meta.id "chapter2.op27"
 @flow.choice "Keep walking" "Linger a second" --result c2_act
 @audio.se "se_click"
 @flow.jump_if c2_act 0 "chapter2_walk"
 @flow.jump "chapter2_linger"
 
 - scene "chapter2_walk"
+@meta.id "chapter2_walk.op1"
 y:Straight through. Efficient.
 @var.set "c2_pace" "walk"
+@meta.id "chapter2_walk.op2"
 y:The hall narrows, then opens again.
+@meta.id "chapter2_walk.op3"
 y:You pass a window that only exists in text.
+@meta.id "chapter2_walk.op4"
 y:Footsteps echo a little longer than they should.
 @flow.jump "chapter2_close"
 
 - scene "chapter2_linger"
+@meta.id "chapter2_linger.op1"
 y:You pause by the wall.
 @var.set "c2_pace" "linger"
+@meta.id "chapter2_linger.op2"
 y:Paint peels in a soft curl.
+@meta.id "chapter2_linger.op3"
 y:Someone penciled a tiny star near the trim.
+@meta.id "chapter2_linger.op4"
 y:You smile without meaning to.
+@meta.id "chapter2_linger.op5"
 y:Then you catch up.
 @flow.jump "chapter2_close"
 
 - scene "chapter2_close"
+@meta.id "chapter2_close.op1"
 y:Chapter two is almost done.
+@meta.id "chapter2_close.op2"
 y:One scale beat for presentation polish.
 @layer.set "y" scale=0.9 duration=0.25
 @flow.wait 0.3
 @layer.set "y" scale=1.0 duration=0.25
 @flow.wait 0.25
+@meta.id "chapter2_close.op3"
 y:There. Small, but it reads on screen.
+@meta.id "chapter2_close.op4"
 y:On to chapter three.
 @flow.jump "chapter3"
 
@@ -74,16 +114,27 @@ y:On to chapter three.
 @flow.wait 0.3
 @trans.fade 0.35 0.0 0.4
 @flow.wait 0.4
+@meta.id "chapter3.op1"
 y:Chapter three. Last stretch before the end.
+@meta.id "chapter3.op2"
 y:We've reused bg, character, BGM, and a click SE.
+@meta.id "chapter3.op3"
 y:That's the demo budget — and it's enough.
+@meta.id "chapter3.op4"
 y:A felt chapter is mostly structure and rhythm.
+@meta.id "chapter3.op5"
 y:Intro. Branch. Join. Mid. Late. Finale.
+@meta.id "chapter3.op6"
 y:You are near the finale now.
+@meta.id "chapter3.op7"
 y:I have two endings prepared.
+@meta.id "chapter3.op8"
 y:Neither is a novel. Both are distinct lines.
+@meta.id "chapter3.op9"
 y:Pick the tone you want to leave on.
+@meta.id "chapter3.op10"
 y:Warm and clear, or quiet and alternate.
+@meta.id "chapter3.op11"
 @flow.choice "Good ending" "Alternate ending" --result end_act
 @var.set "ending_choice" end_act
 @audio.se "se_click"
