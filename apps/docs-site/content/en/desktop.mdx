@@ -110,7 +110,8 @@ Commands (ACL: `allow-moonsight-save`): `read_prefs`, `write_prefs`,
 
 **Web slots and desktop slots are not interchangeable.** There is no automatic
 migration between browser `localStorage` and appData files. Engine save JSON
-remains **v4** on both; only the Host persistence backend differs.
+is written as **v5** on both and readers accept **v2-v5**; only the Host
+persistence backend differs.
 
 Expect separate progress if you play the same project in Chrome and in the
 Tauri app.

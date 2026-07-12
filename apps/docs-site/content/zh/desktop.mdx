@@ -105,7 +105,8 @@ curl -sS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:4173/host_web.wasm
 ### Web 槽位 ≠ 桌面槽位
 
 **Web 槽位与桌面槽位不互通。** 浏览器 `localStorage` 与 appData 文件之间没有
-自动迁移。两端引擎存档 JSON 仍为 **v4**；仅 Host 持久化后端不同。
+自动迁移。两端引擎存档 JSON 均写入 **v5**、读取兼容 **v2-v5**；仅 Host
+持久化后端不同。
 
 在 Chrome 与 Tauri 中玩同一工程时，进度是两套独立数据。
 
