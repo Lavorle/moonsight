@@ -362,7 +362,10 @@ pub fn load_json(json : String) -> Int {
         eng.load(json)
         0
       } catch {
-        _ => 1
+        err => {
+          eng.vm.last_error = Some(err.to_string())
+          1
+        }
       }
   }
 }
