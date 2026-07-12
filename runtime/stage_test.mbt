@@ -152,9 +152,74 @@ test "Intent variants are constructible" {
     @runtime.Intent::MenuLeft,
     @runtime.Intent::MenuRight,
     @runtime.Intent::OpenBacklog,
+    @runtime.Intent::Rollback,
   ]
-  assert_eq(intents.length(), 11)
+  assert_eq(intents.length(), 12)
   assert_true(intents[2] == @runtime.Intent::Select(0))
+}
+
+///|
+test "stage stable dialogue and choices relocalize atomically" {
+  let stage = @runtime.Stage::new()
+  stage.begin_text(
+    speaker="Alice",
+    speaker_id="speaker.alice",
+    text_id="dialogue.greeting",
+  )
+  stage.type_more("Hello")
+  stage.complete_text()
+  stage.set_localized_choices(
+    ["Yes", "No"],
+    ["choice.yes", "choice.no"],
+  )
+  let catalogs = @runtime.LocaleCatalogs::new(default_locale="en", catalogs={
+    "en": {
+      "speaker.alice": "Alice",
+      "dialogue.greeting": "Hello",
+      "choice.yes": "Yes",
+      "choice.no": "No",
+    },
+    "zh-CN": {
+      "speaker.alice": "爱丽丝",
+      "dialogue.greeting": "你好",
+      "choice.yes": "是",
+      "choice.no": "否",
+    },
+  })
+  stage.relocalize(catalogs, "zh-CN")
+  guard stage.text is Some(text) else { fail("localized text") }
+  assert_true(text.speaker == Some("爱丽丝"))
+  assert_eq(text.full_text, "你好")
+  assert_true(text.complete)
+  assert_eq(text.visible_chars, text.full_text.length())
+  guard stage.choices is Some(choices) else { fail("localized choices") }
+  assert_true(choices.options == ["是", "否"])
+  assert_true(choices.option_ids == [Some("choice.yes"), Some("choice.no")])
+}
+
+///|
+test "partial stage relocalization requires a grapheme-derived boundary" {
+  let stage = @runtime.Stage::new()
+  stage.begin_text(text_id="dialogue.greeting")
+  stage.type_more("Hello")
+  stage.reveal_chars(2)
+  let catalogs = @runtime.LocaleCatalogs::new(default_locale="en", catalogs={
+    "en": { "dialogue.greeting": "Hello" },
+    "zh-CN": { "dialogue.greeting": "你好" },
+  })
+  try stage.relocalize(catalogs, "zh-CN") catch {
+    _ => ()
+  } noraise {
+    _ => fail("partial switch without grapheme boundary must fail")
+  }
+  guard stage.text is Some(before) else { fail("original text") }
+  assert_eq(before.full_text, "Hello")
+  assert_eq(before.visible_chars, 2)
+
+  stage.relocalize(catalogs, "zh-CN", partial_visible_utf16=1)
+  guard stage.text is Some(after) else { fail("localized text") }
+  assert_eq(after.full_text, "你好")
+  assert_eq(after.visible_chars, 1)
 }
 
 ///|

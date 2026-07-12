@@ -127,7 +127,11 @@ fn StageLogicalState::capture(stage : Stage) -> StageLogicalState {
   }
   let choices = match stage.choices {
     Some(choice) =>
-      Some({ options: choice.options.copy(), selected: choice.selected })
+      Some({
+        options: choice.options.copy(),
+        option_ids: choice.option_ids.copy(),
+        selected: choice.selected,
+      })
     None => None
   }
   {
@@ -169,7 +173,11 @@ fn StageLogicalState::prepare(
   }
   let choices = match self.choices {
     Some(choice) =>
-      Some({ options: choice.options.copy(), selected: choice.selected })
+      Some({
+        options: choice.options.copy(),
+        option_ids: choice.option_ids.copy(),
+        selected: choice.selected,
+      })
     None => None
   }
   {

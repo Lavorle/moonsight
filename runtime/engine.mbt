@@ -921,7 +921,11 @@ pub fn StageView::from_stage(
 ) -> StageView {
   let choices = match stage.choices {
     None => None
-    Some(c) => Some({ options: c.options.copy(), selected: c.selected })
+    Some(c) => Some({
+      options: c.options.copy(),
+      option_ids: c.option_ids.copy(),
+      selected: c.selected,
+    })
   }
   {
     layers: stage.snapshot_layers(),

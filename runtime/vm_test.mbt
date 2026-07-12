@@ -47,7 +47,9 @@ test "advance completes incomplete text before resuming" {
     Some(t) =>
       eng.stage.text = Some({
         speaker: t.speaker,
+        speaker_id: t.speaker_id,
         full_text: t.full_text,
+        text_id: t.text_id,
         visible_chars: 0,
         complete: false,
       })

@@ -439,7 +439,11 @@ fn SaveGame::to_logical_state(
 ) -> EngineLogicalState {
   let base = EngineLogicalState::capture(eng)
   let choices = match self.choices {
-    Some(options) => Some({ options: options.copy(), selected: None })
+    Some(options) => Some({
+      options: options.copy(),
+      option_ids: options.map(_ => None),
+      selected: None,
+    })
     None => None
   }
   let fade_out = self.audio.bgm_fade_stop is Some(true)
