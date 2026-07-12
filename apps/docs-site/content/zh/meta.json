@@ -1,4 +1,13 @@
 {
   "title": "文档",
-  "pages": ["index", "getting-started", "moon-yuki", "play-input", "ui", "publish", "desktop"]
+  "pages": [
+    "index",
+    "getting-started",
+    "formal-1-0",
+    "moon-yuki",
+    "play-input",
+    "ui",
+    "publish",
+    "desktop"
+  ]
 }

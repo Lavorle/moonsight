@@ -5,6 +5,8 @@
 # Phase 2+: kind=, duration tweens, layer.set, real @flow.wait with trans.fade.
 # Phase 3: title / game_menu / save_load / settings via Screen DSL; named negatives ok.
 # Q2: trans.dissolve dual-phase veil + layer scale= presentation beat.
+# Formal 1.0 authoring catalogs live in locales/{en,zh-Hans-CN}.json;
+# canonical migration/freeze owns the final explicit-ID bindings and MSB2 metadata.
 
 - scene "entrypoint"
 @flow.jump "intro"

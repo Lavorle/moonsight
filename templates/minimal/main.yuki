@@ -1,3 +1,5 @@
+# Formal 1.0: run canonical migration/freeze to bind these legacy lines to
+# the portable IDs demonstrated in locales/*.json before shipping bilingual content.
 - scene "entrypoint"
 @flow.jump "intro"
 
