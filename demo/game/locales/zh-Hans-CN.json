@@ -1,0 +1,15 @@
+{
+  "speaker.y": "Y",
+  "dialogue.intro.welcome": "欢迎来到 MoonSight。",
+  "dialogue.intro.format": "这个 Formal 1.0 demo 使用稳定呈现 ID 与完整语言目录。",
+  "dialogue.intro.controls": "按 H 打开履历，按住 Ctrl 快进，按 Esc 打开系统菜单。",
+  "choice.intro.path.talk": "留在室内交谈",
+  "choice.intro.path.garden": "去花园透气",
+  "dialogue.mid.save_hint": "这里是 save v5 与旧存档兼容测试使用的稳定存档点。",
+  "choice.chapter2.pace.walk": "继续前进",
+  "choice.chapter2.pace.linger": "再停一会儿",
+  "choice.chapter3.ending.good": "温暖结局",
+  "choice.chapter3.ending.alt": "安静结局",
+  "dialogue.finale.good": "感谢游玩 MoonSight Formal 1.0 demo。",
+  "dialogue.finale.alt": "感谢你尝试另一扇门。"
+}

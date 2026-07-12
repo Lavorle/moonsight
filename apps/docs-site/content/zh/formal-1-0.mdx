@@ -1,0 +1,90 @@
+---
+title: Formal 1.0
+description: 稳定 ID、MSB2、save v5、运行时语言切换、rollback 与发布证据
+---
+
+# Formal 1.0 作者与兼容指南
+
+Formal 1.0 将确定性的作者身份、事务式包安装、与呈现无关的存档、原子语言切换、
+rollback barrier 与严格发布证据组合为同一契约。仓库测试不授权 tag 或 release；
+W1、D1、C1 必须在同一个不可变候选上真实执行，在此之前保持 `NOT RUN`。
+
+## 工程语言配置
+
+```json
+{
+  "name": "my-moonsight-game",
+  "entry": "main.yuki",
+  "default_locale": "en",
+  "supported_locales": ["en", "zh-Hans-CN"]
+}
+```
+
+语言标签使用冻结的 Formal 1.0 BCP-47 核心子集。默认语言必须在非空支持列表中恰好
+出现一次。所有语言目录必须与默认目录拥有完全相同的稳定 key 集；缺失或多余 key
+都会失败，正式环境中的文本不会静默回退。
+
+## 稳定 ID 与迁移
+
+双语工程由作者为 speaker、dialogue、choice、UI 文本和语言相关资源维护稳定 ID。
+各语言的 choice ID 与顺序必须一致。不要用源文本、译文、行号或字节偏移充当身份。
+
+确定性迁移 / freeze 流程：
+
+1. 在干净工作树生成迁移输出；
+2. 不改文件再次运行，要求输出逐字节一致；
+3. 审查 ID、choice 顺序及每条 v2-v4 存档映射；
+4. 将已批准的源码、目录与兼容元数据一起提交；
+5. 执行 freeze/check；缺失或歧义映射必须在修改状态前失败。
+
+仓库的 `docs/formal-1.0-migration-example.json` 仅用于审查示例；可执行 schema 以
+正式 `moonsightc` 输出为准。
+
+## MSB2 与整包事务
+
+MSB2 携带模块身份、稳定 operation/presentation/choice ID、完整语言目录、兼容元数据
+与 section digest。manifest 携带 package schema、catalog、resource/audio 与原始产物
+digest。Host 必须先验证并构造完整替换包，再一次性安装；损坏、缺失或混合 digest
+的包不会造成任何安装态修改。
+
+## Save v5
+
+写入端只生成 v5，读取端接受 v2-v5。Save v5 投影聚合逻辑状态，保存稳定文本/选项
+身份、标准化 grapheme 显示进度、dissolve 延续、VM/stage/audio 与 auto 状态。locale
+属于偏好，不属于槽位存档。
+
+v2-v4 通过 MSB2 兼容元数据映射。缺失或歧义映射会在状态修改前明确失败。部分显示
+文本切换语言时使用
+`floor(old_revealed / old_total * new_total)`，并夹到 grapheme 边界。
+
+## 原子语言热切换
+
+运行时会先准备全部叙事、choice、backlog、UI 与资源解析，再提交切换。缺 key 或资源
+digest 错误会保留旧语言。没有稳定 ID 的旧已解析值保持原样，不进行猜测。
+
+门禁：热切换 p95 <= 16 ms，冷切换 p95 <= 100 ms，双语 demo 解码目录 <= 32 MiB。
+
+## Rollback 与 effect
+
+Rollback 保存聚合逻辑状态。ring 上限为 64 条、估算 payload 16 MiB；超限时逐出最旧
+项，单条过大 checkpoint 会被拒绝且不会破坏已有历史。
+
+Effect 只能是 `Checkpointed`、`CompensatableAudio`（BGM）或
+`Barrier(reason_code)`。未知/自定义/外部命令与一次性 SE 默认是 barrier。成功
+barrier 清除更旧可达点，失败 effect 不清历史。被阻止的 rollback 报告
+`rollback.unavailable.*`，且逻辑、UI、backend 均零修改。新游戏、成功读档与返回标题
+会清除可达历史。
+
+locale、prefs、slots、load diagnostics 与临时确认框不进入 checkpoint。backend 在逻辑
+提交后协调，并支持重试。
+
+## 发布证据
+
+按 `docs/formal-1.0-rc-tooling.md` 执行保留 benchmark、双构建可复现与不可变 RC
+manifest。真实证据位于候选提交之外，并绑定同一 SHA 与产物 digest。任何 `NOT RUN`、
+`BLOCKED`、混合 SHA、缺失产物或未列入 allowlist 的差异都会阻止 Formal 1.0。
+
+## 排除项
+
+Formal 1.0 不包含可视化编辑器、成就、Live2D/3D、语音、粒子/后处理、槽位截图、
+DOM 叙事菜单、替代 native/wasm backend、云存档或 Web 到桌面槽位自动迁移。

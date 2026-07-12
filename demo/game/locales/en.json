@@ -1,0 +1,15 @@
+{
+  "speaker.y": "Y",
+  "dialogue.intro.welcome": "Welcome to MoonSight.",
+  "dialogue.intro.format": "This Formal 1.0 demo uses stable presentation IDs and complete locale catalogs.",
+  "dialogue.intro.controls": "Press H for history, hold Ctrl to skip, and press Esc for the system menu.",
+  "choice.intro.path.talk": "Talk inside",
+  "choice.intro.path.garden": "Leave for the garden",
+  "dialogue.mid.save_hint": "This is a stable save point for save v5 and legacy-compatibility tests.",
+  "choice.chapter2.pace.walk": "Keep walking",
+  "choice.chapter2.pace.linger": "Linger a second",
+  "choice.chapter3.ending.good": "Good ending",
+  "choice.chapter3.ending.alt": "Alternate ending",
+  "dialogue.finale.good": "Thanks for playing the MoonSight Formal 1.0 demo.",
+  "dialogue.finale.alt": "Thanks for trying the other door."
+}
