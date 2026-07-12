@@ -143,3 +143,27 @@ test "locale hot switch prepares stage and backlog before atomic publication" {
   assert_eq(eng.ui.prefs.locale, "zh-CN")
   assert_true(eng.locale_catalogs is Some(_))
 }
+
+///|
+test "rollback stable references remain in the current locale" {
+  let eng = rollback_test_engine()
+  eng.stage.begin_text(text_id="dialogue.greeting")
+  eng.stage.type_more("Hello")
+  eng.stage.complete_text()
+  eng.backlog.push(
+    speaker=None,
+    text="Hello",
+    text_id="dialogue.greeting",
+  )
+  eng.capture_rollback_checkpoint()
+  let catalogs = LocaleCatalogs::new(default_locale="en", catalogs={
+    "en": { "dialogue.greeting": "Hello" },
+    "zh-CN": { "dialogue.greeting": "你好" },
+  })
+  eng.switch_locale(catalogs, "zh-CN")
+  eng.tick(Rollback)
+  guard eng.stage.text is Some(text) else { fail("restored localized text") }
+  assert_eq(text.full_text, "你好")
+  assert_eq(eng.backlog.get(0).text, "你好")
+  assert_eq(eng.ui.prefs.locale, "zh-CN")
+}

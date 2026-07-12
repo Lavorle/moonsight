@@ -400,3 +400,23 @@ fn Engine::restore_logical_state(
   self.publish_prepared_logical_state(prepared)
   self.reconcile_backends()
 }
+
+///|
+/// Rollback-specific prepared restore. Installed catalogs and current locale
+/// are preference-owned, so restored stable references are resolved into the
+/// current locale before the single aggregate publication.
+fn Engine::restore_rollback_logical_state(
+  self : Engine,
+  state : EngineLogicalState,
+) -> Unit raise {
+  let prepared = self.prepare_logical_state(state)
+  match self.locale_catalogs {
+    Some(catalogs) if self.ui.prefs.locale != "" => {
+      prepared.stage.relocalize(catalogs, self.ui.prefs.locale)
+      prepared.backlog.relocalize(catalogs, self.ui.prefs.locale)
+    }
+    _ => ()
+  }
+  self.publish_prepared_logical_state(prepared)
+  self.reconcile_backends()
+}

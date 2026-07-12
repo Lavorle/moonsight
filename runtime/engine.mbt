@@ -637,8 +637,12 @@ fn Engine::capture_rollback_checkpoint(self : Engine) -> Unit {
 fn Engine::rollback_latest(self : Engine) -> Unit {
   match self.rollback.take_latest() {
     Checkpoint(state) => {
-      self.restore_logical_state(state) catch {
+      self.restore_rollback_logical_state(state) catch {
         _ => {
+          ignore(self.rollback.push(
+            state,
+            estimated_bytes=state.estimated_rollback_bytes(),
+          ))
           self.rollback_unavailable_reason = "rollback.unavailable.restore"
           return
         }
