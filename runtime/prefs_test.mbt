@@ -6,6 +6,7 @@ test "prefs defaults" {
   assert_eq(p.master_volume, 1.0)
   assert_eq(p.bgm_volume, 1.0)
   assert_eq(p.se_volume, 1.0)
+  assert_eq(p.locale, "")
 }
 
 ///|
@@ -16,6 +17,7 @@ test "prefs clamp ranges" {
     master_volume: 2.0,
     bgm_volume: -0.5,
     se_volume: 0.5,
+    locale: "zh-CN",
   }
   let c = p.clamp()
   assert_eq(c.text_speed, 3.0)
@@ -23,18 +25,21 @@ test "prefs clamp ranges" {
   assert_eq(c.master_volume, 1.0)
   assert_eq(c.bgm_volume, 0.0)
   assert_eq(c.se_volume, 0.5)
+  assert_eq(c.locale, "zh-CN")
   let lo : Prefs = {
     text_speed: 0.0,
     auto_mode: false,
     master_volume: -1.0,
     bgm_volume: 1.5,
     se_volume: 3.0,
+    locale: "en-US",
   }
   let c2 = lo.clamp()
   assert_eq(c2.text_speed, 0.25)
   assert_eq(c2.master_volume, 0.0)
   assert_eq(c2.bgm_volume, 1.0)
   assert_eq(c2.se_volume, 1.0)
+  assert_eq(c2.locale, "en-US")
 }
 
 ///|
@@ -70,6 +75,7 @@ test "prefs json roundtrip" {
     .set("master_volume", Float(0.8))
     .set("bgm_volume", Float(0.6))
     .set("se_volume", Float(0.4))
+    .set("locale", Str("zh-CN"))
   let s = p.to_json_string()
   let p2 = Prefs::from_json_string(s)
   assert_eq(p2.text_speed, 1.5)
@@ -77,6 +83,7 @@ test "prefs json roundtrip" {
   assert_eq(p2.master_volume, 0.8)
   assert_eq(p2.bgm_volume, 0.6)
   assert_eq(p2.se_volume, 0.4)
+  assert_eq(p2.locale, "zh-CN")
 }
 
 ///|
@@ -89,6 +96,7 @@ test "prefs from_json missing fields use defaults and clamp" {
   assert_eq(p.master_volume, 1.0)
   assert_eq(p.bgm_volume, 0.2)
   assert_eq(p.se_volume, 1.0)
+  assert_eq(p.locale, "")
   let empty = Prefs::from_json_string("{}")
   let d = Prefs::default()
   assert_eq(empty.text_speed, d.text_speed)
@@ -96,6 +104,32 @@ test "prefs from_json missing fields use defaults and clamp" {
   assert_eq(empty.master_volume, d.master_volume)
   assert_eq(empty.bgm_volume, d.bgm_volume)
   assert_eq(empty.se_volume, d.se_volume)
+  assert_eq(empty.locale, d.locale)
+}
+
+///|
+test "prefs locale parses backward-compatibly and rejects invalid tags" {
+  let valid = #|{"locale":"zh-Hans-CN"}
+  let p = Prefs::from_json_string(valid)
+  assert_eq(p.locale, "zh-Hans-CN")
+  let invalid = #|{"locale":"zh_cn"}
+  try ignore(Prefs::from_json_string(invalid)) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected invalid locale error")
+  }
+}
+
+///|
+test "formal locale profile and resolver are deterministic" {
+  assert_true(is_formal_locale("en"))
+  assert_true(is_formal_locale("zh-Hans"))
+  assert_true(is_formal_locale("zh-Hans-CN"))
+  assert_true(is_formal_locale("es-419"))
+  assert_true(!is_formal_locale("EN-us"))
+  assert_true(!is_formal_locale("zh_cn"))
+  assert_eq(resolve_locale("zh-CN", ["en", "zh-CN"], "en"), "zh-CN")
+  assert_eq(resolve_locale("fr", ["en", "zh-CN"], "en"), "en")
 }
 
 ///|
