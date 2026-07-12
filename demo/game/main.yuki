@@ -19,10 +19,15 @@
 @audio.bgm "bgm_soft"
 @trans.fade 1.0 0.0 0.5
 @flow.wait 0.5
+@meta.id "intro.op1"
 y:Welcome to MoonSight.
+@meta.id "intro.op2"
 y:This demo uses MoonYuki.
+@meta.id "intro.op3"
 y:Tips: H opens history; hold Ctrl to skip.
+@meta.id "intro.op4"
 y:Esc opens the system menu.
+@meta.id "intro.op5"
 y:Watch a dissolve and scale beat.
 @trans.dissolve 0.8
 @flow.wait 0.4
@@ -30,9 +35,13 @@ y:Watch a dissolve and scale beat.
 @flow.wait 0.4
 @layer.set "y" scale=1.0 duration=0.3
 @flow.wait 0.3
+@meta.id "intro.op6"
 y:I'm Y. I'll walk you through a short chapter.
+@meta.id "intro.op7"
 y:Nothing heavy — just rooms, choices, and quiet beats.
+@meta.id "intro.op8"
 y:First fork: stay and talk, or step out for air?
+@meta.id "intro.op9"
 @flow.choice "Talk inside" "Leave for the garden" --result act
 @var.set "demo_choice" act
 @audio.se "se_click"
@@ -41,17 +50,27 @@ y:First fork: stay and talk, or step out for air?
 
 # --- Branch A: stay and talk ---
 - scene "branch_a"
+@meta.id "branch_a.op1"
 y:Nice to meet you. I'm glad you stayed.
 @var.set "met_y" true
 @var.set "path_a" true
+@meta.id "branch_a.op2"
 y:MoonSight compiles MoonYuki into a tiny VN runtime.
+@meta.id "branch_a.op3"
 y:Scenes, layers, audio, choices — all host commands.
+@meta.id "branch_a.op4"
 y:You can press Esc anytime for save, load, settings.
+@meta.id "branch_a.op5"
 y:History keeps recent lines if you need a recap.
+@meta.id "branch_a.op6"
 y:I keep the script short on purpose.
+@meta.id "branch_a.op7"
 y:Short lines read faster. Volume comes from count.
+@meta.id "branch_a.op8"
 y:Want a little more about the engine?
+@meta.id "branch_a.op9"
 y:Or we can move on when you're ready.
+@meta.id "branch_a.op10"
 y:…Alright. Let's meet in the hall.
 @flow.jump "mid_common"
 
@@ -59,6 +78,7 @@ y:…Alright. Let's meet in the hall.
 - scene "branch_b"
 @layer.hide "y" duration=0.3
 @flow.wait 0.3
+@meta.id "branch_b.op1"
 y:You step out toward the garden.
 @var.set "left_room" true
 @var.set "path_b" true
@@ -68,13 +88,20 @@ y:You step out toward the garden.
 @layer.show "bg" "bg_room" kind=background
 @trans.dissolve 0.8
 @flow.wait 0.8
+@meta.id "garden.op1"
 y:A quiet garden. Placeholder art; BGM still looping.
 @var.set "saw_garden" true
+@meta.id "garden.op2"
 y:The air is cooler here.
+@meta.id "garden.op3"
 y:Leaves shift, though you cannot see the wind.
+@meta.id "garden.op4"
 y:A path curves toward a low stone bench.
+@meta.id "garden.op5"
 y:Farther on, a side door sits half-open.
+@meta.id "garden.op6"
 y:You can sit first, or peek inside.
+@meta.id "garden.op7"
 @flow.choice "Sit on the bench" "Check the side door" --result garden_act
 @audio.se "se_click"
 @flow.jump_if garden_act 0 "bench"
@@ -82,13 +109,18 @@ y:You can sit first, or peek inside.
 
 - scene "bench"
 @layer.show "bg" "bg_room" kind=background
+@meta.id "bench.op1"
 y:You sit on the bench for a moment.
+@meta.id "bench.op2"
 y:The air is still. Birds somewhere beyond the wall.
 @var.set "sat_bench" true
+@meta.id "bench.op3"
 y:Stone holds the morning chill.
+@meta.id "bench.op4"
 y:You count a few breaths. Nothing rushes you.
 @trans.dissolve 0.6
 @flow.wait 0.6
+@meta.id "bench.op5"
 y:Time to head back toward the hall.
 @flow.jump "mid_common"
 
@@ -97,11 +129,16 @@ y:Time to head back toward the hall.
 @layer.show "bg" "bg_room" kind=background
 @trans.dissolve 0.5
 @flow.wait 0.4
+@meta.id "side_peek.op1"
 y:You ease the side door open.
+@meta.id "side_peek.op2"
 y:Dust, old shelves, a strip of light on the floor.
 @var.set "saw_side_peek" true
+@meta.id "side_peek.op3"
 y:Someone left a note: "side room — merge test."
+@meta.id "side_peek.op4"
 y:Cute. The project really does multi-file scenes.
+@meta.id "side_peek.op5"
 y:You close the door and walk on.
 @flow.jump "mid_common"
 
@@ -111,14 +148,23 @@ y:You close the door and walk on.
 @layer.show "y" "char_y" kind=character z=10 x=200 y=0 opacity=1.0
 @trans.dissolve 0.7
 @flow.wait 0.5
+@meta.id "mid_common.op1"
 y:Back in the hall. Good timing.
+@meta.id "mid_common.op2"
 y:Whichever path you took, we land here.
+@meta.id "mid_common.op3"
 y:That's the branch → mid_common join.
+@meta.id "mid_common.op4"
 y:A real chapter would stretch this with more rooms.
+@meta.id "mid_common.op5"
 y:For the demo, we keep the spine clear.
+@meta.id "mid_common.op6"
 y:Next is chapter two — a little longer stretch.
+@meta.id "mid_common.op7"
 y:Before that: a quiet save hint for host tests.
 @sys.save_hint
+@meta.id "mid_common.op8"
 y:If the host supports snapshots, now is a fine moment.
+@meta.id "mid_common.op9"
 y:Ready? Chapter two is through that door.
 @flow.jump "chapter2"

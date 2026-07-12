@@ -8,13 +8,19 @@ import {
 // Values
 pub fn builtin_externs() -> Array[ExternDecl]
 
+pub fn compile_localized_to_identified_ir(String, file~ : String, locale~ : String, require_explicit_ids~ : Bool) -> IdentifiedIrModule raise CompileError
+
 pub fn compile_source(String, file~ : String) -> CompileResult raise CompileError
+
+pub fn compile_to_identified_ir(String, file~ : String) -> IdentifiedIrModule raise CompileError
 
 pub fn compile_to_ir(String, file~ : String) -> IrModule raise CompileError
 
 pub fn decode_module(Bytes) -> IrModule raise BytecodeError
 
 pub fn encode_module(IrModule) -> Bytes
+
+pub fn encode_msb2(Msb2Bundle) -> Bytes
 
 pub fn expand_macros(ScriptUnit) -> ScriptUnit raise MacroError
 
@@ -24,13 +30,27 @@ pub fn linearize_ops(Array[IrOp]) -> Array[IrOp]
 
 pub fn lower_unit(ResolvedUnit) -> IrModule
 
+pub fn lower_unit_with_ids(ResolvedUnit) -> IdentifiedIrModule raise AuthorIdError
+
+pub fn parse_author_id(String) -> AuthorId raise AuthorIdError
+
 pub fn parse_source(String, file~ : String) -> ScriptUnit raise ParseError
 
 pub fn resolve_unit(ScriptUnit, Array[ExternDecl]) -> ResolvedUnit raise ResolveError
 
 pub fn script_package_name() -> String
 
+pub fn validate_localized_ids(ResolvedUnit, String) -> Unit raise AuthorIdError
+
 // Errors
+pub(all) suberror AuthorIdError {
+  EmptyAuthorId
+  InvalidAuthorId(id~ : String, offset~ : Int, message~ : String)
+  InvalidLocalizedAuthorId(span~ : SourceSpan, locale~ : String, id~ : String, offset~ : Int, message~ : String)
+  MissingAuthorId(span~ : SourceSpan, locale~ : String, kind~ : String)
+  DuplicateAuthorId(span~ : SourceSpan, locale~ : String, id~ : String, kind~ : String)
+} derive(Eq, @debug.Debug)
+
 pub(all) suberror BytecodeError {
   InvalidMagic
   UnsupportedVersion(Int)
@@ -44,6 +64,7 @@ pub(all) suberror CompileError {
   Macro(MacroError)
   Resolve(ResolveError)
   Bytecode(BytecodeError)
+  AuthorId(AuthorIdError)
 } derive(Eq, @debug.Debug)
 
 pub(all) suberror MacroError {
@@ -66,6 +87,10 @@ pub(all) enum Arg {
   Named(name~ : String, Expr)
   Flag(String)
 } derive(@debug.Debug)
+
+pub(all) struct AuthorId {
+  value : String
+} derive(Eq, Hash, @debug.Debug)
 
 pub(all) struct CompileResult {
   ir : IrModule
@@ -92,6 +117,11 @@ pub(all) struct ExternDecl {
   name : String
   params : Array[ParamDecl]
   span : SourceSpan
+} derive(@debug.Debug)
+
+pub(all) struct IdentifiedIrModule {
+  ir : IrModule
+  stable_operations : Array[StableOperationId]
 } derive(@debug.Debug)
 
 pub(all) struct IrModule {
@@ -125,11 +155,21 @@ pub(all) enum IrValue {
   None_
 } derive(Eq, @debug.Debug)
 
+pub(all) struct LocaleCatalog {
+  locale : String
+  entries : Map[String, String]
+} derive(Eq, @debug.Debug)
+
 pub(all) struct MacroDecl {
   name : String
   params : Array[ParamDecl]
   body : Array[Stmt]
   span : SourceSpan
+} derive(@debug.Debug)
+
+pub(all) struct Msb2Bundle {
+  identified : IdentifiedIrModule
+  catalogs : Array[LocaleCatalog]
 } derive(@debug.Debug)
 
 pub(all) struct ParamDecl {
@@ -169,6 +209,22 @@ pub(all) struct SourceSpan {
   col : Int
   end_line : Int
   end_col : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct StableOperationId {
+  operation_id : AuthorId
+  presentation_id : AuthorId?
+  choice_ids : Array[AuthorId]
+  scene : String
+  ordinal : Int
+  kind : StablePresentationKind
+  span : SourceSpan
+} derive(Eq, @debug.Debug)
+
+pub(all) enum StablePresentationKind {
+  Dialogue
+  Choice
+  Operation
 } derive(Eq, @debug.Debug)
 
 pub(all) enum Stmt {

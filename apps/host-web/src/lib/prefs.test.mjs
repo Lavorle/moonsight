@@ -6,6 +6,7 @@ import {
   isFormalLocale,
   parsePrefsJson,
   resolveLocale,
+  withLocalePreference,
 } from "./prefs.ts";
 
 test("prefs preserve a valid locale and remain backward compatible", () => {
@@ -27,4 +28,12 @@ test("invalid persisted locale falls back without corrupting other prefs", () =>
   const prefs = parsePrefsJson('{"locale":"zh_cn","master_volume":0.25}');
   assert.equal(prefs.locale, DEFAULT_PREFS.locale);
   assert.equal(prefs.master_volume, 0.25);
+});
+
+test("locale preference updates are validated and immutable", () => {
+  const before = { ...DEFAULT_PREFS };
+  const next = withLocalePreference(before, "zh-CN");
+  assert.equal(before.locale, "");
+  assert.equal(next.locale, "zh-CN");
+  assert.throws(() => withLocalePreference(before, "zh-cn"), RangeError);
 });

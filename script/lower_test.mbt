@@ -181,3 +181,58 @@ test "localized compilation rejects dialogue without author ID" {
     _ => fail("localized dialogue without ID must fail")
   }
 }
+
+///|
+test "localized compilation rejects duplicate IDs with span and locale" {
+  let src =
+    #|- scene "s"
+    #|@meta.id "same.id" presentation="text.one" speaker="speaker.y"
+    #|y:One
+    #|@meta.id "same.id" presentation="text.two" speaker="speaker.y2"
+    #|y:Two
+    #|
+  try
+    @script.compile_localized_to_identified_ir(
+      src,
+      file="duplicate.yuki",
+      locale="ja",
+      require_explicit_ids=true,
+    )
+  catch {
+    @script.AuthorId(@script.DuplicateAuthorId(span~, locale~, id~, kind~)) => {
+      assert_eq(span.file, "duplicate.yuki")
+      assert_eq(locale, "ja")
+      assert_eq(id, "same.id")
+      assert_eq(kind, "operation")
+    }
+    _ => fail("expected duplicate author ID")
+  } noraise {
+    _ => fail("duplicate ID must fail")
+  }
+}
+
+///|
+test "localized compilation wraps invalid ID with source and locale" {
+  let src =
+    #|- scene "s"
+    #|@meta.id "bad..id" presentation="text.one" speaker="speaker.y"
+    #|y:One
+    #|
+  try
+    @script.compile_localized_to_identified_ir(
+      src,
+      file="invalid.yuki",
+      locale="zh-Hans-CN",
+      require_explicit_ids=true,
+    )
+  catch {
+    @script.AuthorId(@script.InvalidLocalizedAuthorId(span~, locale~, id~, ..)) => {
+      assert_eq(span.file, "invalid.yuki")
+      assert_eq(locale, "zh-Hans-CN")
+      assert_eq(id, "bad..id")
+    }
+    _ => fail("expected invalid localized author ID")
+  } noraise {
+    _ => fail("invalid ID must fail")
+  }
+}

@@ -52,6 +52,14 @@ export function resolveLocale(
   return supported.includes(requested) ? requested : defaultLocale;
 }
 
+/** Return a validated locale preference without mutating the input value. */
+export function withLocalePreference(prefs: Prefs, locale: string): Prefs {
+  if (!isFormalLocale(locale)) {
+    throw new RangeError(`invalid locale preference: ${locale}`);
+  }
+  return { ...prefs, locale };
+}
+
 /** Clamp volume to [0, 1]; treat non-finite as 1 (keeps volume 0 valid). */
 export function clampVolume(v: unknown): number {
   const n = Number(v);

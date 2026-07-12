@@ -304,7 +304,7 @@ y:Line
       → Macro expand
       → Resolve（externs、场景、命令）
       → Lower → IR（Host / Yield / Choose / …；命名参数为 #: 标记）
-      → 字节码编码（MSB1，魔数 "MSB1"）
+      → 字节码编码（MSB2，魔数 "MSB2"，内嵌 locale catalogs）
 ```
 
 UI 树**不**由此管线产生；在 Host 初始化时由 `std_ui` / 链接的 `ui_package`

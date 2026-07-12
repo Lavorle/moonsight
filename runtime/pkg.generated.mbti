@@ -149,6 +149,7 @@ pub(all) struct Engine {
   mut backlog_last_key : String
   mut pending_confirm : ConfirmKind?
   mut pending_backend_audio : AudioLogicState?
+  mut backend_reconcile_available : Bool
   rollback : RollbackRing[EngineLogicalState]
   mut rollback_unavailable_reason : String
   mut locale_catalogs : LocaleCatalogs?
@@ -156,6 +157,7 @@ pub(all) struct Engine {
 pub fn Engine::boot_title(Self) -> Unit
 pub fn Engine::clear_screens_to_playing(Self) -> Unit
 pub fn Engine::consume_slot_load_error(Self) -> String
+pub fn Engine::from_identified_ir(@script.IdentifiedIrModule, entry~ : String, catalogs~ : Array[@script.LocaleCatalog], default_locale~ : String, requested_locale~ : String, director? : Director, app? : UiApp, save_slots? : Int, module_id? : String) -> Self raise
 pub fn Engine::from_ir(@script.IrModule, entry~ : String, director? : Director, app? : UiApp, save_slots? : Int, module_id? : String) -> Self
 pub fn Engine::get_slot_blob(Self, Int) -> String?
 pub fn Engine::load(Self, String) -> Unit raise SaveError
@@ -316,6 +318,11 @@ pub fn[T] RollbackRing::take_latest(Self[T]) -> RollbackTake[T]
 pub(all) enum RollbackTake[T] {
   Checkpoint(T)
   Unavailable(String)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RuntimePresentationIds {
+  text_id : String?
+  choice_ids : Array[String]
 } derive(Eq, @debug.Debug)
 
 pub(all) struct SaveGame {
@@ -604,6 +611,8 @@ pub(all) struct Vm {
   mut wait : WaitKind
   mut choose_result_var : String?
   mut last_error : String?
+  mut stable_presentations : Map[String, RuntimePresentationIds]
+  mut presentation_changed : Bool
 } derive(@debug.Debug)
 pub fn Vm::from_module(@script.IrModule, entry~ : String) -> Self
 pub fn Vm::jump_scene(Self, String, Stage) -> Unit

@@ -39,10 +39,23 @@ Recommended namespaces:
 - `ui.*` for project UI strings;
 - `resource.*` for locale-sensitive asset bindings.
 
-Choice IDs and their order are identical across locales. Renaming or reusing an
-ID is a compatibility change and must be reviewed with the migration output.
-Legacy compiler-generated IDs are accepted only for single-locale compatibility;
-they are not an authoring contract for new bilingual content.
+The frozen grammar is
+`[A-Za-z_][A-Za-z0-9_-]*(.[A-Za-z_][A-Za-z0-9_-]*)*`. Put metadata immediately
+before the identified statement:
+
+```yuki
+@meta.id "intro.greeting" presentation="dialogue.intro.greeting"
+y:Welcome.
+@meta.id "intro.path" choices="choice.intro.talk,choice.intro.garden"
+@flow.choice "Talk inside" "Leave for the garden" --result act
+```
+
+The directive is stripped from executable IR. `IdentifiedIrModule` retains the
+operation, optional presentation, and ordered choice IDs with scene, ordinal,
+and source span. Choice IDs and their order are identical across locales.
+Renaming or reusing an ID is a compatibility change. The legacy path remains
+compatible, but localized compilation requires explicit IDs and reports
+file/line/column/locale/kind diagnostics.
 
 ## Catalogs and resources
 
@@ -58,9 +71,15 @@ the final binary layout and manifest digests.
 
 ## Deterministic migration and freeze
 
-Use the canonical migration/freeze command supplied by `moonsightc` once the
-explicit-ID lane is integrated. The review procedure is invariant even if CLI
-spelling evolves before candidate freeze:
+Use the deterministic, idempotent command:
+
+```sh
+moon run cmd/moonsightc --target native -- freeze-ids main.yuki -o main.ids.yuki
+```
+
+It inserts `scene.opN` operation directives for legacy dialogue and choices.
+Review and refine presentation/choice IDs before replacing source. The review
+procedure is:
 
 1. Run migration against a clean tree and retain its machine-readable output.
 2. Run it again without editing the project; bytes must be identical.
@@ -77,10 +96,12 @@ schema.
 ## MSB2 whole-bundle contract
 
 Formal 1.0 packages use MSB2 for the deterministic executable/catalog bundle.
-MSB2 carries logical module identity, stable operation/presentation/choice IDs,
-complete locale catalogs, v2-v4 compatibility metadata, and section digests.
-The package manifest carries package-schema, catalog, resource/audio, and raw
-artifact digests.
+MSB2 uses magic `MSB2`, version `2`: a length-prefixed deterministic MSB1
+payload, a stable-operation section sorted by operation ID, then embedded
+catalogs sorted by locale with entries sorted by stable ID. There are no
+external catalog files. The downstream whole-bundle manifest contract adds
+package identity, resource/audio maps, compatibility metadata, and raw artifact
+digests; those manifest fields are not part of the MSB2 core encoding.
 
 Host installation is a transaction:
 

@@ -42,6 +42,8 @@ pub(all) struct Engine {
   mut pending_confirm : ConfirmKind?
   /// Committed audio state awaiting idempotent backend reconciliation.
   mut pending_backend_audio : AudioLogicState?
+  /// Host/backend availability gate; pending reconciliation remains retryable.
+  mut backend_reconcile_available : Bool
   /// Reachable aggregate logical checkpoints for in-session rollback.
   rollback : RollbackRing[EngineLogicalState]
   /// Stable diagnostic for the most recent blocked rollback attempt.
@@ -95,11 +97,48 @@ pub fn Engine::from_ir(
     backlog_last_key: "",
     pending_confirm: None,
     pending_backend_audio: None,
+    backend_reconcile_available: true,
     rollback: RollbackRing::new_default(),
     rollback_unavailable_reason: "",
     locale_catalogs: None,
   }
   eng.sync_mixer_prefs()
+  eng
+}
+
+///|
+/// Construct a runtime from author-identified IR plus embedded MSB2 catalogs.
+/// Compiler metadata remains separate from executable IR; the VM projects it
+/// onto dialogue/choice presentation boundaries at execution time.
+pub fn Engine::from_identified_ir(
+  identified : @script.IdentifiedIrModule,
+  entry~ : String,
+  catalogs~ : Array[@script.LocaleCatalog],
+  default_locale~ : String,
+  requested_locale~ : String,
+  director? : Director,
+  app? : UiApp = UiApp::new(),
+  save_slots? : Int = 6,
+  module_id? : String = "",
+) -> Engine raise {
+  let eng = Engine::from_ir(
+    identified.ir,
+    entry~,
+    director?,
+    app~,
+    save_slots~,
+    module_id~,
+  )
+  eng.vm.install_identified_presentations(identified)
+  let maps : Map[String, Map[String, String]] = {}
+  for catalog in catalogs {
+    maps[catalog.locale] = catalog.entries
+  }
+  let installed = LocaleCatalogs::new(default_locale~, catalogs=maps)
+  let supported = catalogs.map(catalog => catalog.locale)
+  let locale = resolve_locale(requested_locale, supported, default_locale)
+  eng.locale_catalogs = Some(installed)
+  eng.ui.prefs = eng.ui.prefs.set("locale", Str(locale))
   eng
 }
 
@@ -541,6 +580,7 @@ pub fn Engine::tick(
   if self.vm.wait is Running {
     self.vm.run_until_wait(self.director, self.stage)
   }
+  self.relocalize_new_presentation()
   // If @ui.show opened a modal this frame, freeze narrative presentation.
   // Also gate on pending ui_ops: Show is queued until drain_ui_ops, so stack
   // may still be empty while a modal is about to open.
@@ -560,6 +600,30 @@ pub fn Engine::tick(
     self.tick_typewriter(dt)
   }
   @audio.global_mixer().tick(dt)
+}
+
+///|
+/// Newly-created dialogue starts at grapheme progress zero, so zero is a safe
+/// UTF-16 boundary without substituting code-point counting.
+fn Engine::relocalize_new_presentation(self : Engine) -> Unit {
+  if !self.vm.take_presentation_changed() {
+    return
+  }
+  match self.locale_catalogs {
+    Some(catalogs) if self.ui.prefs.locale != "" =>
+      self.stage.relocalize(
+        catalogs,
+        self.ui.prefs.locale,
+        partial_visible_utf16=0,
+      ) catch {
+        _ => {
+          self.vm.last_error = Some("localized presentation resolution failed")
+          self.vm.halted = true
+          self.vm.wait = Halted
+        }
+      }
+    _ => ()
+  }
 }
 
 ///|

@@ -77,7 +77,20 @@ pub(all) struct AuthorId {
 pub(all) suberror AuthorIdError {
   EmptyAuthorId
   InvalidAuthorId(id~ : String, offset~ : Int, message~ : String)
+  InvalidLocalizedAuthorId(
+    span~ : SourceSpan,
+    locale~ : String,
+    id~ : String,
+    offset~ : Int,
+    message~ : String
+  )
   MissingAuthorId(span~ : SourceSpan, locale~ : String, kind~ : String)
+  DuplicateAuthorId(
+    span~ : SourceSpan,
+    locale~ : String,
+    id~ : String,
+    kind~ : String
+  )
 } derive(Debug, Eq)
 
 ///|
