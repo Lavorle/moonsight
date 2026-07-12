@@ -13,6 +13,12 @@ evidence yet.
 | Field | Value |
 |---|---|
 | Candidate commit | `NOT SELECTED` |
+| Candidate tree status | `NOT RUN` |
+| Candidate source archive SHA-256 | `NOT RUN` |
+| Package SHA-256 | `NOT RUN` |
+| Benchmark report path / SHA-256 | `NOT RUN` |
+| Reproducibility report path / SHA-256 | `NOT RUN` |
+| RC manifest path / SHA-256 | `NOT RUN` |
 | Candidate build/run | `NOT RUN` |
 | Tester | `NOT ASSIGNED` |
 | Started (UTC) | `NOT RUN` |
@@ -25,8 +31,11 @@ artifacts are retained.
 
 ## Automated release matrix
 
-The repository CI workflow enforces the following checks. Record the GitHub
-Actions run URL for the candidate rather than copying results from another SHA.
+The repository CI workflow enforces the following checks. Record the exact
+candidate SHA, retained command output path, artifact digest, and GitHub
+Actions run URL rather than copying results from another SHA. Benchmark,
+two-build reproducibility, and immutable RC-manifest procedures are defined in
+[`formal-1.0-rc-tooling.md`](./formal-1.0-rc-tooling.md).
 
 | Surface | Required check | Candidate result |
 |---|---|---|
@@ -37,11 +46,27 @@ Actions run URL for the candidate rather than copying results from another SHA.
 | Web host | tests, `npx tsc --noEmit`, production build | NOT RUN |
 | CLI | version, demo check, `new -> check -> build`, demo build | NOT RUN |
 | CLI negative | build without `apps/host-web/dist` fails clearly | NOT RUN |
-| Package | required assets; missing/empty/corrupt MSB rejected | NOT RUN |
+| Author IDs | portable dot-separated IDs; missing/duplicate/invalid diagnostics include file/span/ID/locale | NOT RUN |
+| Locale catalogs | strict complete key equality; no text fallback; atomic hot switch | NOT RUN |
+| Package | deterministic MSB2 executable + embedded catalogs; missing/empty/corrupt bundle rejected | NOT RUN |
+| Save | writer v5; readers v2-v5; stable compatibility mapping and dissolve defaults/progress | NOT RUN |
+| Rollback | aggregate `EngineLogicalState`; 64-entry/16 MiB limits; barriers and zero-mutation unavailable path | NOT RUN |
+| Reproducibility | two clean builds compared with the reviewed normalization allowlist | NOT RUN |
+| Benchmarks | five warm/cold runs, catalog/rollback memory, rendered-frame regression limits | NOT RUN |
+| RC manifest | exact SHA, toolchains, locks, environment, commands, report/artifact digests; guard passes | NOT RUN |
 | Docs | typecheck and production build | NOT RUN |
 | Desktop Rust | format, check, tests | NOT RUN |
 
 **Candidate CI run:** `NOT RUN`
+
+### Retained automated evidence
+
+| Check | Exact command | Output path | SHA-256 | Result |
+|---|---|---|---|---|
+| Candidate guard | `NOT RUN` | `NOT RUN` | `NOT RUN` | NOT RUN |
+| Benchmark report | `NOT RUN` | `NOT RUN` | `NOT RUN` | NOT RUN |
+| Reproducibility comparison | `NOT RUN` | `NOT RUN` | `NOT RUN` | NOT RUN |
+| RC manifest generation | `NOT RUN` | `NOT RUN` | `NOT RUN` | NOT RUN |
 
 ## W1 — WebGPU browser play and web persistence
 
@@ -51,6 +76,8 @@ Actions run URL for the candidate rather than copying results from another SHA.
 
 - Candidate commit:
 - Packaged artifact / checksum:
+- Exact candidate commit and clean-tree proof:
+- RC manifest / checksum:
 - OS and version:
 - Browser and version:
 - GPU and driver:
@@ -66,7 +93,12 @@ Actions run URL for the candidate rather than copying results from another SHA.
 3. Save to a slot, record the visible slot metadata, and reload the page.
 4. Load the slot and confirm scene, text, variables, layers, UI, and audio state
    resume at the saved point.
-5. Separately serve a package with missing, empty, and corrupt `game.msb` files.
+5. Switch between `en` and `zh-Hans-CN` while playing. Confirm the operation is
+   atomic, catalogs are complete, and no display-text fallback occurs.
+6. Exercise available rollback, a compensatable BGM transition, and a barrier.
+   Confirm blocked rollback reports `rollback.unavailable.*` and produces zero
+   logical/UI/backend mutation.
+7. Separately serve a package with missing, empty, and corrupt `game.msb` files.
    Each package must show a production boot error and must not enter the demo.
 
 ### Actual result and artifacts
@@ -86,6 +118,8 @@ Actions run URL for the candidate rather than copying results from another SHA.
 
 - Candidate commit:
 - Packaged artifact / checksum:
+- Exact candidate commit and clean-tree proof:
+- RC manifest / checksum:
 - OS and version:
 - Tauri/WebView version:
 - GPU and driver:
@@ -118,6 +152,8 @@ Actions run URL for the candidate rather than copying results from another SHA.
 ### Environment
 
 - Candidate commit:
+- Package / checksum:
+- RC manifest / checksum:
 - Host (web or desktop) and version:
 - OS / browser / webview / GPU:
 - Tester:
@@ -127,8 +163,9 @@ Actions run URL for the candidate rather than copying results from another SHA.
 
 1. Start a fresh playthrough of `demo/game` from the title.
 2. Complete the representative story arc without debug shortcuts.
-3. Exercise choices, menu save/load, quick save/load, preferences, backlog, and
-   return-to-title behavior during the playthrough.
+3. Exercise choices, menu save/load, quick save/load, preferences, backlog,
+   atomic locale switching, rollback/barrier behavior, and return-to-title
+   behavior during the playthrough.
 4. Record the ending reached, elapsed time, and every blocking or confusing
    issue encountered.
 
