@@ -219,6 +219,13 @@ pub(all) struct LayerTween {
   remaining : Double
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
+pub(all) struct LocaleCatalogs {
+  default_locale : String
+  catalogs : Map[String, Map[String, String]]
+} derive(@debug.Debug)
+pub fn LocaleCatalogs::new(default_locale~ : String, catalogs~ : Map[String, Map[String, String]]) -> Self raise
+pub fn LocaleCatalogs::resolve(Self, String, String) -> String raise
+
 pub(all) struct ModalInstance {
   name : String
   mode : String?
