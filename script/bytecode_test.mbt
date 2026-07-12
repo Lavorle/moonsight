@@ -10,6 +10,7 @@ fn minimal_src() -> String {
 ///|
 test "bytecode roundtrip" {
   let ir = @script.compile_to_ir(minimal_src(), file="t.yuki")
+  let identified : IdentifiedIrModule = { ir, stable_operations: [] }
   let bytes = @script.encode_module(ir)
   // magic MSB1
   assert_true(bytes.length() >= 4)
@@ -73,11 +74,11 @@ test "MSB2 catalog encoding is deterministic across map and locale order" {
   en2["line.z"] = "Z"
   let ja : Map[String, String] = { "line.a": "あ", "line.z": "ん" }
   let first = @script.encode_msb2({
-    ir,
+    identified,
     catalogs: [{ locale: "ja", entries: ja }, { locale: "en", entries: en1 }],
   })
   let second = @script.encode_msb2({
-    ir,
+    identified,
     catalogs: [{ locale: "en", entries: en2 }, { locale: "ja", entries: ja }],
   })
   assert_eq(first, second)

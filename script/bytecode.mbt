@@ -69,7 +69,7 @@ pub(all) struct LocaleCatalog {
 /// Deterministic MSB2 payload. The executable module remains independently
 /// decodable while catalogs are ordered by locale and stable presentation ID.
 pub(all) struct Msb2Bundle {
-  ir : IrModule
+  identified : IdentifiedIrModule
   catalogs : Array[LocaleCatalog]
 } derive(Debug)
 
@@ -121,9 +121,25 @@ pub fn encode_msb2(bundle : Msb2Bundle) -> Bytes {
   let buf = Buffer(size_hint=512)
   buf.write_bytes(b"MSB2")
   write_u32(buf, 2)
-  let module_bytes = encode_module(bundle.ir)
+  let module_bytes = encode_module(bundle.identified.ir)
   write_u32(buf, module_bytes.length())
   buf.write_bytes(module_bytes)
+  let stable = bundle.identified.stable_operations.copy()
+  stable.sort_by((a, b) => a.operation_id.value.compare(b.operation_id.value))
+  write_u32(buf, stable.length())
+  for op in stable {
+    write_string(buf, op.operation_id.value)
+    write_string(
+      buf,
+      match op.presentation_id { Some(id) => id.value; None => "" },
+    )
+    write_u32(buf, op.choice_ids.length())
+    for choice in op.choice_ids {
+      write_string(buf, choice.value)
+    }
+    write_string(buf, op.scene)
+    write_u32(buf, op.ordinal)
+  }
   let catalogs = bundle.catalogs.copy()
   catalogs.sort_by((a, b) => a.locale.compare(b.locale))
   write_u32(buf, catalogs.length())
