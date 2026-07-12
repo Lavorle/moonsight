@@ -496,3 +496,32 @@ test "load rejects unsupported stack and inconsistent choice continuation" {
     _ => fail("expected InvalidContinuation")
   }
 }
+
+///|
+test "supported save versions are authoritative and remain exactly v2 through v4" {
+  assert_true(@runtime.is_supported_save_version(2))
+  assert_true(@runtime.is_supported_save_version(3))
+  assert_true(@runtime.is_supported_save_version(4))
+  assert_true(!@runtime.is_supported_save_version(1))
+  assert_true(!@runtime.is_supported_save_version(5))
+}
+
+///|
+test "validate_save exposes typed checks without mutating engine state" {
+  let eng = load_min_demo_engine_for("project-a")
+  eng.tick(None_)
+  eng.stage.set_var("keep", Int(9))
+  let game = @runtime.parse_save_game(eng.save())
+  let invalid = { ..game, scene: "missing" }.to_json().stringify()
+  let scene_before = eng.vm.scene
+  let ip_before = eng.vm.ip
+  try eng.validate_save(invalid) catch {
+    SaveError::UnknownScene(scene~) => assert_eq(scene, "missing")
+    err => fail("unexpected error: \{err}")
+  } noraise {
+    _ => fail("expected UnknownScene")
+  }
+  assert_eq(eng.vm.scene, scene_before)
+  assert_eq(eng.vm.ip, ip_before)
+  assert_true(eng.stage.get_var("keep") == Int(9))
+}

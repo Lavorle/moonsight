@@ -147,7 +147,7 @@ pub impl Show for SaveError with fn output(self : SaveError, logger : &Logger) -
 }
 
 ///|
-fn supported_save_version(version : Int) -> Bool {
+pub fn is_supported_save_version(version : Int) -> Bool {
   version == 2 || version == 3 || version == 4
 }
 
@@ -213,6 +213,16 @@ pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
 }
 
 ///|
+/// Parse and validate a save against this engine without mutating runtime state.
+///
+/// Hosts should use this for slot classification so version, identity, scene,
+/// instruction-position, and continuation rules remain runtime-authoritative.
+pub fn Engine::validate_save(self : Engine, blob : String) -> Unit raise SaveError {
+  let game = parse_save_game(blob)
+  ignore(validate_save_game(self, game))
+}
+
+///|
 /// Decode a `SaveGame` without applying it (for tests and host inspection).
 ///
 /// Checks `format_version` on the raw JSON object before full decode so
@@ -237,7 +247,7 @@ pub fn parse_save_game(blob : String) -> SaveGame raise SaveError {
   let game : SaveGame = @json.from_json(json) catch {
     err => raise SaveError::DecodeFailed(message=err.to_string())
   }
-  if !supported_save_version(game.format_version) {
+  if !is_supported_save_version(game.format_version) {
     raise SaveError::UnsupportedVersion(version=game.format_version)
   }
   game
@@ -308,7 +318,7 @@ fn reject_unsupported_version(json : Json) -> Int raise SaveError {
       match map.get("format_version") {
         Some(Number(n, ..)) => {
           let version = n.to_int()
-          if !supported_save_version(version) {
+          if !is_supported_save_version(version) {
             raise SaveError::UnsupportedVersion(version~)
           }
           version
