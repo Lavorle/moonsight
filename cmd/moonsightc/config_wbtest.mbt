@@ -17,9 +17,11 @@ test "project config accepts the frozen Formal 1.0 locale profile" {
 ///|
 test "project config rejects locale tags outside the frozen profile" {
   for tag in ["EN", "en-us", "en-US-x-private", "en_US", "english"] {
-    let text =
-      "{\"default_locale\":\"" + tag +
-      "\",\"supported_locales\":[\"" + tag + "\"]}"
+    let text = "{\"default_locale\":\"" +
+      tag +
+      "\",\"supported_locales\":[\"" +
+      tag +
+      "\"]}"
     try parse_project_config(text) catch {
       _ => ()
     } noraise {
@@ -30,11 +32,11 @@ test "project config rejects locale tags outside the frozen profile" {
 
 ///|
 test "project config requires a unique supported locale set containing the default" {
-  for text in [
-    "{\"default_locale\":\"fr\",\"supported_locales\":[\"en\"]}",
-    "{\"default_locale\":\"en\",\"supported_locales\":[]}",
-    "{\"default_locale\":\"en\",\"supported_locales\":[\"en\",\"en\"]}",
-  ] {
+  for
+    text in [
+      "{\"default_locale\":\"fr\",\"supported_locales\":[\"en\"]}", "{\"default_locale\":\"en\",\"supported_locales\":[]}",
+      "{\"default_locale\":\"en\",\"supported_locales\":[\"en\",\"en\"]}",
+    ] {
     try parse_project_config(text) catch {
       _ => ()
     } noraise {
