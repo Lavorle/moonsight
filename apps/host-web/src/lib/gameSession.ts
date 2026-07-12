@@ -56,6 +56,7 @@ import {
   loadGameBundle,
   loadManifest,
   loadWasm,
+  upgradeLegacySave,
   validateContentManifest,
   type ContentMode,
 } from "./wasm";
@@ -284,6 +285,7 @@ export class GameSession {
   store: SaveStore;
   private slotStates_ = new Map<number, SaveSlotState>();
   private persistedSlots = new Map<number, string>();
+  private activeManifest: Manifest | null = null;
 
   private onStatus: ((msg: string) => void) | null = null;
   private onSaveSlotState: ((state: SaveSlotState) => void) | null = null;
@@ -380,11 +382,29 @@ export class GameSession {
       typeof exports_.save_slot_count === "function"
         ? exports_.save_slot_count() | 0
         : 6;
+    const incompatibilities = new Map<number, string>();
     const states = hydrateStoredSlots(this.store, slotCount, (slot, json) => {
-      exports_.set_slot_json?.(slot, json);
+      const upgraded = upgradeLegacySave(
+        json,
+        this.activeManifest as Record<string, unknown> | null,
+      );
+      if (!upgraded.ok) {
+        incompatibilities.set(slot, upgraded.message);
+        return;
+      }
+      exports_.set_slot_json?.(slot, upgraded.json);
       this.persistedSlots.set(slot, json);
     });
-    for (const state of states) {
+    for (const original of states) {
+      const message = incompatibilities.get(original.slot);
+      const state: SaveSlotState = message && original.state === "occupied-valid"
+        ? {
+            slot: original.slot,
+            state: "occupied-incompatible",
+            formatVersion: original.formatVersion,
+            message,
+          }
+        : original;
       this.setSlotState(state);
       if (
         state.state === "occupied-corrupt" ||
@@ -517,6 +537,7 @@ export class GameSession {
       (manifest as Record<string, unknown> | null | undefined) ?? null,
       contentMode,
     );
+    this.activeManifest = manifest ?? null;
     stopBgm(this.audio);
     this.afterEngineReady(manifest);
   }
@@ -604,7 +625,24 @@ export class GameSession {
       );
       return;
     }
-    const json = state.json;
+    const upgraded = upgradeLegacySave(
+      state.json,
+      this.activeManifest as Record<string, unknown> | null,
+    );
+    if (!upgraded.ok) {
+      const failure: SaveSlotState = {
+        slot: this.saveSlot,
+        state: "occupied-incompatible",
+        formatVersion: state.formatVersion,
+        message: upgraded.message,
+      };
+      this.setSlotState(failure);
+      this.setStatus(
+        `running · cannot load slot ${this.saveSlot + 1} (${failure.state}: ${failure.message})`,
+      );
+      return;
+    }
+    const json = upgraded.json;
     if (typeof this.exports_.set_slot_json === "function") {
       this.exports_.set_slot_json(this.saveSlot, json);
     }

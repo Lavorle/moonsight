@@ -61,14 +61,16 @@ fn identified_presentations(
     let mut choice_i = 0
     for ip in 0..<ir_scene.ops.length() {
       match ir_scene.ops[ip] {
-        @script.IrOp::Host(name="text.begin", ..) if dialogue_i < dialogue.length() => {
+        @script.IrOp::Host(name="text.begin", ..) if dialogue_i <
+          dialogue.length() => {
           let stable = dialogue[dialogue_i]
           dialogue_i += 1
           match stable.presentation_id {
-            Some(id) => out[presentation_key(scene, ip)] = {
-              text_id: Some(id.value),
-              choice_ids: [],
-            }
+            Some(id) =>
+              out[presentation_key(scene, ip)] = {
+                text_id: Some(id.value),
+                choice_ids: [],
+              }
             None => ()
           }
         }
@@ -211,7 +213,8 @@ pub fn Vm::run_until_wait(
         self.wait = Yield
       }
       Choose(options~, result_var~) => {
-        match self.stable_presentations.get(presentation_key(self.scene, self.ip)) {
+        match
+          self.stable_presentations.get(presentation_key(self.scene, self.ip)) {
           Some({ choice_ids, .. }) if !choice_ids.is_empty() =>
             stage.set_localized_choices(options, choice_ids) catch {
               err => {

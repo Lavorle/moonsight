@@ -72,7 +72,11 @@ test "identified presentation missing from strict catalog halts without fallback
   )
   eng.tick(None_)
   assert_true(eng.vm.wait == Halted)
-  assert_true(eng.vm.last_error == Some("localized presentation resolution failed"))
-  guard eng.stage.text is Some(text) else { fail("authored text remains observable") }
+  assert_true(
+    eng.vm.last_error == Some("localized presentation resolution failed"),
+  )
+  guard eng.stage.text is Some(text) else {
+    fail("authored text remains observable")
+  }
   assert_eq(text.full_text, "Legacy display")
 }

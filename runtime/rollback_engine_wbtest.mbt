@@ -95,10 +95,7 @@ test "successful barrier clears checkpoint while failed barrier preserves it" {
   successful.tick(Advance)
   assert_eq(successful.rollback.count(), 0)
   successful.tick(Rollback)
-  assert_eq(
-    successful.rollback_unavailable(),
-    "rollback.barrier.external",
-  )
+  assert_eq(successful.rollback_unavailable(), "rollback.barrier.external")
 
   let failed = effect_test_engine("external.fail", Error("blocked"), barrier)
   failed.tick(None_)
@@ -150,11 +147,7 @@ test "rollback stable references remain in the current locale" {
   eng.stage.begin_text(text_id="dialogue.greeting")
   eng.stage.type_more("Hello")
   eng.stage.complete_text()
-  eng.backlog.push(
-    speaker=None,
-    text="Hello",
-    text_id="dialogue.greeting",
-  )
+  eng.backlog.push(speaker=None, text="Hello", text_id="dialogue.greeting")
   eng.capture_rollback_checkpoint()
   let catalogs = LocaleCatalogs::new(default_locale="en", catalogs={
     "en": { "dialogue.greeting": "Hello" },

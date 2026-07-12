@@ -9,11 +9,51 @@ from __future__ import annotations
 import json
 import hashlib
 import re
+import struct
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
 errors: list[str] = []
+
+
+def msb2_operation_ids(path: Path) -> set[str]:
+    data = path.read_bytes()
+    offset = 8
+
+    def u32() -> int:
+        nonlocal offset
+        if offset + 4 > len(data):
+            raise ValueError("truncated u32")
+        value = struct.unpack_from("<I", data, offset)[0]
+        offset += 4
+        return value
+
+    def string() -> str:
+        nonlocal offset
+        size = u32()
+        if offset + size > len(data):
+            raise ValueError("truncated string")
+        raw = data[offset:offset + size]
+        offset += size
+        return raw.decode("utf-8")
+
+    module_size = u32()
+    offset += module_size
+    if offset > len(data):
+        raise ValueError("truncated executable section")
+    result: set[str] = set()
+    for _ in range(u32()):
+        operation_id = string()
+        if operation_id in result:
+            raise ValueError(f"duplicate operation ID {operation_id!r}")
+        result.add(operation_id)
+        string()  # presentation ID
+        for _ in range(u32()):
+            string()
+        string()  # scene
+        u32()  # ordinal
+    return result
 
 
 def require_file(relative: str) -> Path:
@@ -25,13 +65,20 @@ def require_file(relative: str) -> Path:
     return path
 
 
-index = require_file("index.html")
+index_html = require_file("index.html")
 manifest_path = require_file("manifest.json")
 msb = require_file("game.msb")
 require_file("host_web.wasm")
 
 if msb.is_file() and msb.read_bytes()[:4] != b"MSB2":
     errors.append("game.msb does not start with the MSB2 magic header")
+
+stable_operation_ids: set[str] = set()
+if msb.is_file() and msb.read_bytes()[:4] == b"MSB2":
+    try:
+        stable_operation_ids = msb2_operation_ids(msb)
+    except (OSError, UnicodeError, ValueError, struct.error) as error:
+        errors.append(f"game.msb has an invalid MSB2 stable-operation section: {error}")
 
 if manifest_path.is_file() and manifest_path.stat().st_size:
     try:
@@ -99,6 +146,40 @@ if manifest_path.is_file() and manifest_path.stat().st_size:
                 if relative not in declared:
                     errors.append(f"manifest {section}.{asset_id} is missing from digests")
 
+        compatibility = manifest.get("legacy_save_compatibility")
+        if not isinstance(compatibility, dict) or compatibility.get("schema_version") != 1:
+            errors.append("manifest legacy_save_compatibility schema_version must equal 1")
+        else:
+            entries = compatibility.get("entries")
+            if not isinstance(entries, list):
+                errors.append("manifest legacy_save_compatibility.entries must be an array")
+            else:
+                locations: set[tuple[str, int]] = set()
+                for index, entry in enumerate(entries):
+                    label = f"manifest legacy_save_compatibility.entries[{index}]"
+                    if not isinstance(entry, dict):
+                        errors.append(f"{label} must be an object")
+                        continue
+                    scene, ip = entry.get("scene"), entry.get("legacy_ip")
+                    operation_id = entry.get("operation_id")
+                    if not isinstance(scene, str) or not scene:
+                        errors.append(f"{label}.scene must be a non-empty string")
+                    if not isinstance(ip, int) or ip < 0:
+                        errors.append(f"{label}.legacy_ip must be a non-negative integer")
+                    if isinstance(scene, str) and isinstance(ip, int):
+                        location = (scene, ip)
+                        if location in locations:
+                            errors.append(f"{label} duplicates legacy location {scene}#{ip}")
+                        locations.add(location)
+                    if not isinstance(operation_id, str) or operation_id not in stable_operation_ids:
+                        errors.append(f"{label}.operation_id must reference an MSB2 stable operation")
+                    old_choices, choice_ids = entry.get("legacy_choices"), entry.get("choice_ids")
+                    if old_choices is not None or choice_ids is not None:
+                        if not isinstance(old_choices, list) or not isinstance(choice_ids, list):
+                            errors.append(f"{label} choice mappings must be arrays")
+                        elif len(old_choices) != len(choice_ids):
+                            errors.append(f"{label} choice mapping lengths must match")
+
         actual_artifacts = {
             path.relative_to(root).as_posix()
             for path in root.rglob("*")
@@ -109,9 +190,9 @@ if manifest_path.is_file() and manifest_path.stat().st_size:
         for relative in sorted(declared - actual_artifacts):
             errors.append(f"manifest digest declares missing artifact: {relative}")
 
-if index.is_file() and index.stat().st_size:
+if index_html.is_file() and index_html.stat().st_size:
     try:
-        html = index.read_text(encoding="utf-8")
+        html = index_html.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as error:
         errors.append(f"index.html is not valid UTF-8 text: {error}")
     else:
