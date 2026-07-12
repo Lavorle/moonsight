@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BENCHMARK = ROOT / "scripts" / "benchmark_report.py"
 REPRO = ROOT / "scripts" / "compare_reproducible_builds.py"
 RC = ROOT / "scripts" / "rc_manifest.py"
+EVIDENCE_VERIFIER = ROOT / "scripts" / "verify_release_evidence.py"
 SHA = "1" * 40
 
 
@@ -170,7 +171,23 @@ class RcManifestTests(unittest.TestCase):
             metadata = root / "metadata.json"
             output = root / "rc.json"
             benchmark.write_text(json.dumps({"outcome": "PASS", "input_sha256": "a" * 64}), encoding="utf-8")
-            repro.write_text(json.dumps({"outcome": "PASS", "artifacts": []}), encoding="utf-8")
+            repro.write_text(
+                json.dumps(
+                    {
+                        "outcome": "PASS",
+                        "artifacts": [
+                            {
+                                "path": "game.msb",
+                                "left_raw_sha256": "c" * 64,
+                                "right_raw_sha256": "c" * 64,
+                                "left_normalized_sha256": "c" * 64,
+                                "right_normalized_sha256": "c" * 64,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             metadata.write_text(
                 json.dumps(
                     {
@@ -218,6 +235,8 @@ class RcManifestTests(unittest.TestCase):
             manifest = json.loads(output.read_text(encoding="utf-8"))
             self.assertFalse(manifest["release_authorized"])
             self.assertTrue(all(item["status"] == "NOT_RUN" for item in manifest["external_checks"].values()))
+            validation = run_script(EVIDENCE_VERIFIER, str(output))
+            self.assertEqual(validation.returncode, 0, validation.stderr)
 
     def test_freeze_guard_rejects_tracked_diff_after_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

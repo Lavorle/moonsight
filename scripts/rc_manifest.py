@@ -52,7 +52,7 @@ def generate(args: argparse.Namespace) -> int:
         for error in errors:
             print(f"error: {error}", file=sys.stderr)
         return 1
-    artifacts = [
+    reproducibility_artifacts = [
         {
             "path": item["path"],
             "left_raw_sha256": item["left_raw_sha256"],
@@ -64,12 +64,21 @@ def generate(args: argparse.Namespace) -> int:
         for item in repro.get("artifacts", [])
     ]
     automated_pass = benchmark.get("outcome") == "PASS" and repro.get("outcome") == "PASS"
+    candidate_artifacts = [
+        {
+            "path": item["path"],
+            "sha256": item["left_raw_sha256"],
+            "normalized_sha256": item["left_normalized_sha256"],
+        }
+        for item in reproducibility_artifacts
+    ]
     manifest = {
         "schema_version": 1,
         "candidate": {
             "commit": args.candidate,
             "toolchains": metadata["toolchains"],
             "locks": metadata["locks"],
+            "artifacts": candidate_artifacts,
         },
         "environment": metadata["environment"],
         "commands": metadata["commands"],
@@ -78,7 +87,22 @@ def generate(args: argparse.Namespace) -> int:
             "benchmark": {"path": str(args.benchmark), "sha256": file_digest(args.benchmark)},
             "reproducibility": {"path": str(args.reproducibility), "sha256": file_digest(args.reproducibility)},
         },
-        "artifact_digests": artifacts,
+        "artifact_digests": reproducibility_artifacts,
+        "generated_files": metadata.get("generated_files", []),
+        "automated_checks": [
+            {
+                "name": "Formal 1.0 benchmark gates",
+                "status": "PASS" if benchmark.get("outcome") == "PASS" else "FAIL",
+                "commit": args.candidate,
+                "output": str(args.benchmark),
+            },
+            {
+                "name": "two-build package reproducibility",
+                "status": "PASS" if repro.get("outcome") == "PASS" else "FAIL",
+                "commit": args.candidate,
+                "output": str(args.reproducibility),
+            },
+        ],
         "automated_outcome": "PASS" if automated_pass else "FAIL",
         "external_checks": {
             name: {"status": "NOT_RUN", "commit": args.candidate, "artifacts": []}
