@@ -13,6 +13,22 @@ from typing import Any
 
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
+CHECK_STATUSES = {"PASS", "FAIL", "BLOCKED", "NOT_RUN"}
+
+
+def check_status(report: dict[str, Any]) -> str:
+    outcome = report.get("outcome")
+    return outcome if outcome in CHECK_STATUSES else "FAIL"
+
+
+def combined_status(*statuses: str) -> str:
+    if all(status == "PASS" for status in statuses):
+        return "PASS"
+    if "FAIL" in statuses:
+        return "FAIL"
+    if "BLOCKED" in statuses:
+        return "BLOCKED"
+    return "NOT_RUN"
 
 
 def read_json(path: Path, label: str) -> dict[str, Any]:
@@ -63,7 +79,10 @@ def generate(args: argparse.Namespace) -> int:
         }
         for item in repro.get("artifacts", [])
     ]
-    automated_pass = benchmark.get("outcome") == "PASS" and repro.get("outcome") == "PASS"
+    benchmark_status = check_status(benchmark)
+    reproducibility_status = check_status(repro)
+    automated_outcome = combined_status(benchmark_status, reproducibility_status)
+    automated_pass = automated_outcome == "PASS"
     candidate_artifacts = [
         {
             "path": item["path"],
@@ -92,18 +111,18 @@ def generate(args: argparse.Namespace) -> int:
         "automated_checks": [
             {
                 "name": "Formal 1.0 benchmark gates",
-                "status": "PASS" if benchmark.get("outcome") == "PASS" else "FAIL",
+                "status": benchmark_status,
                 "commit": args.candidate,
                 "output": str(args.benchmark),
             },
             {
                 "name": "two-build package reproducibility",
-                "status": "PASS" if repro.get("outcome") == "PASS" else "FAIL",
+                "status": reproducibility_status,
                 "commit": args.candidate,
                 "output": str(args.reproducibility),
             },
         ],
-        "automated_outcome": "PASS" if automated_pass else "FAIL",
+        "automated_outcome": automated_outcome,
         "external_checks": {
             name: {"status": "NOT_RUN", "commit": args.candidate, "artifacts": []}
             for name in ("W1", "D1", "C1")

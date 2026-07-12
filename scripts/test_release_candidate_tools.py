@@ -163,6 +163,69 @@ class ReproducibilityTests(unittest.TestCase):
 
 
 class RcManifestTests(unittest.TestCase):
+    def test_generation_preserves_blocked_benchmark_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            benchmark = root / "benchmark.json"
+            repro = root / "repro.json"
+            metadata = root / "metadata.json"
+            output = root / "rc.json"
+            benchmark.write_text(
+                json.dumps({"outcome": "BLOCKED", "reason": "retained samples unavailable"}),
+                encoding="utf-8",
+            )
+            repro.write_text(
+                json.dumps(
+                    {
+                        "outcome": "PASS",
+                        "artifacts": [
+                            {
+                                "path": "game.msb",
+                                "left_raw_sha256": "c" * 64,
+                                "right_raw_sha256": "c" * 64,
+                                "left_normalized_sha256": "c" * 64,
+                                "right_normalized_sha256": "c" * 64,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            metadata.write_text(
+                json.dumps(
+                    {
+                        "toolchains": {"python": "3"},
+                        "locks": {"moon.mod": "b" * 64},
+                        "environment": {"os": "test"},
+                        "commands": [{"command": "test", "output": "evidence/test.txt"}],
+                        "authorized_operator": "release-owner",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_script(
+                RC,
+                "generate",
+                "--candidate",
+                SHA,
+                "--benchmark",
+                str(benchmark),
+                "--reproducibility",
+                str(repro),
+                "--metadata",
+                str(metadata),
+                "--output",
+                str(output),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            manifest = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["automated_checks"][0]["status"], "BLOCKED")
+            self.assertEqual(manifest["automated_outcome"], "BLOCKED")
+            validation = run_script(EVIDENCE_VERIFIER, str(output))
+            self.assertEqual(validation.returncode, 0, validation.stderr)
+
     def test_generation_is_create_only_and_never_claims_external_gates(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
