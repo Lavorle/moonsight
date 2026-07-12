@@ -1,0 +1,9 @@
+{
+  "speaker.y": "Y",
+  "dialogue.intro.welcome": "欢迎使用由 moonsightc new 创建的工程。",
+  "dialogue.intro.edit": "编辑 main.yuki，然后重新构建。",
+  "choice.intro.next.continue": "继续",
+  "choice.intro.next.quit": "退出路线",
+  "dialogue.end.continue": "你选择了继续。感谢游玩。",
+  "dialogue.end.other": "你选择了另一条路线。感谢游玩。"
+}

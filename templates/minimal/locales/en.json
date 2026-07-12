@@ -1,0 +1,9 @@
+{
+  "speaker.y": "Y",
+  "dialogue.intro.welcome": "Welcome. This project was created with moonsightc new.",
+  "dialogue.intro.edit": "Edit main.yuki and rebuild.",
+  "choice.intro.next.continue": "Continue",
+  "choice.intro.next.quit": "Quit path",
+  "dialogue.end.continue": "You chose Continue. Thanks for playing.",
+  "dialogue.end.other": "You chose the other path. Thanks for playing."
+}

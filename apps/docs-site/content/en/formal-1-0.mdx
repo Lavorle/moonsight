@@ -1,0 +1,104 @@
+---
+title: Formal 1.0
+ description: Stable IDs, MSB2, save v5, runtime locales, rollback, and release evidence
+---
+
+# Formal 1.0 authoring and compatibility
+
+Formal 1.0 combines deterministic author identity, transactional packages,
+presentation-independent saves, atomic locale switching, rollback barriers, and
+strict release evidence. Repository tests do not authorize a tag or release;
+W1, D1, and C1 remain `NOT RUN` until executed against one immutable candidate.
+
+## Project locales
+
+```json
+{
+  "name": "my-moonsight-game",
+  "entry": "main.yuki",
+  "default_locale": "en",
+  "supported_locales": ["en", "zh-Hans-CN"]
+}
+```
+
+Locale tags use the frozen Formal 1.0 BCP-47 core profile. The default must be
+present exactly once. Every supported catalog has exactly the same stable key
+set; missing or extra keys fail validation and text never silently falls back.
+
+## Stable IDs and migration
+
+Bilingual projects own stable IDs for speakers, dialogue, choices, UI text, and
+locale-sensitive resources. Choice IDs and order are identical in every locale.
+Do not derive identity from source text, translation text, line numbers, or byte
+offsets.
+
+The deterministic migration/freeze workflow is:
+
+1. generate migration output from a clean tree;
+2. repeat without edits and require byte-identical output;
+3. review IDs, choice order, and every v2-v4 save mapping;
+4. commit approved source, catalogs, and compatibility metadata together;
+5. freeze/check; ambiguous or unavailable mappings fail before mutation.
+
+The repo includes `docs/formal-1.0-migration-example.json` as an illustrative
+review artifact. Canonical `moonsightc` output owns executable schema.
+
+## MSB2 and packages
+
+MSB2 carries module identity, stable operation/presentation/choice IDs, complete
+catalogs, compatibility metadata, and section digests. The manifest carries
+package-schema, catalog, resource/audio, and raw artifact digests. The Host
+validates and constructs the complete replacement before installation; corrupt
+or mixed-digest bundles cause zero installation mutation.
+
+## Save v5
+
+Writers emit v5; readers accept v2-v5. Save v5 projects the aggregate logical
+state and persists stable text/choice identity, normalized grapheme reveal
+progress, dissolve continuation, VM/stage/audio state, and auto state. Locale is
+a preference, not slot state.
+
+Legacy v2-v4 saves use MSB2 compatibility metadata. Missing or ambiguous mapping
+is a visible load failure before state changes. A partially revealed translated
+line uses `floor(old_revealed / old_total * new_total)`, clamped to grapheme
+boundaries.
+
+## Atomic locale switching
+
+A runtime switch prepares every narrative, choice, backlog, UI, and resource
+resolution before commit. Missing keys or bad resource digests leave the old
+locale intact. Legacy resolved values without stable IDs remain unchanged rather
+than being guessed.
+
+Gates: warm switch p95 <= 16 ms, cold switch p95 <= 100 ms, and decoded catalogs
+<= 32 MiB for the bilingual demo.
+
+## Rollback and effects
+
+Rollback captures aggregate logical state. The ring is limited to 64 entries and
+16 MiB estimated payload; oldest entries are evicted, while one oversize entry is
+rejected without destroying history.
+
+Effects are `Checkpointed`, `CompensatableAudio` (BGM), or
+`Barrier(reason_code)`. Unknown/custom/external commands and one-shot SE are
+barriers. Successful barriers clear older reachability; failed effects do not.
+Blocked rollback reports `rollback.unavailable.*` and changes no logical, UI, or
+backend state. New game, successful load, and return to title clear reachability.
+
+Locale, prefs, slots, load diagnostics, and transient confirmations are excluded
+from checkpoints. Backend reconciliation happens after logical commit and is
+retryable.
+
+## Release evidence
+
+Use the retained benchmark, two-build reproducibility, and immutable RC manifest
+procedures in `docs/formal-1.0-rc-tooling.md`. Actual evidence stays outside the
+candidate commit and names one exact SHA plus artifact digests. Any `NOT RUN`,
+`BLOCKED`, mixed SHA, missing artifact, or unlisted reproducibility difference
+keeps Formal 1.0 blocked.
+
+## Exclusions
+
+Formal 1.0 excludes the visual editor, achievements, Live2D/3D, voice,
+particle/postprocess, slot screenshots, DOM narrative menus, alternate native or
+wasm backends, cloud saves, and automatic Web-to-desktop slot migration.
