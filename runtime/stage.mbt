@@ -501,6 +501,15 @@ pub fn Stage::type_more(self : Stage, chunk : String) -> Unit {
 }
 
 ///|
+/// Attach author-owned presentation identity after `text.begin` dispatch.
+fn Stage::attach_text_id(self : Stage, text_id : String) -> Unit {
+  match self.text {
+    Some(text) => self.text = Some({ ..text, text_id: Some(text_id) })
+    None => ()
+  }
+}
+
+///|
 /// Reveal all characters and mark the block complete.
 pub fn Stage::complete_text(self : Stage) -> Unit {
   match self.text {

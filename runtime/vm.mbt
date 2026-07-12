@@ -22,7 +22,70 @@ pub(all) struct Vm {
   mut choose_result_var : String?
   /// Last soft host/VM error message (missing scene, host Error, …).
   mut last_error : String?
+  stable_presentations : Map[String, RuntimePresentationIds]
+  mut presentation_changed : Bool
 } derive(Debug)
+
+///|
+/// Runtime projection of author-owned presentation identity keyed by scene/IP.
+pub(all) struct RuntimePresentationIds {
+  text_id : String?
+  choice_ids : Array[String]
+} derive(Debug, Eq)
+
+///|
+fn presentation_key(scene : String, ip : Int) -> String {
+  "\{scene}#\{ip}"
+}
+
+///|
+fn identified_presentations(
+  identified : @script.IdentifiedIrModule,
+) -> Map[String, RuntimePresentationIds] {
+  let out : Map[String, RuntimePresentationIds] = {}
+  for scene, ir_scene in identified.ir.scenes {
+    let dialogue : Array[@script.StableOperationId] = []
+    let choices : Array[@script.StableOperationId] = []
+    for stable in identified.stable_operations {
+      if stable.scene == scene {
+        match stable.kind {
+          @script.StablePresentationKind::Dialogue => dialogue.push(stable)
+          @script.StablePresentationKind::Choice => choices.push(stable)
+          @script.StablePresentationKind::Operation => ()
+        }
+      }
+    }
+    dialogue.sort_by((a, b) => a.ordinal.compare(b.ordinal))
+    choices.sort_by((a, b) => a.ordinal.compare(b.ordinal))
+    let mut dialogue_i = 0
+    let mut choice_i = 0
+    for ip in 0..<ir_scene.ops.length() {
+      match ir_scene.ops[ip] {
+        @script.IrOp::Host(name="text.begin", ..) if dialogue_i < dialogue.length() => {
+          let stable = dialogue[dialogue_i]
+          dialogue_i += 1
+          match stable.presentation_id {
+            Some(id) => out[presentation_key(scene, ip)] = {
+              text_id: Some(id.value),
+              choice_ids: [],
+            }
+            None => ()
+          }
+        }
+        @script.IrOp::Choose(..) if choice_i < choices.length() => {
+          let stable = choices[choice_i]
+          choice_i += 1
+          out[presentation_key(scene, ip)] = {
+            text_id: None,
+            choice_ids: stable.choice_ids.map(id => id.value),
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+  out
+}
 
 ///|
 /// Create a VM positioned at `entry` scene.
@@ -39,6 +102,8 @@ pub fn Vm::from_module(ir : @script.IrModule, entry~ : String) -> Vm {
         wait: Running,
         choose_result_var: None,
         last_error: None,
+        stable_presentations: {},
+        presentation_changed: false,
       }
     None =>
       {
@@ -51,8 +116,25 @@ pub fn Vm::from_module(ir : @script.IrModule, entry~ : String) -> Vm {
         wait: Halted,
         choose_result_var: None,
         last_error: Some("unknown scene: \{entry}"),
+        stable_presentations: {},
+        presentation_changed: false,
       }
   }
+}
+
+///|
+fn Vm::install_identified_presentations(
+  self : Vm,
+  identified : @script.IdentifiedIrModule,
+) -> Unit {
+  self.stable_presentations = identified_presentations(identified)
+}
+
+///|
+fn Vm::take_presentation_changed(self : Vm) -> Bool {
+  let changed = self.presentation_changed
+  self.presentation_changed = false
+  changed
 }
 
 ///|
@@ -83,8 +165,19 @@ pub fn Vm::run_until_wait(
         // Labels should already be stripped by linearize; skip if present.
         self.ip = self.ip + 1
       Host(name~, args~) => {
+        let stable = self.stable_presentations.get(
+          presentation_key(self.scene, self.ip),
+        )
         let values = resolve_args(args, stage)
         let result = director.call(name, stage, values)
+        match (name, result, stable) {
+          ("text.begin", Error(_), _) => ()
+          ("text.begin", _, Some({ text_id: Some(id), .. })) => {
+            stage.attach_text_id(id)
+            self.presentation_changed = true
+          }
+          _ => ()
+        }
         self.ip = self.ip + 1
         match result {
           Ok => ()
@@ -118,7 +211,19 @@ pub fn Vm::run_until_wait(
         self.wait = Yield
       }
       Choose(options~, result_var~) => {
-        stage.set_choices(options)
+        match self.stable_presentations.get(presentation_key(self.scene, self.ip)) {
+          Some({ choice_ids, .. }) if !choice_ids.is_empty() =>
+            stage.set_localized_choices(options, choice_ids) catch {
+              err => {
+                self.last_error = Some(err.to_string())
+                self.halted = true
+                self.wait = Halted
+                return
+              }
+            }
+          _ => stage.set_choices(options)
+        }
+        self.presentation_changed = true
         self.choose_result_var = Some(result_var)
         self.ip = self.ip + 1
         self.wait = Choose
