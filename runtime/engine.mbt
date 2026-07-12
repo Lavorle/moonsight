@@ -20,6 +20,8 @@ pub(all) struct Engine {
   mut vm : Vm
   director : Director
   mut stage : Stage
+  /// Stable project/module identity supplied by the host manifest.
+  mut module_id : String
   /// When true, a bare `None_` intent while waiting on Yield advances dialogue.
   mut auto : Bool
   /// Modal UI stack, UiMode, prefs, and retained UiApp trees.
@@ -50,6 +52,7 @@ pub fn Engine::from_ir(
   director? : Director,
   app~ : UiApp = UiApp::new(),
   save_slots~ : Int = 6,
+  module_id~ : String = "",
 ) -> Engine {
   let stage = Stage::new()
   stage.scene = entry
@@ -69,6 +72,7 @@ pub fn Engine::from_ir(
     vm: Vm::from_module(ir, entry~),
     director: dir,
     stage,
+    module_id,
     auto: false,
     ui,
     ir_entry: entry,
@@ -79,6 +83,15 @@ pub fn Engine::from_ir(
   }
   eng.sync_mixer_prefs()
   eng
+}
+
+///|
+/// Set the stable project/module identity before save hydration or loading.
+///
+/// Hosts should source this from the project manifest and set it before exposing
+/// save slots. Empty keeps legacy unscoped v2-v4 behavior.
+pub fn Engine::set_module_id(self : Engine, module_id : String) -> Unit {
+  self.module_id = module_id
 }
 
 ///|

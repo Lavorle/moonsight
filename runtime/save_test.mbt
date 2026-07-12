@@ -10,6 +10,17 @@ fn load_min_demo_engine() -> @runtime.Engine raise {
 }
 
 ///|
+fn load_min_demo_engine_for(module_id : String) -> @runtime.Engine raise {
+  let src =
+    #|- scene "s"
+    #|@layer.show "bg" "bg_room"
+    #|y:Hi
+    #|
+  let ir = @script.compile_to_ir(src, file="min_demo.yuki")
+  @runtime.Engine::from_ir(ir, entry="s", module_id~)
+}
+
+///|
 test "save roundtrip restores scene ip vars and layers" {
   let eng = load_min_demo_engine()
   eng.tick(Intent::Advance)
@@ -368,4 +379,120 @@ test "load v3 save without layer scale defaults to 1.0" {
   assert_eq(eng.stage.layers[0].scale, 1.0)
   assert_eq(eng.stage.layers[0].tweens.length(), 0)
   assert_true(!eng.stage.layers[0].pending_hide)
+}
+
+///|
+test "save writes configured module identity without requiring format v5" {
+  let eng = load_min_demo_engine_for("demo-project")
+  let game = @runtime.parse_save_game(eng.save())
+  assert_eq(game.format_version, 4)
+  assert_eq(game.module_id, "demo-project")
+}
+
+///|
+test "load rejects a save from another module before mutating runtime state" {
+  let source = load_min_demo_engine_for("project-a")
+  source.tick(None_)
+  let blob = source.save()
+  let target = load_min_demo_engine_for("project-b")
+  target.tick(None_)
+  target.stage.set_var("keep", Int(7))
+  target.stage.overlay_opacity = 0.37
+  target.auto = true
+  let scene_before = target.vm.scene
+  let ip_before = target.vm.ip
+  let wait_before = target.vm.wait
+  let layer_count_before = target.stage.layers.length()
+  try target.load(blob) catch {
+    SaveError::ModuleMismatch(expected~, found~) => {
+      assert_eq(expected, "project-b")
+      assert_eq(found, "project-a")
+    }
+    err => fail("unexpected error: \{err}")
+  } noraise {
+    _ => fail("expected ModuleMismatch")
+  }
+  assert_eq(target.vm.scene, scene_before)
+  assert_eq(target.vm.ip, ip_before)
+  assert_true(target.vm.wait == wait_before)
+  assert_true(target.stage.get_var("keep") == Int(7))
+  assert_eq(target.stage.layers.length(), layer_count_before)
+  assert_eq(target.stage.overlay_opacity, 0.37)
+  assert_true(target.auto)
+}
+
+///|
+test "load accepts legacy v2 save without module identity in configured runtime" {
+  let eng = load_min_demo_engine_for("project-a")
+  let v2 =
+    #|{"format_version":2,"module_id":"","scene":"s","ip":0,"call_stack":[],"vars":{"met":["Bool",true]},"layers":[],"overlay_opacity":0,"audio":{},"wait":"Running","auto":false}
+  eng.load(v2)
+  assert_eq(eng.vm.scene, "s")
+  assert_true(eng.stage.get_var("met") == Bool(true))
+}
+
+///|
+test "load rejects unknown scene and stale ip before mutating state" {
+  let eng = load_min_demo_engine_for("project-a")
+  eng.tick(None_)
+  eng.stage.set_var("keep", Str("yes"))
+  let base = @runtime.parse_save_game(eng.save())
+  let scene_before = eng.vm.scene
+  let ip_before = eng.vm.ip
+  let wait_before = eng.vm.wait
+  let unknown = { ..base, scene: "missing" }.to_json().stringify()
+  try eng.load(unknown) catch {
+    SaveError::UnknownScene(scene~) => assert_eq(scene, "missing")
+    err => fail("unexpected error: \{err}")
+  } noraise {
+    _ => fail("expected UnknownScene")
+  }
+  assert_eq(eng.vm.scene, scene_before)
+  assert_eq(eng.vm.ip, ip_before)
+  assert_true(eng.vm.wait == wait_before)
+  assert_true(eng.stage.get_var("keep") == Str("yes"))
+  let stale = { ..base, ip: 999 }.to_json().stringify()
+  try eng.load(stale) catch {
+    SaveError::InvalidInstructionPointer(scene~, ip~, max_ip~) => {
+      assert_eq(scene, "s")
+      assert_eq(ip, 999)
+      assert_true(max_ip < 999)
+    }
+    err => fail("unexpected error: \{err}")
+  } noraise {
+    _ => fail("expected InvalidInstructionPointer")
+  }
+  assert_eq(eng.vm.scene, scene_before)
+  assert_eq(eng.vm.ip, ip_before)
+  assert_true(eng.vm.wait == wait_before)
+  assert_true(eng.stage.get_var("keep") == Str("yes"))
+}
+
+///|
+test "load rejects unsupported stack and inconsistent choice continuation" {
+  let eng = load_min_demo_engine_for("project-a")
+  let base = @runtime.parse_save_game(eng.save())
+  let stacked = {
+    ..base,
+    call_stack: [{ scene: "s", ip: 0 }],
+  }.to_json().stringify()
+  try eng.load(stacked) catch {
+    SaveError::UnsupportedCallStack(depth~) => assert_eq(depth, 1)
+    err => fail("unexpected error: \{err}")
+  } noraise {
+    _ => fail("expected UnsupportedCallStack")
+  }
+  let inconsistent = {
+    ..base,
+    wait: Choose,
+    choices: None,
+    choose_result_var: None,
+  }.to_json().stringify()
+  try eng.load(inconsistent) catch {
+    SaveError::InvalidContinuation(message~) =>
+      assert_true(message.contains("Choose"))
+    err => fail("unexpected error: \{err}")
+  } noraise {
+    _ => fail("expected InvalidContinuation")
+  }
 }

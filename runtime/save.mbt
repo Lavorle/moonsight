@@ -109,6 +109,11 @@ pub(all) suberror SaveError {
   UnsupportedVersion(version~ : Int)
   InvalidJson(message~ : String)
   DecodeFailed(message~ : String)
+  ModuleMismatch(expected~ : String, found~ : String)
+  UnknownScene(scene~ : String)
+  InvalidInstructionPointer(scene~ : String, ip~ : Int, max_ip~ : Int)
+  UnsupportedCallStack(depth~ : Int)
+  InvalidContinuation(message~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -122,6 +127,22 @@ pub impl Show for SaveError with fn output(self : SaveError, logger : &Logger) -
       logger.write_string("invalid save JSON: \{message}")
     DecodeFailed(message~) =>
       logger.write_string("failed to decode save game: \{message}")
+    ModuleMismatch(expected~, found~) =>
+      logger.write_string(
+        "save module_id mismatch: expected \{expected}, found \{found}",
+      )
+    UnknownScene(scene~) =>
+      logger.write_string("save references unknown scene: \{scene}")
+    InvalidInstructionPointer(scene~, ip~, max_ip~) =>
+      logger.write_string(
+        "save instruction pointer \{ip} is invalid for scene \{scene} (expected 0..\{max_ip})",
+      )
+    UnsupportedCallStack(depth~) =>
+      logger.write_string(
+        "save call_stack depth \{depth} is unsupported by this runtime",
+      )
+    InvalidContinuation(message~) =>
+      logger.write_string("invalid save continuation: \{message}")
   }
 }
 
@@ -149,7 +170,7 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
   }
   let game : SaveGame = {
     format_version: save_format_version,
-    module_id: "",
+    module_id: self.module_id,
     scene: self.vm.scene,
     ip: self.vm.ip,
     call_stack: [],
@@ -179,7 +200,9 @@ pub fn Engine::save(self : Engine, slot? : Int = 0) -> String {
 /// wait, choices, and v3 fade/wait remaining fields. v3 layers without `scale`
 /// default to 1.0; v4 is the native scale-aware shape.
 pub fn Engine::load(self : Engine, blob : String) -> Unit raise SaveError {
-  apply_save_game(self, parse_save_game(blob))
+  let game = parse_save_game(blob)
+  let ops = validate_save_game(self, game)
+  apply_save_game(self, game, ops)
   // Spec: load returns to narrative play with no residual modal stack.
   self.clear_screens_to_playing()
   // Session backlog is not part of save; drop lines from the prior playthrough.
@@ -344,19 +367,60 @@ fn save_game_from_v2(v2 : SaveGameV2) -> SaveGame {
 }
 
 ///|
-fn apply_save_game(eng : Engine, game : SaveGame) -> Unit {
-  match load_scene_ops(eng.vm.ir, game.scene) {
-    Some(ops) => {
-      eng.vm.ops = ops
-      eng.vm.halted = game.wait is Halted
-      eng.vm.last_error = None
-    }
-    None => {
-      eng.vm.ops = []
-      eng.vm.halted = true
-      eng.vm.last_error = Some("unknown scene: \{game.scene}")
-    }
+fn validate_save_game(
+  eng : Engine,
+  game : SaveGame,
+) -> Array[@script.IrOp] raise SaveError {
+  // Empty module_id is the legacy v2-v4 compatibility case. Once a save is
+  // scoped, it must match the runtime identity exactly; an unconfigured runtime
+  // therefore cannot silently load another project's scoped save.
+  if game.module_id != "" && game.module_id != eng.module_id {
+    raise SaveError::ModuleMismatch(
+      expected=eng.module_id,
+      found=game.module_id,
+    )
   }
+  if !game.call_stack.is_empty() {
+    raise SaveError::UnsupportedCallStack(depth=game.call_stack.length())
+  }
+  let ops = match load_scene_ops(eng.vm.ir, game.scene) {
+    Some(ops) => ops
+    None => raise SaveError::UnknownScene(scene=game.scene)
+  }
+  let max_ip = ops.length()
+  if game.ip < 0 || game.ip > max_ip {
+    raise SaveError::InvalidInstructionPointer(
+      scene=game.scene,
+      ip=game.ip,
+      max_ip~,
+    )
+  }
+  match game.wait {
+    Choose =>
+      if game.choices is None || game.choose_result_var is None {
+        raise SaveError::InvalidContinuation(
+          message="Choose requires choices and choose_result_var",
+        )
+      }
+    _ =>
+      if game.choices is Some(_) || game.choose_result_var is Some(_) {
+        raise SaveError::InvalidContinuation(
+          message="non-Choose wait cannot carry choice state",
+        )
+      }
+  }
+  ops
+}
+
+///|
+fn apply_save_game(
+  eng : Engine,
+  game : SaveGame,
+  ops : Array[@script.IrOp],
+) -> Unit {
+  eng.vm.ops = ops
+  eng.vm.halted = game.wait is Halted
+  eng.vm.last_error = None
   eng.vm.scene = game.scene
   eng.vm.ip = game.ip
   eng.vm.stack = []
