@@ -266,15 +266,53 @@ export class GameSession {
   audio: AudioHost = createAudioHost();
   /** Host persistence boundary (SaveStore). */
   store: SaveStore;
+  private slotStates_ = new Map<number, SaveSlotState>();
+  private persistedSlots = new Map<number, string>();
 
   private onStatus: ((msg: string) => void) | null = null;
+  private onSaveSlotState: ((state: SaveSlotState) => void) | null = null;
   private rafId = 0;
   private running = false;
   private unbindInput: (() => void) | null = null;
   private unbindResize: (() => void) | null = null;
 
   constructor(store: SaveStore = new WebSaveStore()) {
-    this.store = store;
+    this.store = this.trackStore(store);
+  }
+
+  private trackStore(store: SaveStore): SaveStore {
+    return new TrackedSaveStore(store, (event) => this.onSaveWrite(event));
+  }
+
+  private setSlotState(state: SaveSlotState): void {
+    this.slotStates_.set(state.slot, state);
+    this.onSaveSlotState?.(state);
+  }
+
+  private onSaveWrite(event: SaveWriteEvent): void {
+    if (event.operation === "save-prefs") {
+      if (event.state === "failed") {
+        this.setStatus(`running · preferences save failed: ${this.errorMessage(event.error)}`);
+      }
+      return;
+    }
+    const slot = event.slot ?? 0;
+    if (event.state === "pending") {
+      this.setSlotState({ slot, state: "write-pending" });
+      this.setStatus(`running · saving slot ${slot + 1}…`);
+    } else if (event.state === "failed") {
+      const message = this.errorMessage(event.error);
+      this.setSlotState({ slot, state: "write-failed", message });
+      this.setStatus(`running · save slot ${slot + 1} failed: ${message}`);
+    } else {
+      const state = classifyStoredSlot(slot, this.store.loadSlot(slot));
+      this.setSlotState(state);
+      this.setStatus(`running · saved slot ${slot + 1}`);
+    }
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   setStatus(m: string): void {
@@ -306,16 +344,24 @@ export class GameSession {
   private hydrateSlotsFromStorage(): void {
     const exports_ = this.exports_;
     if (!exports_ || typeof exports_.set_slot_json !== "function") return;
-    const n =
+    const slotCount =
       typeof exports_.save_slot_count === "function"
         ? exports_.save_slot_count() | 0
         : 6;
-    for (let i = 0; i < Math.max(n, 1); i++) {
-      try {
-        const json = this.store.loadSlot(i);
-        if (json && json.length) exports_.set_slot_json(i, json);
-      } catch {
-        /* skip bad slot */
+    const states = hydrateStoredSlots(this.store, slotCount, (slot, json) => {
+      exports_.set_slot_json?.(slot, json);
+      this.persistedSlots.set(slot, json);
+    });
+    for (const state of states) {
+      this.setSlotState(state);
+      if (
+        state.state === "occupied-corrupt" ||
+        state.state === "occupied-incompatible" ||
+        state.state === "read-failed"
+      ) {
+        console.warn(
+          `[moonsight] slot ${state.slot + 1} ${state.state}: ${state.message}`,
+        );
       }
     }
   }
@@ -342,13 +388,29 @@ export class GameSession {
    * Stamps missing `saved_at` and writes the stamped blob back into the engine
    * so slot labels update immediately.
    */
-  private syncSlotsToStorage(): void {
+  private async persistSlot(slot: number, json: string): Promise<void> {
+    const previous = this.persistedSlots.get(slot);
+    if (previous === json) return;
+    this.persistedSlots.set(slot, json);
+    try {
+      await this.store.saveSlot(slot, json);
+    } catch (error) {
+      if (this.persistedSlots.get(slot) === json) {
+        if (previous == null) this.persistedSlots.delete(slot);
+        else this.persistedSlots.set(slot, previous);
+      }
+      throw error;
+    }
+  }
+
+  private async syncSlotsToStorage(): Promise<void> {
     const exports_ = this.exports_;
     if (!exports_ || typeof exports_.get_slot_json !== "function") return;
     const n =
       typeof exports_.save_slot_count === "function"
         ? exports_.save_slot_count() | 0
         : 6;
+    const writes: Promise<void>[] = [];
     for (let i = 0; i < Math.max(n, 1); i++) {
       try {
         const json = exports_.get_slot_json(i);
@@ -357,12 +419,13 @@ export class GameSession {
           if (stamped !== json && typeof exports_.set_slot_json === "function") {
             exports_.set_slot_json(i, stamped);
           }
-          this.store.saveSlot(i, stamped);
+          writes.push(this.persistSlot(i, stamped));
         }
-      } catch {
-        /* ignore */
+      } catch (error) {
+        console.error(`[moonsight] slot ${i + 1} sync failed`, error);
       }
     }
+    await Promise.all(writes);
   }
 
   private applySaveSlotsFromManifest(manifest: Manifest | null | undefined): void {
@@ -373,14 +436,22 @@ export class GameSession {
     ) {
       return;
     }
-    const n = Number(manifest.save_slots);
-    if (!Number.isFinite(n)) return;
-    const rc = this.exports_.set_save_slots(n | 0);
-    console.info("set_save_slots", n | 0, "rc=", rc);
+    const n = clampSaveSlotCount(manifest.save_slots);
+    const rc = this.exports_.set_save_slots(n);
+    console.info("set_save_slots", n, "rc=", rc);
+  }
+
+  private applyModuleIdFromManifest(manifest: Manifest | null | undefined): void {
+    if (!manifest?.name || typeof this.exports_?.set_module_id !== "function") {
+      return;
+    }
+    const rc = this.exports_.set_module_id(manifest.name);
+    console.info("set_module_id", manifest.name, "rc=", rc);
   }
 
   private afterEngineReady(manifest: Manifest | null | undefined): void {
     this.applySaveSlotsFromManifest(manifest);
+    this.applyModuleIdFromManifest(manifest);
     this.hydrateSlotsFromStorage();
     this.prefs = loadPrefsFromStorage(this.store, this.exports_, this.prefs);
     applyPrefsToAudio(this.audio);
