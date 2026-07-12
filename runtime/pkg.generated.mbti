@@ -250,6 +250,42 @@ pub fn Prefs::from_json_string(String) -> Self raise
 pub fn Prefs::set(Self, String, Value) -> Self
 pub fn Prefs::to_json_string(Self) -> String
 
+pub(all) struct RollbackCheckpoint[T] {
+  state : T
+  estimated_bytes : Int
+}
+
+pub(all) enum RollbackPushResult {
+  Accepted(evicted~ : Int)
+  RejectedOversize(estimated_bytes~ : Int, max_bytes~ : Int)
+  RejectedInvalidSize(Int)
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RollbackRing[T] {
+  entries : Array[RollbackCheckpoint[T]]
+  max_count : Int
+  max_bytes : Int
+  mut retained_bytes : Int
+  mut high_water_bytes : Int
+  mut evictions : Int
+  mut rejections : Int
+  mut barriers : Int
+  mut last_barrier : String?
+}
+pub fn[T] RollbackRing::after_effect(Self[T], CommandEffect, succeeded~ : Bool) -> Unit
+pub fn[T] RollbackRing::apply_barrier(Self[T], String) -> Unit
+pub fn[T] RollbackRing::bytes(Self[T]) -> Int
+pub fn[T] RollbackRing::clear(Self[T]) -> Unit
+pub fn[T] RollbackRing::count(Self[T]) -> Int
+pub fn[T] RollbackRing::new(max_count? : Int, max_bytes? : Int) -> Self[T] raise
+pub fn[T] RollbackRing::push(Self[T], T, estimated_bytes~ : Int) -> RollbackPushResult
+pub fn[T] RollbackRing::take_latest(Self[T]) -> RollbackTake[T]
+
+pub(all) enum RollbackTake[T] {
+  Checkpoint(T)
+  Unavailable(String)
+} derive(Eq, @debug.Debug)
+
 pub(all) struct SaveGame {
   format_version : Int
   module_id : String

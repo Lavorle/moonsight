@@ -34,11 +34,22 @@ test "rollback barriers clear reachability and next capture re-enables rollback"
   ring.apply_barrier("rollback.barrier.audio-se")
   assert_eq(ring.count(), 0)
   assert_eq(ring.bytes(), 0)
-  assert_true(
-    ring.take_latest() == Unavailable("rollback.barrier.audio-se"),
-  )
+  assert_true(ring.take_latest() == Unavailable("rollback.barrier.audio-se"))
   ignore(ring.push("after", estimated_bytes=10))
   assert_true(ring.take_latest() == Checkpoint("after"))
+}
+
+///|
+test "only successful barrier effects clear rollback reachability" {
+  let ring : RollbackRing[String] = RollbackRing::new()
+  ignore(ring.push("before", estimated_bytes=10))
+  ring.after_effect(Barrier("rollback.barrier.custom"), succeeded=false)
+  assert_eq(ring.count(), 1)
+  ring.after_effect(CompensatableAudio, succeeded=true)
+  assert_eq(ring.count(), 1)
+  ring.after_effect(Barrier("rollback.barrier.custom"), succeeded=true)
+  assert_eq(ring.count(), 0)
+  assert_true(ring.take_latest() == Unavailable("rollback.barrier.custom"))
 }
 
 ///|
