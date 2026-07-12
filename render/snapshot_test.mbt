@@ -192,8 +192,7 @@ test "typewriter only lays out visible chars via ui ops" {
   st.type_more("ABCDEFGH")
   // leave incomplete with 3 visible
   match st.text {
-    Some(t) =>
-      st.text = Some({ ..t, visible_chars: 3, complete: false })
+    Some(t) => st.text = Some({ ..t, visible_chars: 3, complete: false })
     None => fail("text")
   }
   let view = @runtime.StageView::from_stage(
