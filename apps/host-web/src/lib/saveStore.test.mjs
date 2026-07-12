@@ -54,7 +54,7 @@ test("TrackedSaveStore reports pending until write and flush complete", async ()
     loadSlot: () => null,
     saveSlot: async () => {
       calls.push("write");
-      await new Promise<void>((resolve) => {
+      await new Promise((resolve) => {
         releaseWrite = resolve;
       });
     },
