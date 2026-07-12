@@ -79,7 +79,8 @@ modal widgets paint via `UiDrawOp` above layers (with optional menu dim); see
 ### layer `scale=`
 
 `@layer.show` / `@layer.set` accept `scale=` (default 1.0). Linear tween via
-`duration=`. Scale is about the layer's top-left `(x,y)`. Save format v4.
+`duration=`. Scale is about the layer's top-left `(x,y)`. Save format v5
+retains the v4 layer shape and adds dissolve-state persistence.
 
 ### `layer.show id resource [z] [x] [y] [opacity]` + named
 
@@ -386,19 +387,24 @@ While a modal is open, Esc pops one layer (`return_modal`).
 under `localStorage` key `moonsight/save/{slot}` (multi-slot). Desktop shell uses
 the same webview storage.
 
-### Save format (v4)
+### Save format (v5)
 
-Writers always emit **format_version 4**. Loaders accept **v2, v3, and v4**.
+Writers always emit **format_version 5**. Loaders accept **v2, v3, v4, and
+v5**.
 
-| Field (v4) | Role |
+| Field (v5) | Role |
 |------------|------|
+| `module_id`, `scene`, `ip` | Project identity and resumable VM location; author-owned stable operation IDs are the compatibility source of truth for localized projects rather than display text |
 | `layers[]` | Current geometry + **`scale`** (default `1.0`) + `tweens` (`prop` incl. `Scale`, `to`, `remaining`) + `pending_hide` |
 | `overlay_opacity`, `fade_to`, **`fade_remaining`** | Overlay fade mid-state (wall-clock seconds left) |
+| `dissolve_phase`, `dissolve_total` | Dual-phase dissolve progress (`0` none, `1` out, `2` in) and full duration |
 | `wait_remaining` | Timed `@flow.wait` countdown left |
 | `wait`, `choices`, `choose_result_var`, `auto` | VM / UI wait state (from v2) |
 | audio block | BGM id + logical volume / fade mid-state where applicable |
 
-- Mid-tween / mid-fade / mid-wait save → load continues with remaining times.
+- Mid-tween / mid-fade / mid-wait / mid-dissolve save → load continues with
+  remaining logical progress. Text reveal is interpreted in grapheme clusters;
+  compatibility must not derive identity from localized display text.
 - v3 loads: layers missing `scale` default to `1.0`; otherwise same as v3 shape.
 - v2 loads: layers without tweens; `kind` defaults as stored (missing → character semantics where applicable); no tween restore; `scale=1.0`.
 - Unknown higher versions are rejected with a clear error.
@@ -406,10 +412,12 @@ Writers always emit **format_version 4**. Loaders accept **v2, v3, and v4**.
   are rejected before runtime state changes. Legacy v2-v4 saves without an ID
   remain loadable.
 - **UI modal stack / HUD focus are not saved.** **Prefs are not part of slot saves.**
-- **Mid-dissolve save/load:** dual-phase dissolve is not part of the save format; after load the dissolve clock is hard-cleared (`dissolve_phase=0`, `dissolve_total=0`). Authors should not rely on resuming an in-flight dissolve (remaining `fade_*` may continue as a simple fade only).
+- v5 persists dual-phase dissolve progress. Pre-v5 inputs inject
+  `dissolve_phase=0` and `dissolve_total=0`.
 
-There is no v5 migration in this release: writers stay on v4 and known v2-v4
-inputs load in place. Corrupt JSON, unsupported versions, wrong-project IDs,
+The v5 reader maps known v2-v4 inputs in place and injects defaults for fields
+that did not exist in those formats. Corrupt JSON, unsupported versions,
+wrong-project IDs,
 unknown scenes, and stale instruction pointers are reported as failures; they
 are not rewritten or treated as empty slots.
 
@@ -425,7 +433,7 @@ are not rewritten or treated as empty slots.
 
 Slot discovery distinguishes `empty`, `occupied-valid`, `occupied-corrupt`,
 `occupied-incompatible`, and storage read failures. Only envelope-valid v2-v4
-JSON is seeded into the runtime; semantic validation still happens in the
+or v5 JSON is seeded into the runtime; semantic validation still happens in the
 runtime before mutation.
 
 Save completion is observable at the persistence boundary: Web resolves after

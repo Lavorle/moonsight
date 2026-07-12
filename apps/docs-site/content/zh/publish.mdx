@@ -97,12 +97,18 @@ MoonSight **要求 WebGPU**，没有 WebGL 回退。Linux 上 Chromium 常需开
 
 - 数据按 **源站**（协议 + 主机 + 端口）隔离。换端口或域名即另一套存储。
 - 清除站点数据会抹掉存档与偏好。
-- 引擎槽位 JSON 仍为 **v4**；与桌面端仅 Host 持久化后端不同。
+- 引擎槽位写入 **v5**，读取兼容 **v2-v5**；与桌面端仅 Host 持久化后端不同。
 
 **Web 槽位与桌面槽位不互通** — 不会在 `localStorage` 与桌面 appData 之间自动迁移。
 见 [桌面端](./desktop)。
 
 ## 发布后验收
+
+保留精确候选提交、完整包 SHA-256 摘要、基准报告摘要、双构建可复现报告摘要及
+只创建不覆盖的 RC manifest。Formal 证据流程见
+`docs/formal-1.0-rc-tooling.md` 与 `docs/release-1.0-verification.md`。发布包是
+MSB2 整体 bundle：可执行字节码与严格完整的内嵌 locale catalogs 必须作为一个
+事务安装。
 
 1. 冷启动落在 **标题** 模态。
 2. **Start** → 玩一小段；Esc → 存档槽 0（或 Ctrl+S）。

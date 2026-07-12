@@ -4,6 +4,11 @@ These scripts implement the retained-evidence procedures frozen at M1. They do
 not create benchmark samples, select a release candidate, authorize W1/D1/C1,
 create a tag, or publish a release.
 
+Use this procedure together with the tracked authoring contract in
+[`formal-1.0-author-guide.md`](./formal-1.0-author-guide.md) and record the
+resulting exact-SHA evidence in
+[`release-1.0-verification.md`](./release-1.0-verification.md).
+
 ## Benchmark report
 
 `scripts/benchmark_report.py` consumes a retained JSON sample file. It requires

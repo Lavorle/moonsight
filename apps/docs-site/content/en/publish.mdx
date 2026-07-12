@@ -102,13 +102,21 @@ Browser builds use **`WebSaveStore`** → **`localStorage`**:
 - Data is **per origin** (scheme + host + port). Changing port or domain is a
   different store.
 - Clearing site data wipes saves and prefs.
-- Engine slot JSON remains **v4**; only the Host persistence backend differs
+- Engine slot writers emit **v5** and readers accept **v2-v5**; only the Host
+  persistence backend differs from desktop.
   from desktop.
 
 **Web slots and desktop slots are not interchangeable** — there is no automatic
 migration between `localStorage` and desktop appData. See [Desktop](./desktop).
 
 ## Verify after publish
+
+Retain the exact candidate commit, SHA-256 digest of the complete package, the
+benchmark report digest, the two-build reproducibility report digest, and the
+create-only RC manifest. Formal evidence procedures are documented in
+`docs/formal-1.0-rc-tooling.md` and `docs/release-1.0-verification.md`. A package
+is an MSB2 whole bundle: executable bytecode and strict embedded locale
+catalogs must be installed as one transaction.
 
 1. Cold start lands on the **title** modal.
 2. **Start** → play a short beat; Esc → save slot 0 (or Ctrl+S).

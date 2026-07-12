@@ -47,7 +47,7 @@ moonsight/
 | Package / app | Role |
 |---------------|------|
 | `script` | Compile MoonYuki → IR/bytecode (narrative only; rejects `- screen`) |
-| `runtime` | IR VM, Director, Stage (scale + dissolve clock), UiApp/UiRuntime, prefs, save **v4** |
+| `runtime` | IR VM, Director, Stage (scale + dissolve clock), UiApp/UiRuntime, prefs, save **v5** (reads v2-v5) |
 | `render` | CPU draw list + float pack for JS GPU (layers + scale × size + `UiDrawOp`) |
 | `audio` | BGM/SE logical mixer (volume, fade) |
 | `std_commands` | `standard_registry()` host handlers (`trans.dissolve`, `scale=`, …) |
@@ -84,6 +84,9 @@ my_game/
     bg_room.png
     char_y.png
     bgm_soft.ogg
+  locales/                 # strict complete catalogs for supported locales
+    en.json
+    zh-Hans-CN.json
   ui/                      # optional MoonBit UI package (see ui_package)
     lib.mbt
 ```
@@ -124,6 +127,8 @@ Phase 1 pins **JSON** (no TOML dependency).
 | `logical_width` | number | `1920` | Logical canvas width |
 | `logical_height` | number | `1080` | Logical canvas height |
 | `save_slots` | number | `6` | Multi-slot count (clamped **1..20**) |
+| `default_locale` | string | `"en"` | Initial catalog locale |
+| `supported_locales` | string[] | `[default_locale]` | Strict complete locale set packaged into MSB2 |
 | `ui_package` | string \| omit | omit | Relative dir of MoonBit UI sources linked into host wasm |
 
 Example (`demo/game/moonsight.json`):
@@ -165,7 +170,7 @@ Typical `dist/demo/`:
 
 | Artifact | Purpose |
 |----------|---------|
-| `game.msb` | Merged narrative bytecode (`MSB1`) |
+| `game.msb` | Deterministic executable plus embedded locale catalogs (`MSB2`; executable payload remains MSB1-compatible internally) |
 | `demo.yuki` | Copy of entry source (host load path today) |
 | `manifest.json` | name, logical size, resources, audio, save_slots |
 | `assets/**` | Copied media |
@@ -281,7 +286,8 @@ Saves use **OS appData** via `DesktopSaveStore` (not webview `localStorage`):
 | Slot *n* | `{appDataDir}/moonsight/saves/{n}.json` |
 
 **Web slots ≠ desktop slots** — no automatic migration between browser
-`localStorage` and appData files. Engine save JSON remains v4 on both.
+`localStorage` and appData files. Engine save JSON is v5 on both and readers
+accept v2-v5.
 
 One-shot: `./scripts/publish-desktop.sh` (web package + `tauri build`).
 
@@ -327,6 +333,7 @@ UI kernel, render pack, audio mixer, std_commands registry alignment,
 | **Q2** | `trans.dissolve`, layer `scale` + save v4, longer demo, Svelte host path, Fumadocs zh/en core pages |
 | **Q3 / 0.8** | ScrollView backlog, pointer phase 2, dual-host wheel, confirm unified, slot/theme polish |
 | **Q4** | `moonsightc new` + `templates/minimal`; Svelte-only shell; Web/Desktop SaveStore; publish scripts; publish/desktop docs |
+| **Formal 1.0** | portable dot-separated author IDs; deterministic MSB2 with embedded strict locale catalogs; atomic hot locale switching; save v5; aggregate-state rollback with barriers and bounded history; retained release evidence |
 
 ## Documentation index
 
@@ -340,17 +347,19 @@ UI kernel, render pack, audio mixer, std_commands registry alignment,
 | [`play-input.md`](./play-input.md) | Intents, skip hold, wait gate, backlog/confirm |
 | [`draw-list-pack.md`](./draw-list-pack.md) | Packed frame format + MenuUp/Down |
 | [`project-layout.md`](./project-layout.md) | This file |
+| [`formal-1.0-author-guide.md`](./formal-1.0-author-guide.md) | Formal 1.0 IDs, catalogs, migration review, MSB2, save v5, locale switching, rollback, budgets, and exclusions |
+| [`release-1.0-verification.md`](./release-1.0-verification.md) | Exact-SHA release evidence template; W1/D1/C1 remain external gates |
 | `superpowers/specs/…` | Design specs |
 | `superpowers/plans/…` | Implementation plans |
 
-## Explicit non-goals (through Q4 author path)
+## Explicit non-goals after Formal 1.0
 
 Do not expect or document as shipped:
 
-- Visual editor, full product i18n (beyond docs-site locales), achievements, Live2D, second native GPU backend
+- Visual editor, achievements, Live2D, second native GPU backend
 - Official YukimiScript bytecode interop, TOML project config
 - Voice track; deep SE overhaul (SE status quo)
-- Slot screenshot thumbnails; saving backlog into slots; rollback
+- Slot screenshot thumbnails; saving backlog into slots
 - DOM / HTML **game** menus (host chrome may be DOM; narrative UI is MoonBit/wasm)
 - Second wasm / dynamic UI load; general theme files; rotate/anchor; transform animation stack
 - Open host-string UI actions / general expression language on the tree
