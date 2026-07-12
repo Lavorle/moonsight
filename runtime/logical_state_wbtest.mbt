@@ -130,6 +130,12 @@ test "backend reconciliation retries from the committed snapshot" {
   assert_true(eng.pending_backend_audio is Some(_))
 
   @audio.global_mixer().stop_bgm()
+  eng.backend_reconcile_available = false
+  eng.reconcile_backends()
+  assert_true(eng.pending_backend_audio is Some(_))
+  assert_true(@audio.global_mixer().bgm is None)
+
+  eng.backend_reconcile_available = true
   eng.reconcile_backends()
   assert_true(eng.pending_backend_audio is None)
   assert_true(@audio.global_mixer().bgm == Some("theme"))

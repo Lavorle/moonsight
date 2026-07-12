@@ -383,6 +383,9 @@ fn Engine::publish_prepared_logical_state(
 /// Idempotently reconcile external audio from the committed logical snapshot.
 /// If a future backend raises, the pending snapshot remains set for retry.
 pub fn Engine::reconcile_backends(self : Engine) -> Unit {
+  if !self.backend_reconcile_available {
+    return
+  }
   match self.pending_backend_audio {
     None => ()
     Some(audio) => {

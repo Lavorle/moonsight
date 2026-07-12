@@ -42,6 +42,8 @@ pub(all) struct Engine {
   mut pending_confirm : ConfirmKind?
   /// Committed audio state awaiting idempotent backend reconciliation.
   mut pending_backend_audio : AudioLogicState?
+  /// Host/backend availability gate; pending reconciliation remains retryable.
+  mut backend_reconcile_available : Bool
   /// Reachable aggregate logical checkpoints for in-session rollback.
   rollback : RollbackRing[EngineLogicalState]
   /// Stable diagnostic for the most recent blocked rollback attempt.
@@ -95,6 +97,7 @@ pub fn Engine::from_ir(
     backlog_last_key: "",
     pending_confirm: None,
     pending_backend_audio: None,
+    backend_reconcile_available: true,
     rollback: RollbackRing::new_default(),
     rollback_unavailable_reason: "",
     locale_catalogs: None,
