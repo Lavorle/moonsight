@@ -22,7 +22,7 @@ pub(all) struct Vm {
   mut choose_result_var : String?
   /// Last soft host/VM error message (missing scene, host Error, …).
   mut last_error : String?
-  stable_presentations : Map[String, RuntimePresentationIds]
+  mut stable_presentations : Map[String, RuntimePresentationIds]
   mut presentation_changed : Bool
 } derive(Debug)
 

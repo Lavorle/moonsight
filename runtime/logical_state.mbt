@@ -116,6 +116,8 @@ fn VmLogicalState::prepare(
     wait: self.wait,
     choose_result_var: self.choose_result_var,
     last_error: None,
+    stable_presentations: current.stable_presentations,
+    presentation_changed: false,
   }
 }
 
