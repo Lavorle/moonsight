@@ -37,8 +37,9 @@ fn cmd_build(project_dir : String, out_dir : String) -> Int {
     if !path_exists(entry_path) {
       println("warning: entry file missing: \{entry_path}")
     }
-    let ir = compile_yuki_paths(yuki[:], entry_file=entry_path)
-    let bytecode = @script.encode_module(ir)
+    let identified = compile_yuki_paths_with_ids(yuki[:], entry_file=entry_path)
+    let ir = identified.ir
+    let bytecode = @script.encode_msb2({ identified, catalogs: [] })
 
     // Link optional project UI into host_web/project_ui, then rebuild wasm when set.
     // Mark linked before prepare so catch restores even if prepare mutates then fails
@@ -296,7 +297,7 @@ fn copy_host_shell(shell_dir : String, out_dir : String) -> Unit raise IoError {
   for name in read_dir(shell_dir) {
     // Skip host-local placeholder; build writes project manifest after assets.
     // Copy files *and* dirs (slug/, fonts/, Vite assets/ as required by the shell).
-    if name == "manifest.json" {
+    if name == "manifest.json" || name == "game.msb" || name == "demo.yuki" {
       continue
     }
     let from = join_path(shell_dir, name)

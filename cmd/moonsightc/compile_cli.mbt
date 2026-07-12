@@ -115,6 +115,69 @@ fn compile_yuki_paths(
 }
 
 ///|
+/// Compile and merge sources while preserving author-owned stable IDs for the
+/// MSB2 stable-operation section. Legacy sources remain valid and simply
+/// contribute no stable-operation entries.
+fn compile_yuki_paths_with_ids(
+  paths : ArrayView[String],
+  entry_file? : String,
+) -> @script.IdentifiedIrModule raise IoError {
+  guard paths.length() > 0 else { raise IoError("no .yuki sources found") }
+  let scenes : Map[String, @script.IrScene] = {}
+  let stable_operations : Array[@script.StableOperationId] = []
+  let mut entry = "entrypoint"
+  let mut entry_set = false
+  let entry_abs = match entry_file {
+    Some(f) => Some(normalize_path_key(f))
+    None => None
+  }
+  for path in paths {
+    let src = read_file_to_string(path)
+    let identified = @script.compile_to_identified_ir(src, file=path) catch {
+      e => raise IoError(format_compile_error(e))
+    }
+    for name, scene in identified.ir.scenes {
+      if scenes.contains(name) {
+        raise IoError("duplicate scene `\{name}` from \{path}")
+      }
+      scenes[name] = scene
+    }
+    stable_operations.append(identified.stable_operations)
+    match entry_abs {
+      Some(ef) =>
+        if normalize_path_key(path) == ef || basename(path) == basename(ef) {
+          entry = identified.ir.entry
+          entry_set = true
+        }
+      None => ()
+    }
+    if !entry_set {
+      if identified.ir.scenes.contains("entrypoint") {
+        entry = "entrypoint"
+        entry_set = true
+      } else if paths.length() == 1 {
+        entry = identified.ir.entry
+        entry_set = true
+      }
+    }
+  }
+  if !entry_set {
+    if scenes.contains("entrypoint") {
+      entry = "entrypoint"
+    } else {
+      for name, _ in scenes {
+        entry = name
+        break
+      }
+    }
+  }
+  if !scenes.contains(entry) {
+    raise IoError("entry scene `\{entry}` not found after compile")
+  }
+  { ir: { scenes, entry }, stable_operations }
+}
+
+///|
 /// Normalize path for comparison (strip leading `./`).
 fn normalize_path_key(path : String) -> String {
   if path.has_prefix("./") {
