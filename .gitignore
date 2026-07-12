@@ -4,6 +4,8 @@ _build/
 .target/
 .repos/
 node_modules/
+__pycache__/
+*.py[cod]
 *.wasm
 host_desktop/tauri/src-tauri/target/
 
