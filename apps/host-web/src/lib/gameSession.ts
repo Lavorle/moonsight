@@ -43,6 +43,7 @@ import {
 } from "./saveStore";
 import {
   clampSaveSlotCount,
+  classifyRuntimeLoadFailure,
   classifyStoredSlot,
   hydrateStoredSlots,
   type SaveSlotState,
@@ -98,6 +99,7 @@ export type HostExports = WebAssembly.Exports & {
   init_demo?: () => void;
   save_json?: (slot: number) => string;
   load_json?: (json: string) => number;
+  load_error?: () => string;
   audio_event_count?: () => number;
   audio_event_kind?: (i: number) => number;
   audio_event_resource?: (i: number) => string;
@@ -590,8 +592,22 @@ export class GameSession {
     if (typeof this.exports_.set_slot_json === "function") {
       this.exports_.set_slot_json(this.saveSlot, json);
     }
-    const rc = this.exports_.load_json?.(json);
+    const rc = this.exports_.load_json?.(json) ?? 1;
     console.info("load", SAVE_KEY(this.saveSlot), "rc=", rc);
+    if (rc !== 0) {
+      const message = this.exports_.load_error?.() || "Runtime rejected save";
+      const failure = classifyRuntimeLoadFailure(
+        this.saveSlot,
+        state.formatVersion,
+        message,
+      );
+      this.setSlotState(failure);
+      this.setStatus(
+        `running · cannot load slot ${this.saveSlot + 1} (${failure.state}: ${message})`,
+      );
+      return;
+    }
+    this.setStatus(`running · loaded slot ${this.saveSlot + 1}`);
   };
 
   private async persistAfterAction(): Promise<void> {

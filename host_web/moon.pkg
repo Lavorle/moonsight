@@ -25,6 +25,7 @@ options(
         "get_slot_json",
         "set_slot_json",
         "last_error",
+        "load_error",
         "export_frame",
         "export_pointer",
         "export_wheel",

@@ -71,6 +71,27 @@ export function classifyStoredSlot(
   };
 }
 
+/** Convert a runtime semantic rejection into a player-visible slot state. */
+export function classifyRuntimeLoadFailure(
+  slot: number,
+  formatVersion: number,
+  message: string,
+): SaveSlotState {
+  const diagnostic = message || "Runtime rejected save";
+  if (
+    diagnostic.startsWith("unsupported save format_version") ||
+    diagnostic.startsWith("save module_id mismatch")
+  ) {
+    return {
+      slot,
+      state: "occupied-incompatible",
+      formatVersion,
+      message: diagnostic,
+    };
+  }
+  return { slot, state: "occupied-corrupt", message: diagnostic };
+}
+
 export function hydrateStoredSlots(
   store: SaveStore,
   slotCount: number,

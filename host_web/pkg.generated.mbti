@@ -40,6 +40,8 @@ pub fn init_demo() -> Unit
 
 pub fn last_error() -> String
 
+pub fn load_error() -> String
+
 pub fn load_json(String) -> Int
 
 pub fn load_msb(String) -> Int

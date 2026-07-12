@@ -28,6 +28,35 @@ test("stored slots distinguish empty, corrupt, incompatible, and valid data", as
   );
 });
 
+test("runtime load diagnostics distinguish cross-project from corrupt saves", async () => {
+  const slots = await import("./saveSlots.ts");
+  assert.deepEqual(
+    slots.classifyRuntimeLoadFailure(
+      2,
+      4,
+      "save module_id mismatch: expected current, found other",
+    ),
+    {
+      slot: 2,
+      state: "occupied-incompatible",
+      formatVersion: 4,
+      message: "save module_id mismatch: expected current, found other",
+    },
+  );
+  assert.deepEqual(
+    slots.classifyRuntimeLoadFailure(
+      3,
+      4,
+      "save instruction pointer 99 is invalid for scene main",
+    ),
+    {
+      slot: 3,
+      state: "occupied-corrupt",
+      message: "save instruction pointer 99 is invalid for scene main",
+    },
+  );
+});
+
 test("hydration enumerates the configured slot count without seeding bad data", async () => {
   const slots = await import("./saveSlots.ts");
   assert.equal(typeof slots.hydrateStoredSlots, "function");

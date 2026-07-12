@@ -12,6 +12,7 @@
 ///|
 struct HostSession {
   mut engine : @runtime.Engine?
+  mut save_load_error : String
   mut atlas : @render.GlyphAtlas
   mut resources : @render.ResourceTable
   layout : @render.UiLayout
@@ -23,6 +24,7 @@ struct HostSession {
 ///|
 let session : Ref[HostSession] = Ref({
   engine: None,
+  save_load_error: "",
   atlas: @render.GlyphAtlas::new(),
   resources: @render.ResourceTable::new(),
   layout: @render.UiLayout::default_fhd(),
@@ -92,6 +94,12 @@ pub fn last_error() -> String {
         Some(msg) => msg
       }
   }
+}
+
+///|
+/// Last save parsing/validation error, separate from VM soft errors.
+pub fn load_error() -> String {
+  session.val.save_load_error
 }
 
 ///|
@@ -354,6 +362,7 @@ pub fn save_json(slot : Int) -> String {
 /// `Engine::load` restores mixer BGM/volume/fade from the save audio block.
 pub fn load_json(json : String) -> Int {
   let s = session.val
+  s.save_load_error = ""
   match s.engine {
     None => 1
     Some(eng) =>
@@ -363,7 +372,7 @@ pub fn load_json(json : String) -> Int {
         0
       } catch {
         err => {
-          eng.vm.last_error = Some(err.to_string())
+          s.save_load_error = err.to_string()
           1
         }
       }

@@ -11,7 +11,7 @@ test "host module identity export reaches save JSON" {
 }
 
 ///|
-test "load_json exposes typed save validation errors through last_error" {
+test "load_json exposes save validation errors separately from VM errors" {
   let source =
     #|- scene "main"
     #|yuki:Validation smoke.
@@ -21,5 +21,6 @@ test "load_json exposes typed save validation errors through last_error" {
   let save = save_json(0)
   assert_eq(set_module_id("active-module"), 0)
   assert_eq(load_json(save), 1)
-  assert_true(last_error().contains("module_id mismatch"))
+  assert_true(load_error().contains("module_id mismatch"))
+  assert_eq(last_error(), "")
 }
