@@ -1,5 +1,5 @@
 export const MIN_SAVE_FORMAT_VERSION = 2;
-export const MAX_SAVE_FORMAT_VERSION = 4;
+export const MAX_SAVE_FORMAT_VERSION = 5;
 export const DEFAULT_SAVE_SLOT_COUNT = 6;
 export const MAX_SAVE_SLOT_COUNT = 20;
 
