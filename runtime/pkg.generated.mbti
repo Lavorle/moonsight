@@ -12,6 +12,8 @@ pub fn dispatch_builtin(String, Stage, Array[Value]) -> HostResult
 
 pub fn dispatch_builtin_kind(BuiltinHost, Stage, Array[Value]) -> HostResult
 
+pub fn is_formal_locale(String) -> Bool
+
 pub fn is_supported_save_version(Int) -> Bool
 
 pub let logical_height : Int
@@ -19,6 +21,8 @@ pub let logical_height : Int
 pub let logical_width : Int
 
 pub fn parse_save_game(String) -> SaveGame raise SaveError
+
+pub fn resolve_locale(String, Array[String], String) -> String raise
 
 pub fn runtime_package_name() -> String
 
@@ -88,6 +92,12 @@ pub(all) struct ChoiceState {
   selected : Int?
 } derive(@debug.Debug)
 
+pub(all) enum CommandEffect {
+  Checkpointed
+  CompensatableAudio
+  Barrier(String)
+} derive(Eq, @debug.Debug)
+
 pub(all) enum ConfirmKind {
   OverwriteSave(Int)
   QuitToTitle
@@ -95,11 +105,15 @@ pub(all) enum ConfirmKind {
 
 pub(all) struct Director {
   handlers : Map[String, HostHandler]
+  effects : Map[String, CommandEffect]
 } derive(@debug.Debug)
 pub fn Director::call(Self, String, Stage, Array[Value]) -> HostResult
+pub fn Director::effect_for(Self, String) -> CommandEffect
 pub fn Director::new() -> Self
 pub fn Director::register(Self, String, HostHandler) -> Unit
 pub fn Director::register_fn(Self, String, (Stage, Array[Value]) -> HostResult) -> Unit
+pub fn Director::register_fn_with_effect(Self, String, (Stage, Array[Value]) -> HostResult, CommandEffect) -> Unit
+pub fn Director::register_with_effect(Self, String, HostHandler, CommandEffect) -> Unit
 pub fn Director::registered_names(Self) -> Array[String]
 pub fn Director::with_builtins() -> Self
 
@@ -217,6 +231,7 @@ pub(all) struct Prefs {
   master_volume : Double
   bgm_volume : Double
   se_volume : Double
+  locale : String
 } derive(Eq, ToJson, @debug.Debug)
 pub fn Prefs::adjust(Self, String, Double) -> Self
 pub fn Prefs::clamp(Self) -> Self

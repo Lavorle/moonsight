@@ -24,7 +24,11 @@ pub fn standard_registry() -> @runtime.Director {
   dir.register_fn_with_effect("layer.set", cmd_layer_set, Checkpointed)
   dir.register_fn_with_effect("flow.jump", cmd_flow_jump, Checkpointed)
   dir.register_fn_with_effect("flow.jump_if", cmd_flow_jump_if, Checkpointed)
-  dir.register_fn_with_effect("flow.jump_if_not", cmd_flow_jump_if_not, Checkpointed)
+  dir.register_fn_with_effect(
+    "flow.jump_if_not",
+    cmd_flow_jump_if_not,
+    Checkpointed,
+  )
   dir.register_fn_with_effect("flow.wait", cmd_flow_wait, Checkpointed)
   dir.register_fn_with_effect("flow.yield", cmd_flow_yield, Checkpointed)
   dir.register_fn_with_effect("flow.choice", cmd_flow_choice, Checkpointed)
@@ -36,7 +40,11 @@ pub fn standard_registry() -> @runtime.Director {
     Barrier("rollback.barrier.audio-se"),
   )
   dir.register_fn_with_effect("trans.fade", cmd_trans_fade, Checkpointed)
-  dir.register_fn_with_effect("trans.dissolve", cmd_trans_dissolve, Checkpointed)
+  dir.register_fn_with_effect(
+    "trans.dissolve",
+    cmd_trans_dissolve,
+    Checkpointed,
+  )
   dir.register_fn_with_effect(
     "sys.save_hint",
     cmd_sys_save_hint,

@@ -82,5 +82,9 @@ pub fn resolve_locale(
   if !default_supported {
     fail("default locale is not supported: \{default_locale}")
   }
-  if requested_supported { requested } else { default_locale }
+  if requested_supported {
+    requested
+  } else {
+    default_locale
+  }
 }

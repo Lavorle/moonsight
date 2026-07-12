@@ -109,10 +109,12 @@ test "prefs from_json missing fields use defaults and clamp" {
 
 ///|
 test "prefs locale parses backward-compatibly and rejects invalid tags" {
-  let valid = #|{"locale":"zh-Hans-CN"}
+  let valid =
+    #|{"locale":"zh-Hans-CN"}
   let p = Prefs::from_json_string(valid)
   assert_eq(p.locale, "zh-Hans-CN")
-  let invalid = #|{"locale":"zh_cn"}
+  let invalid =
+    #|{"locale":"zh_cn"}
   try ignore(Prefs::from_json_string(invalid)) catch {
     _ => ()
   } noraise {

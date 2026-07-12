@@ -20,8 +20,9 @@ pub(all) enum CommandEffect {
 } derive(Debug, Eq)
 
 ///|
-let unknown_command_barrier : CommandEffect =
-  Barrier("rollback.barrier.unknown-command")
+let unknown_command_barrier : CommandEffect = Barrier(
+  "rollback.barrier.unknown-command",
+)
 
 ///|
 /// Director with text/layer/var built-ins registered.
