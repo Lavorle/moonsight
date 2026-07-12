@@ -18,6 +18,17 @@ GATES = {
     "catalogs_rollback_incremental_mib": 48.0,
     "rendered_frame_regression_percent": 5.0,
 }
+ENVIRONMENT_FIELDS = (
+    "os",
+    "cpu",
+    "ram",
+    "browser_or_webview",
+    "gpu_driver",
+    "toolchains",
+    "power_mode",
+    "viewport",
+    "demo_trace",
+)
 
 
 def p95(samples: list[float]) -> float:
@@ -43,11 +54,18 @@ def build_report(data: Any, input_digest: str) -> tuple[dict[str, Any], list[str
         return {}, ["schema_version must be 1"]
     if not isinstance(data.get("environment"), dict) or not data["environment"]:
         errors.append("environment must be a non-empty object")
+    else:
+        for field in ENVIRONMENT_FIELDS:
+            value = data["environment"].get(field)
+            if value in (None, "", {}):
+                errors.append(f"environment.{field} must identify the reference environment")
     runs = data.get("runs")
     if not isinstance(runs, list):
         return {}, errors + ["runs must be an array"]
 
     p95s: dict[str, list[float]] = {"warm": [], "cold": []}
+    cold_decode_p95s: list[float] = []
+    cold_upload_p95s: list[float] = []
     seen_ids: set[str] = set()
     for index, run in enumerate(runs):
         path = f"runs[{index}]"
@@ -69,8 +87,12 @@ def build_report(data: Any, input_digest: str) -> tuple[dict[str, Any], list[str
         if mode == "cold":
             if run.get("fresh_sessions") is not True:
                 errors.append(f"{path}.fresh_sessions must be true")
-            numbers(run.get("catalog_decode_ms"), f"{path}.catalog_decode_ms", 100, errors)
-            numbers(run.get("first_gpu_glyph_upload_ms"), f"{path}.first_gpu_glyph_upload_ms", 100, errors)
+            decode = numbers(run.get("catalog_decode_ms"), f"{path}.catalog_decode_ms", 100, errors)
+            upload = numbers(run.get("first_gpu_glyph_upload_ms"), f"{path}.first_gpu_glyph_upload_ms", 100, errors)
+            if len(decode) == 100:
+                cold_decode_p95s.append(p95(decode))
+            if len(upload) == 100:
+                cold_upload_p95s.append(p95(upload))
         samples = numbers(run.get("samples_ms"), f"{path}.samples_ms", expected, errors)
         if len(samples) == expected:
             p95s[mode].append(p95(samples))
@@ -124,6 +146,18 @@ def build_report(data: Any, input_digest: str) -> tuple[dict[str, Any], list[str
         }
         for name, value in values.items()
     }
+    metrics["warm_locale_switch_ms"]["run_p95_values"] = p95s["warm"]
+    metrics["cold_locale_switch_ms"]["run_p95_values"] = p95s["cold"]
+    metrics["cold_catalog_decode_ms"] = {
+        "median_run_p95": statistics.median(cold_decode_p95s),
+        "run_p95_values": cold_decode_p95s,
+        "status": "OBSERVED",
+    }
+    metrics["cold_first_gpu_glyph_upload_ms"] = {
+        "median_run_p95": statistics.median(cold_upload_p95s),
+        "run_p95_values": cold_upload_p95s,
+        "status": "OBSERVED",
+    }
     return {
         "schema_version": 1,
         "input_sha256": input_digest,
@@ -135,7 +169,7 @@ def build_report(data: Any, input_digest: str) -> tuple[dict[str, Any], list[str
             "cold_fresh_sessions_per_run": 100,
         },
         "metrics": metrics,
-        "outcome": "PASS" if all(item["status"] == "PASS" for item in metrics.values()) else "FAIL",
+        "outcome": "PASS" if all(metrics[name]["status"] == "PASS" for name in GATES) else "FAIL",
     }, []
 
 

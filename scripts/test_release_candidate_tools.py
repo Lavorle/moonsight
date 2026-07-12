@@ -47,7 +47,17 @@ def benchmark_input() -> dict[str, object]:
         )
     return {
         "schema_version": 1,
-        "environment": {"os": "test", "trace": "demo-10m"},
+        "environment": {
+            "os": "test",
+            "cpu": "test-cpu",
+            "ram": "16 GiB",
+            "browser_or_webview": "test-browser",
+            "gpu_driver": "test-gpu",
+            "toolchains": {"moon": "test"},
+            "power_mode": "performance",
+            "viewport": "1280x720",
+            "demo_trace": "demo-10m",
+        },
         "runs": runs,
         "memory": {
             "decoded_catalogs_mib": 31.0,
@@ -72,6 +82,8 @@ class BenchmarkReportTests(unittest.TestCase):
             self.assertEqual(report["outcome"], "PASS")
             self.assertEqual(report["metrics"]["warm_locale_switch_ms"]["median_run_p95"], 10.0)
             self.assertEqual(report["metrics"]["cold_locale_switch_ms"]["median_run_p95"], 80.0)
+            self.assertEqual(report["metrics"]["cold_catalog_decode_ms"]["median_run_p95"], 20.0)
+            self.assertEqual(report["metrics"]["cold_first_gpu_glyph_upload_ms"]["median_run_p95"], 10.0)
             self.assertAlmostEqual(report["metrics"]["rendered_frame_regression_percent"]["value"], 4.0)
 
     def test_rejects_unretained_or_incomplete_sample_sets(self) -> None:
