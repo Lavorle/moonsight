@@ -61,13 +61,12 @@ export function readPrefsFromStorage(store: SaveStore): Prefs | null {
 /**
  * Write a prefs JSON string via SaveStore.
  */
-export function writePrefsToStorage(store: SaveStore, json: string): void {
-  try {
-    if (json && json.length) {
-      store.savePrefs(json);
-    }
-  } catch {
-    /* ignore */
+export async function writePrefsToStorage(
+  store: SaveStore,
+  json: string,
+): Promise<void> {
+  if (json && json.length) {
+    await store.savePrefs(json);
   }
 }
 
@@ -106,22 +105,18 @@ export function loadPrefsFromStorage(
 /**
  * Persist engine prefs via SaveStore when present; return updated JS prefs.
  */
-export function savePrefsToStorage(
+export async function savePrefsToStorage(
   store: SaveStore,
   exports_: PrefsWasmExports | null,
   current: Prefs,
-): Prefs {
+): Promise<Prefs> {
   let prefs = { ...current };
-  try {
-    if (typeof exports_?.prefs_json === "function") {
-      const json = exports_.prefs_json();
-      if (json && json.length) {
-        store.savePrefs(json);
-        prefs = parsePrefsJson(json, prefs);
-      }
+  if (typeof exports_?.prefs_json === "function") {
+    const json = exports_.prefs_json();
+    if (json && json.length) {
+      await store.savePrefs(json);
+      prefs = parsePrefsJson(json, prefs);
     }
-  } catch {
-    /* ignore */
   }
   return prefs;
 }

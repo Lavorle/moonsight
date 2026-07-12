@@ -34,7 +34,19 @@ import {
   savePrefsToStorage,
   type Prefs,
 } from "./prefs";
-import { SAVE_KEY, WebSaveStore, type SaveStore } from "./saveStore";
+import {
+  SAVE_KEY,
+  TrackedSaveStore,
+  WebSaveStore,
+  type SaveStore,
+  type SaveWriteEvent,
+} from "./saveStore";
+import {
+  clampSaveSlotCount,
+  classifyStoredSlot,
+  hydrateStoredSlots,
+  type SaveSlotState,
+} from "./saveSlots";
 import { loadTheme } from "./theme";
 import { bytesToBinaryString, loadManifest, loadWasm } from "./wasm";
 
@@ -79,6 +91,7 @@ export type HostExports = WebAssembly.Exports & {
   get_slot_json?: (slot: number) => string;
   save_slot_count?: () => number;
   set_save_slots?: (n: number) => number;
+  set_module_id?: (moduleId: string) => number;
   boot_title?: () => number;
   load_msb?: (raw: string) => number;
   load_source?: (src: string) => number;
@@ -102,17 +115,22 @@ export type GameSessionOptions = {
   onStatus?: (msg: string) => void;
   /** Persistence backend; defaults to WebSaveStore. */
   store?: SaveStore;
+  /** Preloaded manifest, used so desktop slot preload matches save_slots. */
+  manifest?: Manifest | null;
+  onSaveSlotState?: (state: SaveSlotState) => void;
 };
 
 export type GameSessionHandle = {
   exports: () => HostExports | null;
-  save: () => void;
-  load: () => void;
+  save: () => Promise<void>;
+  load: () => Promise<void>;
   setIntent: (code: number) => void;
-  stop: () => void;
+  slotStates: () => SaveSlotState[];
+  stop: () => Promise<void>;
 };
 
-type Manifest = {
+export type Manifest = {
+  name?: string;
   resources?: Record<string, string>;
   audio?: Record<string, string>;
   save_slots?: number;
