@@ -101,10 +101,10 @@ test("manifest slot counts share the 1..20 clamp contract", async () => {
   assert.equal(slots.clampSaveSlotCount("not-a-number"), 6);
 });
 
-test("v2 through v4 remain compatible while older and future saves do not", async () => {
+test("v2 through v5 remain compatible while older and future saves do not", async () => {
   const slots = await import("./saveSlots.ts");
 
-  for (const formatVersion of [2, 3, 4]) {
+  for (const formatVersion of [2, 3, 4, 5]) {
     assert.equal(
       slots.classifyStoredSlot(
         formatVersion,
@@ -113,7 +113,7 @@ test("v2 through v4 remain compatible while older and future saves do not", asyn
       "occupied-valid",
     );
   }
-  for (const formatVersion of [1, 5, 99]) {
+  for (const formatVersion of [1, 6, 99]) {
     assert.equal(
       slots.classifyStoredSlot(
         formatVersion,
