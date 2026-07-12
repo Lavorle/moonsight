@@ -151,6 +151,7 @@ pub(all) struct Engine {
   mut pending_backend_audio : AudioLogicState?
   rollback : RollbackRing[EngineLogicalState]
   mut rollback_unavailable_reason : String
+  mut locale_catalogs : LocaleCatalogs?
 }
 pub fn Engine::boot_title(Self) -> Unit
 pub fn Engine::clear_screens_to_playing(Self) -> Unit
@@ -171,6 +172,7 @@ pub fn Engine::set_save_slots(Self, Int) -> Unit
 pub fn Engine::set_slot_blob(Self, Int, String) -> Unit
 pub fn Engine::slot_load_error_slot(Self) -> Int
 pub fn Engine::start_game(Self) -> Unit
+pub fn Engine::switch_locale(Self, LocaleCatalogs, String, partial_visible_utf16? : Int) -> Unit raise
 pub fn Engine::sync_ui_bind(Self) -> Unit
 pub fn Engine::tick(Self, Intent, dt? : Double, skip_held? : Bool) -> Unit
 pub fn Engine::validate_save(Self, String) -> Unit raise SaveError
