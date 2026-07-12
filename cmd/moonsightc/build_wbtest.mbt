@@ -60,3 +60,22 @@ test "native SHA-256 file digest matches the standard vector" {
     digest, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
   )
 }
+
+///|
+test "localized package compile requires explicit stable IDs" {
+  let path = "/tmp/moonsight-localized-missing-id.yuki"
+  write_string_to_file(path, "- scene \"s\"\ny:Hello\n")
+  let rejected = try {
+    compile_yuki_paths_with_ids(
+      [path][0:1],
+      locale="ja",
+      require_explicit_ids=true,
+    )
+    |> ignore
+    false
+  } catch {
+    IoError(message) => message.contains("missing author ID")
+  }
+  remove_file(path)
+  assert_true(rejected)
+}
