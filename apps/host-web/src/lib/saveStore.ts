@@ -2,10 +2,36 @@
 
 export interface SaveStore {
   loadPrefs(): string | null;
-  savePrefs(json: string): void;
+  savePrefs(json: string): Promise<void>;
   loadSlot(slot: number): string | null;
-  saveSlot(slot: number, json: string): void;
+  saveSlot(slot: number, json: string): Promise<void>;
+  flush(): Promise<void>;
 }
+
+export type SaveStoreOperation =
+  | "load-prefs"
+  | "save-prefs"
+  | "load-slot"
+  | "save-slot"
+  | "flush";
+
+export class SaveStoreError extends Error {
+  readonly operation: SaveStoreOperation;
+  readonly slot: number | null;
+
+  constructor(
+    operation: SaveStoreOperation,
+    message: string,
+    options: { slot?: number; cause?: unknown } = {},
+  ) {
+    super(message, { cause: options.cause });
+    this.name = "SaveStoreError";
+    this.operation = operation;
+    this.slot = options.slot ?? null;
+  }
+}
+
+export type StorageLike = Pick<Storage, "getItem" | "setItem">;
 
 export const PREFS_KEY = "moonsight/prefs";
 export const SAVE_KEY = (slot: number) => `moonsight/save/${slot}`;
@@ -17,44 +43,64 @@ export class MemorySaveStore implements SaveStore {
   loadPrefs(): string | null {
     return this.prefs;
   }
-  savePrefs(json: string): void {
+  async savePrefs(json: string): Promise<void> {
     this.prefs = json;
   }
   loadSlot(slot: number): string | null {
     return this.slots.get(slot) ?? null;
   }
-  saveSlot(slot: number, json: string): void {
+  async saveSlot(slot: number, json: string): Promise<void> {
     this.slots.set(slot, json);
   }
+
+  async flush(): Promise<void> {}
 }
 
 export class WebSaveStore implements SaveStore {
+  constructor(private readonly storage: StorageLike = localStorage) {}
+
   loadPrefs(): string | null {
     try {
-      return localStorage.getItem(PREFS_KEY);
-    } catch {
-      return null;
+      return this.storage.getItem(PREFS_KEY);
+    } catch (cause) {
+      throw new SaveStoreError("load-prefs", "Unable to read preferences", {
+        cause,
+      });
     }
   }
-  savePrefs(json: string): void {
+
+  async savePrefs(json: string): Promise<void> {
     try {
-      if (json && json.length) localStorage.setItem(PREFS_KEY, json);
-    } catch {
-      console.error("[moonsight] savePrefs failed");
+      if (json && json.length) this.storage.setItem(PREFS_KEY, json);
+    } catch (cause) {
+      throw new SaveStoreError("save-prefs", "Unable to save preferences", {
+        cause,
+      });
     }
   }
+
   loadSlot(slot: number): string | null {
     try {
-      return localStorage.getItem(SAVE_KEY(slot));
-    } catch {
-      return null;
+      return this.storage.getItem(SAVE_KEY(slot));
+    } catch (cause) {
+      throw new SaveStoreError("load-slot", `Unable to read save slot ${slot}`, {
+        slot,
+        cause,
+      });
     }
   }
-  saveSlot(slot: number, json: string): void {
+
+  async saveSlot(slot: number, json: string): Promise<void> {
     try {
-      if (json && json.length) localStorage.setItem(SAVE_KEY(slot), json);
-    } catch {
-      console.error("[moonsight] saveSlot failed", slot);
+      if (json && json.length) this.storage.setItem(SAVE_KEY(slot), json);
+    } catch (cause) {
+      throw new SaveStoreError("save-slot", `Unable to save slot ${slot}`, {
+        slot,
+        cause,
+      });
     }
   }
+
+  /** localStorage.setItem is synchronous; returning marks the durable boundary. */
+  async flush(): Promise<void> {}
 }
