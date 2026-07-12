@@ -12,6 +12,69 @@ test "register sets hud and six modals" {
 }
 
 ///|
+fn count_buttons(node : @runtime.UiNode, label : String) -> Int {
+  match node {
+    @runtime.UiNode::Button(label=l, ..) => if l == label { 1 } else { 0 }
+    @runtime.UiNode::VBox(children~, ..) |
+    @runtime.UiNode::HBox(children~, ..) |
+    @runtime.UiNode::Fixed(children~, ..) |
+    @runtime.UiNode::ScrollView(children~, ..) => {
+      let mut total = 0
+      for child in children {
+        total = total + count_buttons(child, label)
+      }
+      total
+    }
+    _ => 0
+  }
+}
+
+///|
+test "save_load honors a one-slot registration" {
+  let app = @runtime.UiApp::new()
+  register(app, save_slots=1)
+  guard app.modals.get("save_load") is Some(root) else {
+    fail("save_load modal missing")
+  }
+  assert_eq(count_buttons(root, "Save"), 1)
+  assert_eq(count_buttons(root, "Load"), 1)
+  assert_eq(count_buttons(root, "Back"), 1)
+  let rt = @runtime.UiRuntime::from_app(app, save_slots=1)
+  rt.show_modal("save_load", mode="save")
+  let bind = {
+    ..@runtime.UiBindCtx::empty(),
+    occupied: [false],
+    modal_mode: Some("save"),
+  }
+  assert_eq(rt.focusables_top(bind).length(), 2)
+}
+
+///|
+test "save_load honors twenty slots and scrolls the slot list" {
+  let app = @runtime.UiApp::new()
+  register(app, save_slots=20)
+  guard app.modals.get("save_load") is Some(root) else {
+    fail("save_load modal missing")
+  }
+  assert_eq(count_buttons(root, "Save"), 20)
+  assert_eq(count_buttons(root, "Load"), 20)
+  assert_eq(count_buttons(root, "Back"), 1)
+  let rt = @runtime.UiRuntime::from_app(app, save_slots=20)
+  rt.show_modal("save_load", mode="save")
+  let occupied : Array[Bool] = []
+  for _ in 0..<20 {
+    occupied.push(false)
+  }
+  let bind = {
+    ..@runtime.UiBindCtx::empty(),
+    occupied,
+    modal_mode: Some("save"),
+  }
+  ignore(rt.paint_modal(canvas_w=1920.0, canvas_h=1080.0, bind~))
+  assert_true(rt.scroll_max() > 0.0)
+}
+
+///|
 test "title start_game reaches playing" {
   let src =
     #|- scene "entrypoint"
