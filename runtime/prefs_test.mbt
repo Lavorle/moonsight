@@ -109,10 +109,12 @@ test "prefs from_json missing fields use defaults and clamp" {
 
 ///|
 test "prefs locale parses backward-compatibly and rejects invalid tags" {
-  let valid = #|{"locale":"zh-Hans-CN"}
+  let valid =
+    #|{"locale":"zh-Hans-CN"}
   let p = Prefs::from_json_string(valid)
   assert_eq(p.locale, "zh-Hans-CN")
-  let invalid = #|{"locale":"zh_cn"}
+  let invalid =
+    #|{"locale":"zh_cn"}
   try ignore(Prefs::from_json_string(invalid)) catch {
     _ => ()
   } noraise {
@@ -130,6 +132,11 @@ test "formal locale profile and resolver are deterministic" {
   assert_true(!is_formal_locale("zh_cn"))
   assert_eq(resolve_locale("zh-CN", ["en", "zh-CN"], "en"), "zh-CN")
   assert_eq(resolve_locale("fr", ["en", "zh-CN"], "en"), "en")
+  try ignore(resolve_locale("en", ["en", "bad_tag"], "en")) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected invalid supported locale error")
+  }
 }
 
 ///|

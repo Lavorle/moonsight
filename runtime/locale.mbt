@@ -67,6 +67,7 @@ pub fn resolve_locale(
     fail("invalid default locale: \{default_locale}")
   }
   let mut default_supported = false
+  let mut requested_supported = false
   for locale in supported {
     if !is_formal_locale(locale) {
       fail("invalid supported locale: \{locale}")
@@ -75,11 +76,15 @@ pub fn resolve_locale(
       default_supported = true
     }
     if locale == requested {
-      return locale
+      requested_supported = true
     }
   }
   if !default_supported {
     fail("default locale is not supported: \{default_locale}")
   }
-  default_locale
+  if requested_supported {
+    requested
+  } else {
+    default_locale
+  }
 }
