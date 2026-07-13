@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BENCHMARK = ROOT / "scripts" / "benchmark_report.py"
 REPRO = ROOT / "scripts" / "compare_reproducible_builds.py"
 RC = ROOT / "scripts" / "rc_manifest.py"
-EVIDENCE_VERIFIER = ROOT / "scripts" / "verify_release_evidence.py"
+EVIDENCE_TEMPLATE = ROOT / "scripts" / "release-evidence-template.json"
 SHA = "1" * 40
 
 
@@ -163,45 +163,80 @@ class ReproducibilityTests(unittest.TestCase):
 
 
 class RcManifestTests(unittest.TestCase):
+    def write_inputs(
+        self,
+        root: Path,
+        *,
+        benchmark_outcome: str = "PASS",
+    ) -> tuple[Path, Path, Path, Path]:
+        benchmark = root / "benchmark.json"
+        repro = root / "repro.json"
+        metadata = root / "metadata.json"
+        output = root / "rc.json"
+        benchmark.write_text(
+            json.dumps(
+                {
+                    "outcome": benchmark_outcome,
+                    "input_sha256": "a" * 64,
+                }
+            ),
+            encoding="utf-8",
+        )
+        repro.write_text(
+            json.dumps(
+                {
+                    "outcome": "PASS",
+                    "input_sha256": "b" * 64,
+                    "artifacts": [
+                        {
+                            "path": "MoonSight-v1.0.0-web-x86_64.zip",
+                            "left_size_bytes": 123456,
+                            "right_size_bytes": 123456,
+                            "left_raw_sha256": "c" * 64,
+                            "right_raw_sha256": "c" * 64,
+                            "left_normalized_sha256": "c" * 64,
+                            "right_normalized_sha256": "c" * 64,
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        metadata.write_text(
+            json.dumps(
+                {
+                    "attempt_id": "rc-20260713T030000Z-111111111111",
+                    "clean_tree": True,
+                    "built_at_utc": "2026-07-13T03:00:00Z",
+                    "build_host": "release-builder.example",
+                    "toolchains": {
+                        "moon": "0.6.29+3f4c5d6",
+                        "node": "24.4.0",
+                        "rustc": "1.88.0",
+                        "tauri_cli": "2.7.1",
+                    },
+                    "system": {
+                        "build_os": "Ubuntu 24.04.2 LTS",
+                        "kernel": "6.8.0-63-generic",
+                        "fedora": "Fedora Linux 42",
+                        "arch": "Arch Linux 2026.07.01",
+                    },
+                    "validation_targets": {
+                        "chromium": "138.0.7204.92",
+                        "firefox": "140.0.4",
+                        "webkitgtk": "2.48.3",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return benchmark, repro, metadata, output
+
     def test_generation_preserves_blocked_benchmark_status(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            benchmark = root / "benchmark.json"
-            repro = root / "repro.json"
-            metadata = root / "metadata.json"
-            output = root / "rc.json"
-            benchmark.write_text(
-                json.dumps({"outcome": "BLOCKED", "reason": "retained samples unavailable"}),
-                encoding="utf-8",
-            )
-            repro.write_text(
-                json.dumps(
-                    {
-                        "outcome": "PASS",
-                        "artifacts": [
-                            {
-                                "path": "game.msb",
-                                "left_raw_sha256": "c" * 64,
-                                "right_raw_sha256": "c" * 64,
-                                "left_normalized_sha256": "c" * 64,
-                                "right_normalized_sha256": "c" * 64,
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            metadata.write_text(
-                json.dumps(
-                    {
-                        "toolchains": {"python": "3"},
-                        "locks": {"moon.mod": "b" * 64},
-                        "environment": {"os": "test"},
-                        "commands": [{"command": "test", "output": "evidence/test.txt"}],
-                        "authorized_operator": "release-owner",
-                    }
-                ),
-                encoding="utf-8",
+            benchmark, repro, metadata, output = self.write_inputs(
+                root, benchmark_outcome="BLOCKED"
             )
 
             result = run_script(
@@ -222,47 +257,69 @@ class RcManifestTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             manifest = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(manifest["automated_checks"][0]["status"], "BLOCKED")
-            self.assertEqual(manifest["automated_outcome"], "BLOCKED")
-            validation = run_script(EVIDENCE_VERIFIER, str(output))
-            self.assertEqual(validation.returncode, 0, validation.stderr)
+            self.assertNotIn("external_checks", manifest)
 
-    def test_generation_is_create_only_and_never_claims_external_gates(self) -> None:
+    def test_generation_is_schema_v2_candidate_identity_without_external_results(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            benchmark = root / "benchmark.json"
-            repro = root / "repro.json"
-            metadata = root / "metadata.json"
-            output = root / "rc.json"
-            benchmark.write_text(json.dumps({"outcome": "PASS", "input_sha256": "a" * 64}), encoding="utf-8")
-            repro.write_text(
-                json.dumps(
-                    {
-                        "outcome": "PASS",
-                        "artifacts": [
-                            {
-                                "path": "game.msb",
-                                "left_raw_sha256": "c" * 64,
-                                "right_raw_sha256": "c" * 64,
-                                "left_normalized_sha256": "c" * 64,
-                                "right_normalized_sha256": "c" * 64,
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
+            benchmark, repro, metadata, output = self.write_inputs(root)
+
+            first = run_script(
+                RC,
+                "generate",
+                "--candidate",
+                SHA,
+                "--benchmark",
+                str(benchmark),
+                "--reproducibility",
+                str(repro),
+                "--metadata",
+                str(metadata),
+                "--output",
+                str(output),
             )
-            metadata.write_text(
-                json.dumps(
-                    {
-                        "toolchains": {"python": "3"},
-                        "locks": {"moon.mod": "b" * 64},
-                        "environment": {"os": "test"},
-                        "commands": [{"command": "test", "output": "evidence/test.txt"}],
-                        "authorized_operator": "release-owner",
-                    }
-                ),
-                encoding="utf-8",
+            self.assertEqual(first.returncode, 0, first.stderr)
+            manifest = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["schema_version"], 2)
+            self.assertEqual(manifest["attempt_id"], "rc-20260713T030000Z-111111111111")
+            self.assertEqual(
+                manifest["candidate"],
+                {
+                    "version": "v1.0.0",
+                    "commit": SHA,
+                    "architecture": "x86_64",
+                    "clean_tree": True,
+                    "built_at_utc": "2026-07-13T03:00:00Z",
+                    "build_host": "release-builder.example",
+                    "artifacts": [
+                        {
+                            "path": "MoonSight-v1.0.0-web-x86_64.zip",
+                            "size_bytes": 123456,
+                            "sha256": "c" * 64,
+                        }
+                    ],
+                },
             )
+            self.assertEqual(manifest["toolchains"]["moon"], "0.6.29+3f4c5d6")
+            self.assertEqual(manifest["system"]["fedora"], "Fedora Linux 42")
+            self.assertEqual(manifest["system"]["arch"], "Arch Linux 2026.07.01")
+            self.assertEqual(
+                manifest["validation_targets"]["chromium"], "138.0.7204.92"
+            )
+            self.assertEqual(manifest["reproducibility"]["input_sha256"], "b" * 64)
+            self.assertEqual(manifest["reproducibility"]["report"]["path"], str(repro))
+            self.assertRegex(
+                manifest["reproducibility"]["report"]["sha256"],
+                r"^[0-9a-f]{64}$",
+            )
+            self.assertEqual(len(manifest["required_evidence_ids"]), 13)
+            self.assertNotIn("external_checks", manifest)
+            self.assertNotIn("release_authorized", manifest)
+
+    def test_generation_is_create_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            benchmark, repro, metadata, output = self.write_inputs(root)
 
             first = run_script(
                 RC,
@@ -295,11 +352,75 @@ class RcManifestTests(unittest.TestCase):
 
             self.assertEqual(first.returncode, 0, first.stderr)
             self.assertNotEqual(second.returncode, 0)
-            manifest = json.loads(output.read_text(encoding="utf-8"))
-            self.assertFalse(manifest["release_authorized"])
-            self.assertTrue(all(item["status"] == "NOT_RUN" for item in manifest["external_checks"].values()))
-            validation = run_script(EVIDENCE_VERIFIER, str(output))
-            self.assertEqual(validation.returncode, 0, validation.stderr)
+            self.assertIn("immutable RC manifest already exists", second.stderr)
+
+    def test_generation_requires_complete_candidate_identity_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            benchmark, repro, metadata, output = self.write_inputs(root)
+            data = json.loads(metadata.read_text(encoding="utf-8"))
+            del data["attempt_id"]
+            del data["validation_targets"]["firefox"]
+            metadata.write_text(json.dumps(data), encoding="utf-8")
+
+            result = run_script(
+                RC,
+                "generate",
+                "--candidate",
+                SHA,
+                "--benchmark",
+                str(benchmark),
+                "--reproducibility",
+                str(repro),
+                "--metadata",
+                str(metadata),
+                "--output",
+                str(output),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("metadata.attempt_id must be a non-empty string", result.stderr)
+            self.assertIn(
+                "metadata.validation_targets.firefox must be a non-empty string",
+                result.stderr,
+            )
+
+    def test_release_evidence_template_names_all_public_and_raw_evidence_fields(
+        self,
+    ) -> None:
+        template = json.loads(EVIDENCE_TEMPLATE.read_text(encoding="utf-8"))
+
+        self.assertEqual(template["schema_version"], 1)
+        self.assertIn(template["id"], ("W1-ubuntu-chromium", "REQUIRED_EVIDENCE_ID"))
+        self.assertEqual(template["status"], "NOT_RUN")
+        self.assertRegex(template["candidate_commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(set(template["artifact"]), {"path", "sha256"})
+        self.assertEqual(
+            set(template["environment"]),
+            {
+                "os",
+                "os_version",
+                "kernel",
+                "desktop_environment",
+                "browser_or_webview",
+                "browser_or_webview_version",
+                "gpu",
+                "driver",
+            },
+        )
+        self.assertEqual(
+            set(template["executed_steps"][0]),
+            {"order", "action", "expected", "actual", "result"},
+        )
+        self.assertEqual(
+            set(template["attachments"]),
+            {"logs", "screenshots", "video"},
+        )
+        self.assertIn("save", template["redacted_inspection"])
+        self.assertIn("localStorage", template["redacted_inspection"])
+        self.assertRegex(template["public_evidence_sha256"], r"^[0-9a-f]{64}$")
+        self.assertRegex(template["raw_evidence_sha256"], r"^[0-9a-f]{64}$")
+        self.assertTrue(template["redaction_statement"])
 
     def test_freeze_guard_rejects_tracked_diff_after_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

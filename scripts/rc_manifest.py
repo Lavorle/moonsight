@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -10,6 +9,13 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+from release_schema import (
+    REQUIRED_EVIDENCE_IDS,
+    read_object,
+    sha256_file,
+    validate_sha256,
+)
 
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -31,18 +37,29 @@ def combined_status(*statuses: str) -> str:
     return "NOT_RUN"
 
 
-def read_json(path: Path, label: str) -> dict[str, Any]:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError(f"cannot read {label}: {error}") from error
-    if not isinstance(data, dict):
-        raise ValueError(f"{label} must be an object")
-    return data
+def require_non_empty_string(
+    value: Any,
+    path: str,
+    errors: list[str],
+) -> str:
+    if not isinstance(value, str) or not value:
+        errors.append(f"{path} must be a non-empty string")
+        return ""
+    return value
 
 
-def file_digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def require_version_map(
+    value: Any,
+    path: str,
+    required_keys: tuple[str, ...],
+    errors: list[str],
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        errors.append(f"{path} must be an object")
+        return {}
+    for key in required_keys:
+        require_non_empty_string(value.get(key), f"{path}.{key}", errors)
+    return value
 
 
 def generate(args: argparse.Namespace) -> int:
@@ -50,35 +67,55 @@ def generate(args: argparse.Namespace) -> int:
         print("error: candidate must be a full 40-character lowercase Git SHA", file=sys.stderr)
         return 1
     try:
-        benchmark = read_json(args.benchmark, "benchmark report")
-        repro = read_json(args.reproducibility, "reproducibility report")
-        metadata = read_json(args.metadata, "RC metadata")
+        benchmark = read_object(args.benchmark, "benchmark report")
+        repro = read_object(args.reproducibility, "reproducibility report")
+        metadata = read_object(args.metadata, "RC metadata")
     except ValueError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
     errors: list[str] = []
-    for field in ("toolchains", "locks", "environment"):
-        if not isinstance(metadata.get(field), dict) or not metadata[field]:
-            errors.append(f"metadata.{field} must be a non-empty object")
-    if not isinstance(metadata.get("commands"), list) or not metadata["commands"]:
-        errors.append("metadata.commands must be a non-empty array")
-    if not isinstance(metadata.get("authorized_operator"), str) or not metadata["authorized_operator"]:
-        errors.append("metadata.authorized_operator must be a non-empty string")
+    require_non_empty_string(metadata.get("attempt_id"), "metadata.attempt_id", errors)
+    if metadata.get("clean_tree") is not True:
+        errors.append("metadata.clean_tree must be true")
+    require_non_empty_string(metadata.get("built_at_utc"), "metadata.built_at_utc", errors)
+    require_non_empty_string(metadata.get("build_host"), "metadata.build_host", errors)
+    require_version_map(
+        metadata.get("toolchains"),
+        "metadata.toolchains",
+        ("moon", "node", "rustc", "tauri_cli"),
+        errors,
+    )
+    require_version_map(
+        metadata.get("system"),
+        "metadata.system",
+        ("build_os", "kernel", "fedora", "arch"),
+        errors,
+    )
+    require_version_map(
+        metadata.get("validation_targets"),
+        "metadata.validation_targets",
+        ("chromium", "firefox", "webkitgtk"),
+        errors,
+    )
+    validate_sha256(repro.get("input_sha256"), "reproducibility.input_sha256", errors)
+    repro_artifacts = repro.get("artifacts")
+    if not isinstance(repro_artifacts, list) or not repro_artifacts:
+        errors.append("reproducibility.artifacts must be a non-empty array")
+        repro_artifacts = []
+    for index, item in enumerate(repro_artifacts):
+        path = f"reproducibility.artifacts[{index}]"
+        if not isinstance(item, dict):
+            errors.append(f"{path} must be an object")
+            continue
+        require_non_empty_string(item.get("path"), f"{path}.path", errors)
+        size = item.get("left_size_bytes")
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+            errors.append(f"{path}.left_size_bytes must be a non-negative integer")
+        validate_sha256(item.get("left_raw_sha256"), f"{path}.left_raw_sha256", errors)
     if errors:
         for error in errors:
             print(f"error: {error}", file=sys.stderr)
         return 1
-    reproducibility_artifacts = [
-        {
-            "path": item["path"],
-            "left_raw_sha256": item["left_raw_sha256"],
-            "right_raw_sha256": item["right_raw_sha256"],
-            "left_normalized_sha256": item["left_normalized_sha256"],
-            "right_normalized_sha256": item["right_normalized_sha256"],
-            **({"normalization_id": item["normalization_id"]} if "normalization_id" in item else {}),
-        }
-        for item in repro.get("artifacts", [])
-    ]
     benchmark_status = check_status(benchmark)
     reproducibility_status = check_status(repro)
     automated_outcome = combined_status(benchmark_status, reproducibility_status)
@@ -86,49 +123,54 @@ def generate(args: argparse.Namespace) -> int:
     candidate_artifacts = [
         {
             "path": item["path"],
+            "size_bytes": item["left_size_bytes"],
             "sha256": item["left_raw_sha256"],
-            "normalized_sha256": item["left_normalized_sha256"],
         }
-        for item in reproducibility_artifacts
+        for item in repro_artifacts
+    ]
+    reproducibility_reference = {
+        "input_sha256": repro["input_sha256"],
+        "report": {
+            "path": str(args.reproducibility),
+            "sha256": sha256_file(args.reproducibility),
+        },
+    }
+    automated_checks = [
+        {
+            "id": "benchmark",
+            "status": benchmark_status,
+            "input_sha256": benchmark.get("input_sha256"),
+            "report": {
+                "path": str(args.benchmark),
+                "sha256": sha256_file(args.benchmark),
+            },
+        },
+        {
+            "id": "reproducibility",
+            "status": reproducibility_status,
+            "input_sha256": repro["input_sha256"],
+            "report": reproducibility_reference["report"],
+        },
     ]
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "attempt_id": metadata["attempt_id"],
         "candidate": {
+            "version": "v1.0.0",
             "commit": args.candidate,
-            "toolchains": metadata["toolchains"],
-            "locks": metadata["locks"],
+            "architecture": "x86_64",
+            "clean_tree": metadata["clean_tree"],
+            "built_at_utc": metadata["built_at_utc"],
+            "build_host": metadata["build_host"],
             "artifacts": candidate_artifacts,
         },
-        "environment": metadata["environment"],
-        "commands": metadata["commands"],
-        "authorized_operator": metadata["authorized_operator"],
-        "evidence_inputs": {
-            "benchmark": {"path": str(args.benchmark), "sha256": file_digest(args.benchmark)},
-            "reproducibility": {"path": str(args.reproducibility), "sha256": file_digest(args.reproducibility)},
-        },
-        "artifact_digests": reproducibility_artifacts,
-        "generated_files": metadata.get("generated_files", []),
-        "automated_checks": [
-            {
-                "name": "Formal 1.0 benchmark gates",
-                "status": benchmark_status,
-                "commit": args.candidate,
-                "output": str(args.benchmark),
-            },
-            {
-                "name": "two-build package reproducibility",
-                "status": reproducibility_status,
-                "commit": args.candidate,
-                "output": str(args.reproducibility),
-            },
-        ],
-        "automated_outcome": automated_outcome,
-        "external_checks": {
-            name: {"status": "NOT_RUN", "commit": args.candidate, "artifacts": []}
-            for name in ("W1", "D1", "C1")
-        },
-        "release_authorized": False,
-        "notice": "Automated local evidence does not authorize W1, D1, C1, tagging, publication, or release.",
+        "toolchains": metadata["toolchains"],
+        "system": metadata["system"],
+        "reproducibility": reproducibility_reference,
+        "validation_targets": metadata["validation_targets"],
+        "required_evidence_ids": list(REQUIRED_EVIDENCE_IDS),
+        "automated_checks": automated_checks,
+        "notice": "Candidate identity does not authorize publication.",
     }
     encoded = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
     try:
