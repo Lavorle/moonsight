@@ -18,4 +18,9 @@ if test -n "${MOONSIGHT_RELEASE_VERSION:-}"; then
   esac
   TAURI_ARGS+=(--config "{\"version\":\"${MOONSIGHT_RELEASE_VERSION#v}\"}")
 fi
+# linuxdeploy ships an old strip that rejects modern ELF RELR (.relr.dyn) sections
+# on current Fedora/Arch toolchains; NO_STRIP avoids that hard failure.
+# APPIMAGE_EXTRACT_AND_RUN avoids fuse-mount requirements for nested AppImages.
+export NO_STRIP="${NO_STRIP:-true}"
+export APPIMAGE_EXTRACT_AND_RUN="${APPIMAGE_EXTRACT_AND_RUN:-1}"
 npm run tauri -- "${TAURI_ARGS[@]}"

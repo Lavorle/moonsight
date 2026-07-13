@@ -49,6 +49,16 @@ trap 'rm -rf "$STAGING"' EXIT
 COMMIT="$(git rev-parse HEAD)"
 SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
 ATTEMPT_ID="rc-$(date -u +%Y%m%dT%H%M%SZ)-${COMMIT:0:12}"
+# Propagate AppImage packaging env for both build sets (see publish-desktop.sh).
+export NO_STRIP="${NO_STRIP:-true}"
+export APPIMAGE_EXTRACT_AND_RUN="${APPIMAGE_EXTRACT_AND_RUN:-1}"
+# linuxdeploy opens many shared-library FDs; low soft limits fail packaging mid-run.
+if command -v ulimit >/dev/null 2>&1; then
+  soft="$(ulimit -n 2>/dev/null || echo 0)"
+  if test "${soft:-0}" -lt 8192 2>/dev/null; then
+    ulimit -n 65536 2>/dev/null || ulimit -n 8192 2>/dev/null || true
+  fi
+fi
 
 zip_web_dist() {
   local source_dir="$1"
