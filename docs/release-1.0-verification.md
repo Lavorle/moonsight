@@ -3,12 +3,14 @@
 This document is the durable evidence template for the release-critical 1.0
 gates. It intentionally distinguishes automated checks from real-environment
 play evidence. A build, static asset smoke, or headless browser result is not a
-substitute for W1, D1, or C1.
+substitute for W1, D1, or C1. Repository CI never claims W1/D1/C1 PASS.
 
 ## Current release status
 
 **BLOCKED** — no immutable release-candidate commit has complete W1, D1, and C1
-evidence yet.
+evidence yet. Overall status remains **BLOCKED** until a real candidate is
+selected and Ops completes retained external evidence for every required ID
+below.
 
 | Field | Value |
 |---|---|
@@ -25,9 +27,82 @@ evidence yet.
 | Completed (UTC) | `NOT RUN` |
 | Overall result | **BLOCKED** |
 
-Do not replace `NOT RUN`, `BLOCKED`, or `FAIL` with `PASS` unless the recorded
-steps were executed against the exact candidate commit and the referenced
-artifacts are retained.
+Do not replace `NOT RUN`, `BLOCKED`, `NOT SELECTED`, or `FAIL` with `PASS`
+unless the recorded steps were executed against the exact candidate commit and
+the referenced artifacts are retained.
+
+## Required external evidence IDs (13)
+
+Formal 1.0 requires retained PASS records for **exactly** these IDs against one
+immutable candidate SHA (order matches `scripts/release_schema.py`):
+
+```text
+W1-ubuntu-chromium
+W1-ubuntu-firefox
+W1-fedora-chromium
+W1-fedora-firefox
+W1-arch-chromium
+W1-arch-firefox
+D1-ubuntu-appimage
+D1-ubuntu-deb
+D1-fedora-appimage
+D1-fedora-rpm
+D1-arch-appimage
+C1-web
+C1-desktop
+```
+
+| ID | Surface (summary) | Candidate result |
+|---|---|---|
+| `W1-ubuntu-chromium` | Ubuntu 24.04 + Chromium stable + Web ZIP | NOT RUN |
+| `W1-ubuntu-firefox` | Ubuntu 24.04 + Firefox stable + Web ZIP | NOT RUN |
+| `W1-fedora-chromium` | Fedora current stable + Chromium + Web ZIP | NOT RUN |
+| `W1-fedora-firefox` | Fedora current stable + Firefox + Web ZIP | NOT RUN |
+| `W1-arch-chromium` | Arch current + Chromium + Web ZIP | NOT RUN |
+| `W1-arch-firefox` | Arch current + Firefox + Web ZIP | NOT RUN |
+| `D1-ubuntu-appimage` | Ubuntu + AppImage desktop persistence | NOT RUN |
+| `D1-ubuntu-deb` | Ubuntu + deb desktop persistence | NOT RUN |
+| `D1-fedora-appimage` | Fedora + AppImage desktop persistence | NOT RUN |
+| `D1-fedora-rpm` | Fedora + rpm desktop persistence | NOT RUN |
+| `D1-arch-appimage` | Arch + AppImage desktop persistence | NOT RUN |
+| `C1-web` | Representative demo completion (web) | NOT RUN |
+| `C1-desktop` | Representative demo completion (desktop) | NOT RUN |
+
+## Public release artifacts
+
+First-candidate package set (names match `build_release_artifacts.sh` /
+`EXPECTED_RELEASE_ARTIFACTS`):
+
+| Artifact | Role |
+|---|---|
+| `moonsight-web-x86_64-v1.0.0.zip` | Web package |
+| `moonsight-linux-x86_64-v1.0.0.AppImage` | Desktop AppImage |
+| `moonsight-linux-x86_64-v1.0.0.deb` | Desktop deb |
+| `moonsight-linux-x86_64-v1.0.0.rpm` | Desktop rpm |
+| `SHA256SUMS` | Canonical digests for the four packages |
+
+Artifacts are delivered via **GitHub Release** attachments, not GitHub Pages.
+
+## External evidence lifecycle
+
+Evidence is collected **outside** the immutable candidate commit. Sequence:
+
+1. **Freeze** — select candidate SHA; `rc_manifest.py guard` rejects dirty tree
+   or mismatched `HEAD`.
+2. **Records outside commit** — operators write the 13 evidence records (and
+   related logs/screenshots) in an external evidence directory; untracked files
+   must not alter the candidate commit.
+3. **`release_evidence.py build-index`** — build the public evidence index from
+   candidate + records directory.
+4. **`verify_release_evidence.py`** — produce the Final Gate Report
+   (`final-gate.json`); technical readiness must be true before publication.
+5. **Operator secondary confirm** — human review of gate, digests, and notes;
+   secondary confirmation is not CI.
+6. **Publisher** — dry-run `publish_github_release.py` first; execute only with
+   `--execute --authorize v1.0.0` after Final Gate PASS and confirmation.
+
+Tool commands and dry-run/execute publisher examples:
+[`formal-1.0-rc-tooling.md`](./formal-1.0-rc-tooling.md).
 
 ## Automated release matrix
 
@@ -54,10 +129,14 @@ two-build reproducibility, and immutable RC-manifest procedures are defined in
 | Reproducibility | two clean builds compared with the reviewed normalization allowlist | NOT RUN |
 | Benchmarks | five warm/cold runs, catalog/rollback memory, rendered-frame regression limits | NOT RUN |
 | RC manifest | exact SHA, toolchains, locks, environment, commands, report/artifact digests; guard passes | NOT RUN |
+| Release tooling | `python3 -m unittest discover -s scripts -p 'test_*.py'` (includes publisher tests) | NOT RUN |
 | Docs | typecheck and production build | NOT RUN |
 | Desktop Rust | format, check, tests | NOT RUN |
 
 **Candidate CI run:** `NOT RUN`
+
+CI green proves tooling and automated gates only. It does **not** authorize
+W1/D1/C1 PASS, a tag, or a published GitHub Release.
 
 ### Retained automated evidence
 
@@ -67,10 +146,15 @@ two-build reproducibility, and immutable RC-manifest procedures are defined in
 | Benchmark report | `NOT RUN` | `NOT RUN` | `NOT RUN` | NOT RUN |
 | Reproducibility comparison | `NOT RUN` | `NOT RUN` | `NOT RUN` | NOT RUN |
 | RC manifest generation | `NOT RUN` | `NOT RUN` | `NOT RUN` | NOT RUN |
+| Evidence index | `NOT RUN` | `NOT RUN` | `NOT RUN` | NOT RUN |
+| Final gate | `NOT RUN` | `NOT RUN` | `NOT RUN` | NOT RUN |
 
 ## W1 — WebGPU browser play and web persistence
 
 **Status: NOT RUN**
+
+Required IDs: `W1-ubuntu-chromium`, `W1-ubuntu-firefox`, `W1-fedora-chromium`,
+`W1-fedora-firefox`, `W1-arch-chromium`, `W1-arch-firefox`.
 
 ### Environment
 
@@ -87,7 +171,7 @@ two-build reproducibility, and immutable RC-manifest procedures are defined in
 
 ### Steps and expected results
 
-1. Serve the candidate `dist/demo` over HTTP and open it in a browser with a
+1. Serve the candidate web package over HTTP and open it in a browser with a
    real WebGPU adapter.
 2. Confirm title -> Start -> advance works without the error panel.
 3. Save to a slot, record the visible slot metadata, and reload the page.
@@ -113,6 +197,9 @@ two-build reproducibility, and immutable RC-manifest procedures are defined in
 ## D1 — Tauri full-exit persistence
 
 **Status: NOT RUN**
+
+Required IDs: `D1-ubuntu-appimage`, `D1-ubuntu-deb`, `D1-fedora-appimage`,
+`D1-fedora-rpm`, `D1-arch-appimage`.
 
 ### Environment
 
@@ -149,6 +236,8 @@ two-build reproducibility, and immutable RC-manifest procedures are defined in
 
 **Status: NOT RUN**
 
+Required IDs: `C1-web`, `C1-desktop`.
+
 ### Environment
 
 - Candidate commit:
@@ -180,7 +269,8 @@ two-build reproducibility, and immutable RC-manifest procedures are defined in
 
 ## Release decision
 
-Formal 1.0 can be marked ready only when the automated matrix is green and W1,
-D1, and C1 are all `PASS` for the same immutable candidate commit. Any `FAIL`,
-`BLOCKED`, `NOT RUN`, mismatched SHA, or missing artifact keeps the release
-blocked.
+Formal 1.0 can be marked ready only when the automated matrix is green and all
+13 required external evidence IDs are `PASS` for the same immutable candidate
+commit, the Final Gate Report is retained, and a human secondary confirmation
+authorizes publication. Any `FAIL`, `BLOCKED`, `NOT RUN`, mismatched SHA, or
+missing artifact keeps the release blocked.
