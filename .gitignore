@@ -10,3 +10,5 @@ __pycache__/
 host_desktop/tauri/src-tauri/target/
 
 dist/
+
+.worktrees/
