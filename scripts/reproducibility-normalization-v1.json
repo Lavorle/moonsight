@@ -1,4 +1,79 @@
 {
   "schema_version": 1,
-  "entries": []
+  "desktop_packages": [
+    {
+      "id": "appimage-extracted-snapshot-v1",
+      "artifact_name": "moonsight-linux-x86_64-v1.0.0.AppImage",
+      "format": "appimage",
+      "required_identity": {
+        "app_name": "MoonSight",
+        "app_exec": "moonsight",
+        "version": "1.0.0",
+        "architecture": "x86_64"
+      },
+      "normalizable_metadata_fields": [
+        "build_id"
+      ],
+      "rationale": "Compare the complete AppDir application payload plus typed desktop metadata, embedded version, executable identity, and ELF architecture.",
+      "owner": "release engineering"
+    },
+    {
+      "id": "deb-package-snapshot-v1",
+      "artifact_name": "moonsight-linux-x86_64-v1.0.0.deb",
+      "format": "deb",
+      "required_identity": {
+        "package_name": "moonsight",
+        "version": "1.0.0",
+        "architecture": "amd64"
+      },
+      "normalizable_metadata_fields": [],
+      "rationale": "Compare every Debian data/control payload entry and all stable control identity fields; ar and tar timestamps are structural container metadata.",
+      "owner": "release engineering"
+    },
+    {
+      "id": "rpm-package-snapshot-v1",
+      "artifact_name": "moonsight-linux-x86_64-v1.0.0.rpm",
+      "format": "rpm",
+      "required_identity": {
+        "package_name": "moonsight",
+        "version": "1.0.0",
+        "architecture": "x86_64"
+      },
+      "normalizable_metadata_fields": [
+        "build_time",
+        "build_host"
+      ],
+      "rationale": "Compare the complete RPM cpio payload and stable header identity while normalizing only the explicitly volatile build time and host fields.",
+      "owner": "release engineering"
+    }
+  ],
+  "entries": [
+    {
+      "id": "appimage-build-id-v1",
+      "namespace": "package_metadata",
+      "package_format": "appimage",
+      "field": "build_id",
+      "replacement": "normalized-build-id",
+      "rationale": "AppImage tooling may record a per-build identifier in the desktop metadata; all other desktop metadata and the complete application payload remain exact.",
+      "owner": "release engineering"
+    },
+    {
+      "id": "rpm-build-time-v1",
+      "namespace": "package_metadata",
+      "package_format": "rpm",
+      "field": "build_time",
+      "replacement": "0",
+      "rationale": "RPM records the package build timestamp in its header even when the extracted application snapshot is identical.",
+      "owner": "release engineering"
+    },
+    {
+      "id": "rpm-build-host-v1",
+      "namespace": "package_metadata",
+      "package_format": "rpm",
+      "field": "build_host",
+      "replacement": "normalized-build-host",
+      "rationale": "RPM records the build host in its header; this field does not identify or alter the shipped application.",
+      "owner": "release engineering"
+    }
+  ]
 }

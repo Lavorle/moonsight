@@ -148,7 +148,8 @@ Host 纯色 + 可选 PNG）。作者说明：
 - [`docs/play-input.md`](./docs/play-input.md) — intents、快进按住、wait 门控、履历/确认
 - [`docs/project-layout.md`](./docs/project-layout.md) — 仓库布局与 `moonsight.json`
 - [`docs/formal-1.0-author-guide.md`](./docs/formal-1.0-author-guide.md) — Formal 1.0 ID、catalog、迁移审阅、MSB2、存档 v5、语言切换、rollback 与预算
-- [`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md) — 精确 SHA 发布证据模板
+- [`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md) — 精确 SHA 发布证据模板（13 ID / BLOCKED）
+- [`docs/formal-1.0-rc-tooling.md`](./docs/formal-1.0-rc-tooling.md) — 基准、可复现、RC manifest、证据索引与 publisher 手册
 - [`CHANGELOG.md`](./CHANGELOG.md) — Formal 1.0 跟踪内容摘要
 - [`docs/draw-list-pack.md`](./docs/draw-list-pack.md) — 帧打包格式
 - [`docs/screen-language.md`](./docs/screen-language.md) — 已废弃的 Phase 3 Screen DSL 存档
@@ -266,11 +267,18 @@ Esc 存档 → 重载 → 读档。agent CI 中 **推迟**：无头 Chromium 有
 Formal 1.0 同时跟踪严格完整的双语 catalogs、无文本 fallback 的原子热切换、
 聚合 `EngineLogicalState` rollback、`Checkpointed` / `CompensatableAudio` /
 `Barrier(reason_code)` effect 策略，以及 64 条 / 16 MiB rollback 环。这些是产品
-契约，不代表已经创建 tag、发布或获得授权。仓库 CI 现强制执行格式、全 target 检查与测试、WASM、Host
-测试/类型检查/构建、CLI 正负 fixtures、package smoke、文档以及 desktop Rust
-门禁；但 CI 绿不能替代真实 WebGPU/Tauri/完整样章证据。W1、D1、C1 尚未对同一
-不可变候选 SHA 完成，因此正式 1.0 仍为 **BLOCKED**。执行字段、步骤和当前诚实
-状态见 [`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md)。
+契约，不代表已经创建 tag、发布或获得授权。
+
+**正式支持矩阵（目标平台，非已 PASS 证据）：**
+
+| 维度 | Formal 1.0 支持 |
+|------|-----------------|
+| OS / 架构 | **Linux x86_64** |
+| Web | **Chromium stable** + **Firefox stable**，在 **Ubuntu 24.04**、**Fedora 当前 stable**、**Arch 当前** |
+| Desktop | **AppImage** + **deb** + **rpm**（`moonsight-linux-x86_64-v1.0.0.*`） |
+| 交付 | **GitHub Release** 附件（Web ZIP、桌面包、`SHA256SUMS`）— **不是** GitHub Pages |
+
+外部证据共 13 条 ID（W1×6 / D1×5 / C1×2），须对**同一**不可变候选 SHA 留存 PASS 记录后才可发布。仓库 CI 强制执行格式、全 target 检查与测试、WASM、Host 测试/类型检查/构建、CLI 正负 fixtures、package smoke、发布工具链单元测试（含 `publish_github_release.py` dry-run 路径）、文档以及 desktop Rust 门禁；CI 绿**不能**替代真实 WebGPU / Tauri / 完整样章证据，也**不会**宣称 W1/D1/C1 PASS 或创建 tag。W1、D1、C1 尚未对同一候选完成，正式 1.0 仍为 **BLOCKED**。证据生命周期、制品名与字段见 [`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md)；publisher 与 RC 工具见 [`docs/formal-1.0-rc-tooling.md`](./docs/formal-1.0-rc-tooling.md)。
 
 ### 范围外 / 推迟到 Q5+
 

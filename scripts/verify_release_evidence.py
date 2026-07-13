@@ -3,193 +3,142 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
+import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
-
-SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
-DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-STATUSES = {"PASS", "FAIL", "BLOCKED", "NOT_RUN"}
-EXTERNAL_CHECKS = ("W1", "D1", "C1")
+from rc_manifest import validate_candidate_manifest
+from release_evidence import candidate_commit, validate_evidence_index
+from release_schema import read_object, sha256_file
 
 
-def require_object(value: Any, path: str, errors: list[str]) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        errors.append(f"{path} must be an object")
-        return {}
-    return value
+def validate_technical_readiness(
+    candidate: dict[str, Any], index: dict[str, Any], errors: list[str]
+) -> None:
+    automated_checks = candidate.get("automated_checks")
+    if isinstance(automated_checks, list):
+        for check_index, check in enumerate(automated_checks):
+            if isinstance(check, dict) and check.get("status") != "PASS":
+                errors.append(f"automated_checks[{check_index}].status must be PASS")
+
+    if index.get("aggregate_status") != "PASS":
+        errors.append("index.aggregate_status must be PASS")
+    records = index.get("records")
+    if isinstance(records, list):
+        for record_index, record in enumerate(records):
+            if isinstance(record, dict) and record.get("status") != "PASS":
+                errors.append(f"records[{record_index}].status must be PASS")
 
 
-def require_list(value: Any, path: str, errors: list[str]) -> list[Any]:
-    if not isinstance(value, list):
-        errors.append(f"{path} must be an array")
-        return []
-    return value
-
-
-def require_text(value: Any, path: str, errors: list[str]) -> str:
-    if not isinstance(value, str) or not value:
-        errors.append(f"{path} must be a non-empty string")
-        return ""
-    return value
-
-
-def require_pattern(
-    value: Any, path: str, pattern: re.Pattern[str], errors: list[str]
-) -> str:
-    text = require_text(value, path, errors)
-    if text and pattern.fullmatch(text) is None:
-        errors.append(f"{path} has an invalid format")
-    return text
-
-
-def validate_manifest(data: Any, require_release_ready: bool) -> list[str]:
-    errors: list[str] = []
-    root = require_object(data, "manifest", errors)
-
-    if root.get("schema_version") != 1:
-        errors.append("schema_version must be 1")
-
-    candidate = require_object(root.get("candidate"), "candidate", errors)
-    candidate_commit = require_pattern(
-        candidate.get("commit"), "candidate.commit", SHA_PATTERN, errors
+def git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=False,
     )
 
-    toolchains = require_object(candidate.get("toolchains"), "candidate.toolchains", errors)
-    if not toolchains:
-        errors.append("candidate.toolchains must not be empty")
-    for name, version in toolchains.items():
-        require_text(name, "candidate.toolchains key", errors)
-        require_text(version, f"candidate.toolchains.{name}", errors)
 
-    artifact_digests: dict[str, str] = {}
-    artifacts = require_list(candidate.get("artifacts"), "candidate.artifacts", errors)
-    if not artifacts:
-        errors.append("candidate.artifacts must not be empty")
-    for index, raw_artifact in enumerate(artifacts):
-        path = f"candidate.artifacts[{index}]"
-        artifact = require_object(raw_artifact, path, errors)
-        artifact_path = require_text(artifact.get("path"), f"{path}.path", errors)
-        if artifact_path:
-            if artifact_path in artifact_digests:
-                errors.append(f"{path}.path duplicates {artifact_path}")
-        digest = require_pattern(
-            artifact.get("sha256"), f"{path}.sha256", DIGEST_PATTERN, errors
+def validate_git_state(repo: Path, frozen_commit: str, errors: list[str]) -> None:
+    head = git(repo, "rev-parse", "HEAD")
+    if head.returncode != 0:
+        errors.append(f"cannot resolve repository HEAD: {head.stderr.strip()}")
+    elif frozen_commit and head.stdout.strip() != frozen_commit:
+        errors.append("repository HEAD must equal candidate commit")
+
+    status = git(repo, "status", "--porcelain=v1")
+    if status.returncode != 0:
+        errors.append(f"cannot inspect repository worktree: {status.stderr.strip()}")
+    elif status.stdout:
+        errors.append("repository worktree must be clean")
+
+    tag = git(repo, "show-ref", "--verify", "--quiet", "refs/tags/v1.0.0")
+    if tag.returncode == 0:
+        errors.append("refs/tags/v1.0.0 must not exist")
+    elif tag.returncode != 1:
+        detail = tag.stderr.strip() or f"exit status {tag.returncode}"
+        errors.append(f"cannot inspect refs/tags/v1.0.0: {detail}")
+
+
+def write_report(output: Path, report: dict[str, Any]) -> bool:
+    encoded = (json.dumps(report, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    try:
+        descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(encoded)
+    except FileExistsError:
+        print(
+            f"error: immutable final gate report already exists: {output}",
+            file=sys.stderr,
         )
-        if artifact_path and digest:
-            artifact_digests[artifact_path] = digest
-        if "normalized_sha256" in artifact:
-            require_pattern(
-                artifact.get("normalized_sha256"),
-                f"{path}.normalized_sha256",
-                DIGEST_PATTERN,
-                errors,
-            )
-
-    generated_files = require_list(
-        root.get("generated_files"), "generated_files", errors
-    )
-    for index, raw_generated in enumerate(generated_files):
-        path = f"generated_files[{index}]"
-        generated = require_object(raw_generated, path, errors)
-        require_text(generated.get("path"), f"{path}.path", errors)
-        require_text(generated.get("generator"), f"{path}.generator", errors)
-        require_text(generated.get("owner"), f"{path}.owner", errors)
-        if generated.get("clean") is not True:
-            errors.append(f"{path}.clean must be true")
-
-    automated_checks = require_list(
-        root.get("automated_checks"), "automated_checks", errors
-    )
-    if not automated_checks:
-        errors.append("automated_checks must not be empty")
-    for index, raw_check in enumerate(automated_checks):
-        path = f"automated_checks[{index}]"
-        check = require_object(raw_check, path, errors)
-        require_text(check.get("name"), f"{path}.name", errors)
-        status = require_text(check.get("status"), f"{path}.status", errors)
-        if status and status not in STATUSES:
-            errors.append(f"{path}.status must be one of {sorted(STATUSES)}")
-        commit = require_pattern(check.get("commit"), f"{path}.commit", SHA_PATTERN, errors)
-        if candidate_commit and commit and commit != candidate_commit:
-            errors.append(f"{path}.commit must equal candidate.commit")
-        require_text(check.get("output"), f"{path}.output", errors)
-        if require_release_ready and status != "PASS":
-            errors.append(f"{path}.status must be PASS")
-
-    external = require_object(root.get("external_checks"), "external_checks", errors)
-    for name in EXTERNAL_CHECKS:
-        path = f"external_checks.{name}"
-        check = require_object(external.get(name), path, errors)
-        status = require_text(check.get("status"), f"{path}.status", errors)
-        if status and status not in STATUSES:
-            errors.append(f"{path}.status must be one of {sorted(STATUSES)}")
-        commit = require_pattern(check.get("commit"), f"{path}.commit", SHA_PATTERN, errors)
-        if candidate_commit and commit and commit != candidate_commit:
-            errors.append(f"{path}.commit must equal candidate.commit")
-        references = require_list(check.get("artifacts"), f"{path}.artifacts", errors)
-        for index, raw_reference in enumerate(references):
-            reference_path = f"{path}.artifacts[{index}]"
-            reference = require_object(raw_reference, reference_path, errors)
-            artifact = require_text(
-                reference.get("path"), f"{reference_path}.path", errors
-            )
-            digest = require_pattern(
-                reference.get("sha256"),
-                f"{reference_path}.sha256",
-                DIGEST_PATTERN,
-                errors,
-            )
-            if artifact and artifact not in artifact_digests:
-                errors.append(
-                    f"{reference_path}.path does not reference candidate.artifacts"
-                )
-            elif artifact and digest and digest != artifact_digests[artifact]:
-                errors.append(
-                    f"{reference_path}.sha256 must equal candidate artifact"
-                )
-        if require_release_ready and status != "PASS":
-            errors.append(f"{path}.status must be PASS")
-
-    authorization = root.get("release_authorized")
-    if not isinstance(authorization, bool):
-        errors.append("release_authorized must be a boolean")
-    elif require_release_ready and authorization is not True:
-        errors.append("release_authorized must be true")
-
-    return errors
+        return False
+    except OSError as error:
+        print(f"error: cannot create final gate report: {error}", file=sys.stderr)
+        return False
+    return True
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Validate Formal 1.0 exact-SHA release evidence."
+        description="Create the immutable Formal 1.0 technical release gate report."
     )
-    parser.add_argument(
-        "--require-release-ready",
-        action="store_true",
-        help="also require automated, W1, D1, C1, and authorization gates to pass",
-    )
-    parser.add_argument("manifest", type=Path)
+    parser.add_argument("--repo", required=True, type=Path)
+    parser.add_argument("--candidate", required=True, type=Path)
+    parser.add_argument("--index", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
     try:
-        data = json.loads(args.manifest.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        print(f"error: cannot read evidence manifest: {error}", file=sys.stderr)
+        candidate_sha256 = sha256_file(args.candidate)
+        evidence_index_sha256 = sha256_file(args.index)
+    except OSError as error:
+        print(f"error: cannot digest release evidence input: {error}", file=sys.stderr)
         return 1
 
-    errors = validate_manifest(data, args.require_release_ready)
+    errors: list[str] = []
+    try:
+        candidate = read_object(args.candidate, "candidate manifest")
+    except ValueError as error:
+        errors.append(str(error))
+        candidate = {}
+    try:
+        index = read_object(args.index, "evidence index")
+    except ValueError as error:
+        errors.append(str(error))
+        index = {}
+
+    errors.extend(validate_candidate_manifest(candidate))
+    errors.extend(
+        validate_evidence_index(
+            candidate,
+            index,
+            candidate_manifest_path=args.candidate,
+            candidate_manifest_sha256=candidate_sha256,
+        )
+    )
+    validate_technical_readiness(candidate, index, errors)
+    validate_git_state(args.repo, candidate_commit(candidate), errors)
+
+    report = {
+        "schema_version": 1,
+        "candidate_sha256": candidate_sha256,
+        "evidence_index_sha256": evidence_index_sha256,
+        "technical_release_ready": not errors,
+        "publication_authorized": False,
+        "reasons": errors,
+    }
+    if not write_report(args.output, report):
+        return 1
+
     if errors:
         for error in errors:
             print(f"error: {error}", file=sys.stderr)
         return 1
 
-    if args.require_release_ready:
-        print("OK: release-ready evidence is consistent")
-    else:
-        print("OK: schema and exact-SHA evidence are consistent")
+    print(f"created immutable final gate report: {args.output}")
     return 0
 
 

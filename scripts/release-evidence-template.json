@@ -1,0 +1,43 @@
+{
+  "artifact": {
+    "path": "MoonSight-v1.0.0-web-x86_64.zip",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "attachments": {
+    "logs": [],
+    "screenshots": [],
+    "video": []
+  },
+  "candidate_commit": "0000000000000000000000000000000000000000",
+  "environment": {
+    "browser_or_webview": "Chromium",
+    "browser_or_webview_version": "exact version",
+    "desktop_environment": "desktop environment and exact version, or N/A",
+    "driver": "exact GPU driver version",
+    "gpu": "exact GPU model",
+    "kernel": "exact kernel version",
+    "os": "Ubuntu",
+    "os_version": "exact OS version"
+  },
+  "executed_steps": [
+    {
+      "action": "ordered command or interaction",
+      "actual": "observed result",
+      "expected": "required result",
+      "order": 1,
+      "result": "NOT_RUN"
+    }
+  ],
+  "id": "REQUIRED_EVIDENCE_ID",
+  "public_evidence_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "raw_evidence_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "redacted_inspection": {
+    "localStorage": "redacted inspection result or N/A",
+    "save": "redacted save inspection result or N/A"
+  },
+  "redaction_statement": "No secrets, personal data, machine identifiers, or unredacted save/localStorage contents are present in public evidence.",
+  "schema_version": 1,
+  "status": "NOT_RUN",
+  "tester": "tester identity",
+  "timestamp_utc": "YYYY-MM-DDTHH:MM:SSZ"
+}

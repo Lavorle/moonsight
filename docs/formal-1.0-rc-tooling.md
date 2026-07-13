@@ -82,3 +82,64 @@ the immutable candidate commit.
 python3 scripts/rc_manifest.py guard \
   --candidate "$CANDIDATE_SHA" --repo .
 ```
+
+## Evidence index and Final Gate
+
+After the candidate is frozen, operators collect the 13 required external
+evidence records **outside** the candidate commit. Build the public index, then
+verify the Final Gate Report. These steps never authorize a tag by themselves.
+
+```sh
+python3 scripts/release_evidence.py build-index \
+  --candidate path/to/candidate.json \
+  --records path/to/records \
+  --output path/to/evidence-index.json
+
+python3 scripts/verify_release_evidence.py \
+  --repo . \
+  --candidate path/to/candidate.json \
+  --index path/to/evidence-index.json \
+  --output path/to/final-gate.json
+```
+
+Record paths and digests in
+[`release-1.0-verification.md`](./release-1.0-verification.md). Publication still
+requires human secondary confirmation after Final Gate PASS.
+
+## GitHub publisher
+
+`scripts/publish_github_release.py` plans an annotated tag and draft-first
+GitHub Release from candidate identity, evidence index, Final Gate Report,
+release notes, and the first-candidate artifact directory (four packages +
+`SHA256SUMS`). Default mode is dry-run: it prints planned argv arrays and
+performs no mutations.
+
+Dry-run (safe, no side effects):
+
+```bash
+python3 scripts/publish_github_release.py \
+  --repo . \
+  --candidate path/to/candidate.json \
+  --index path/to/evidence-index.json \
+  --gate path/to/final-gate.json \
+  --artifacts path/to/first \
+  --notes path/to/release-notes.md
+```
+
+Execute only after Final Gate PASS and human secondary confirmation:
+
+```bash
+python3 scripts/publish_github_release.py \
+  --repo . \
+  --candidate path/to/candidate.json \
+  --index path/to/evidence-index.json \
+  --gate path/to/final-gate.json \
+  --artifacts path/to/first \
+  --notes path/to/release-notes.md \
+  --execute --authorize v1.0.0
+```
+
+`--execute` without `--authorize v1.0.0` (exact string) is rejected. Execute mode
+is the only path that may create the annotated tag, draft release, and upload
+attachments. Repository CI runs publisher unit tests only; it never executes
+publication and never claims W1/D1/C1 PASS.

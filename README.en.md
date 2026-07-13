@@ -153,7 +153,8 @@ on the site are authoritative for listed topics):
 - [`docs/play-input.md`](./docs/play-input.md) — intents, skip hold, wait gate, backlog/confirm
 - [`docs/project-layout.md`](./docs/project-layout.md) — repo & `moonsight.json`
 - [`docs/formal-1.0-author-guide.md`](./docs/formal-1.0-author-guide.md) — Formal 1.0 IDs, catalogs, migration review, MSB2, save v5, locale switching, rollback, and budgets
-- [`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md) — exact-SHA release evidence template
+- [`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md) — exact-SHA release evidence template (13 IDs / BLOCKED)
+- [`docs/formal-1.0-rc-tooling.md`](./docs/formal-1.0-rc-tooling.md) — benchmarks, reproducibility, RC manifest, evidence index, publisher runbook
 - [`CHANGELOG.md`](./CHANGELOG.md) — tracked Formal 1.0 content summary
 - [`docs/draw-list-pack.md`](./docs/draw-list-pack.md) — frame pack format
 - [`docs/screen-language.md`](./docs/screen-language.md) — obsolete Phase 3 Screen DSL archive
@@ -282,10 +283,24 @@ switching with no text fallback, aggregate `EngineLogicalState` rollback,
 and a 64-entry / 16 MiB rollback ring. These are product contracts, not proof
 that a release was tagged or authorized.
 
-The release remains **BLOCKED** until W1, D1, and C1 are all executed against
-the same immutable candidate SHA and retained artifacts. See
-[`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md); all
-unexecuted fields remain `NOT RUN`.
+**Formal support matrix (target platforms, not PASS evidence):**
+
+| Dimension | Formal 1.0 support |
+|-----------|--------------------|
+| OS / arch | **Linux x86_64** |
+| Web | **Chromium stable** + **Firefox stable** on **Ubuntu 24.04**, **Fedora current stable**, and **Arch current** |
+| Desktop | **AppImage** + **deb** + **rpm** (`moonsight-linux-x86_64-v1.0.0.*`) |
+| Delivery | **GitHub Release** attachments (Web ZIP, desktop packages, `SHA256SUMS`) — **not** GitHub Pages |
+
+External evidence requires exactly 13 IDs (W1×6 / D1×5 / C1×2) as PASS against
+**one** immutable candidate SHA before publication. Repository CI enforces
+format, all-target check/test, WASM, host test/typecheck/build, CLI fixtures,
+package smoke, release-tooling unit tests (including `publish_github_release.py`
+dry-run paths), docs, and desktop Rust gates. CI green is **not** W1/D1/C1
+PASS, a tag, or a published release. The release remains **BLOCKED** until
+those gates pass on one candidate. Evidence lifecycle, artifact names, and
+fields: [`docs/release-1.0-verification.md`](./docs/release-1.0-verification.md).
+Publisher and RC tooling: [`docs/formal-1.0-rc-tooling.md`](./docs/formal-1.0-rc-tooling.md).
 
 ### Out of scope / deferred to Q5+
 
