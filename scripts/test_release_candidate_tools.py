@@ -385,6 +385,40 @@ class RcManifestTests(unittest.TestCase):
                 result.stderr,
             )
 
+    def test_generation_rejects_missing_or_malformed_benchmark_input_digest(
+        self,
+    ) -> None:
+        for digest in (None, "A" * 64):
+            with self.subTest(digest=digest), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                benchmark, repro, metadata, output = self.write_inputs(root)
+                benchmark_data = json.loads(benchmark.read_text(encoding="utf-8"))
+                benchmark_data["input_sha256"] = digest
+                benchmark.write_text(json.dumps(benchmark_data), encoding="utf-8")
+
+                result = run_script(
+                    RC,
+                    "generate",
+                    "--candidate",
+                    SHA,
+                    "--benchmark",
+                    str(benchmark),
+                    "--reproducibility",
+                    str(repro),
+                    "--metadata",
+                    str(metadata),
+                    "--output",
+                    str(output),
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    "benchmark.input_sha256 must be a 64-character lowercase "
+                    "hexadecimal SHA-256 digest",
+                    result.stderr,
+                )
+                self.assertFalse(output.exists())
+
     def test_release_evidence_template_names_all_public_and_raw_evidence_fields(
         self,
     ) -> None:

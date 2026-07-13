@@ -97,6 +97,7 @@ def generate(args: argparse.Namespace) -> int:
         ("chromium", "firefox", "webkitgtk"),
         errors,
     )
+    validate_sha256(benchmark.get("input_sha256"), "benchmark.input_sha256", errors)
     validate_sha256(repro.get("input_sha256"), "reproducibility.input_sha256", errors)
     repro_artifacts = repro.get("artifacts")
     if not isinstance(repro_artifacts, list) or not repro_artifacts:
@@ -139,7 +140,7 @@ def generate(args: argparse.Namespace) -> int:
         {
             "id": "benchmark",
             "status": benchmark_status,
-            "input_sha256": benchmark.get("input_sha256"),
+            "input_sha256": benchmark["input_sha256"],
             "report": {
                 "path": str(args.benchmark),
                 "sha256": sha256_file(args.benchmark),
