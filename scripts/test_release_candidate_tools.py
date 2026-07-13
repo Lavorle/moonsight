@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import io
 import json
+import shutil
 import subprocess
+import tarfile
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 BENCHMARK = ROOT / "scripts" / "benchmark_report.py"
+BUILDER = ROOT / "scripts" / "build_release_artifacts.sh"
 REPRO = ROOT / "scripts" / "compare_reproducible_builds.py"
+REPRO_POLICY = ROOT / "scripts" / "reproducibility-normalization-v1.json"
 RC = ROOT / "scripts" / "rc_manifest.py"
 EVIDENCE_TEMPLATE = ROOT / "scripts" / "release-evidence-template.json"
 SHA = "1" * 40
@@ -22,6 +28,49 @@ def run_script(script: Path, *args: str, cwd: Path = ROOT) -> subprocess.Complet
         text=True,
         capture_output=True,
         check=False,
+    )
+
+
+def ar_archive(members: list[tuple[str, bytes, int]]) -> bytes:
+    output = bytearray(b"!<arch>\n")
+    for name, data, timestamp in members:
+        header = (
+            f"{name + '/':<16}{timestamp:<12}{0:<6}{0:<6}{0o100644:<8o}"
+            f"{len(data):<10}`\n"
+        ).encode("ascii")
+        output.extend(header)
+        output.extend(data)
+        if len(data) % 2:
+            output.extend(b"\n")
+    return bytes(output)
+
+
+def tar_gz(files: dict[str, bytes], *, timestamp: int) -> bytes:
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w:gz") as archive:
+        for name, data in sorted(files.items()):
+            info = tarfile.TarInfo(name)
+            info.mode = 0o755 if name.endswith("/moonsight") else 0o644
+            info.mtime = timestamp
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+    return output.getvalue()
+
+
+def write_deb(path: Path, files: dict[str, bytes], *, timestamp: int) -> None:
+    control = tar_gz(
+        {"control": b"Package: moonsight\nVersion: 1.0.0\nArchitecture: amd64\n"},
+        timestamp=timestamp,
+    )
+    data = tar_gz(files, timestamp=timestamp)
+    path.write_bytes(
+        ar_archive(
+            [
+                ("debian-binary", b"2.0\n", timestamp),
+                ("control.tar.gz", control, timestamp),
+                ("data.tar.gz", data, timestamp),
+            ]
+        )
     )
 
 
@@ -101,6 +150,327 @@ class BenchmarkReportTests(unittest.TestCase):
 
 
 class ReproducibilityTests(unittest.TestCase):
+    def test_builder_rejects_wrong_version_and_dirty_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp) / "repo"
+            scripts = repo / "scripts"
+            scripts.mkdir(parents=True)
+            shutil.copy2(BUILDER, scripts / BUILDER.name)
+            for name in ("publish-web.sh", "publish-desktop.sh"):
+                path = scripts / name
+                path.write_text("#!/usr/bin/env bash\nexit 99\n", encoding="utf-8")
+                path.chmod(0o755)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.com"], cwd=repo, check=True
+            )
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+            subprocess.run(["git", "add", "scripts"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)
+
+            wrong_version = subprocess.run(
+                [
+                    "bash",
+                    str(scripts / BUILDER.name),
+                    "--version",
+                    "v2.0.0",
+                    "--out",
+                    str(repo / "wrong-version"),
+                ],
+                cwd=repo,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(wrong_version.returncode, 0)
+            self.assertIn("error: expected v1.0.0", wrong_version.stderr)
+
+            (repo / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+            dirty = subprocess.run(
+                [
+                    "bash",
+                    str(scripts / BUILDER.name),
+                    "--version",
+                    "v1.0.0",
+                    "--out",
+                    str(repo / "dirty"),
+                ],
+                cwd=repo,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(dirty.returncode, 0)
+            self.assertIn("error: dirty worktree", dirty.stderr)
+
+    def test_builder_writes_exact_candidate_and_comparison_sets(self) -> None:
+        if not BUILDER.exists():
+            self.fail("release artifact builder is missing")
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp) / "repo"
+            scripts = repo / "scripts"
+            scripts.mkdir(parents=True)
+            shutil.copy2(BUILDER, scripts / BUILDER.name)
+            (scripts / "publish-web.sh").write_text(
+                """#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p "$2/assets"
+printf 'same web payload\\n' > "$2/index.html"
+printf 'same wasm payload\\n' > "$2/assets/moonsight.wasm"
+""",
+                encoding="utf-8",
+            )
+            (scripts / "publish-desktop.sh").write_text(
+                """#!/usr/bin/env bash
+set -euo pipefail
+version="${MOONSIGHT_RELEASE_VERSION#v}"
+target="${CARGO_TARGET_DIR:?}/release/bundle"
+mkdir -p "$target/appimage" "$target/deb" "$target/rpm"
+printf 'appimage container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/appimage/MoonSight_${version}_amd64.AppImage"
+printf 'deb container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/deb/MoonSight_${version}_amd64.deb"
+printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSight-${version}-1.x86_64.rpm"
+""",
+                encoding="utf-8",
+            )
+            for script in scripts.iterdir():
+                script.chmod(0o755)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.com"], cwd=repo, check=True
+            )
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+            subprocess.run(["git", "add", "scripts"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)
+            release = repo / "release"
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(scripts / BUILDER.name),
+                    "--version",
+                    "v1.0.0",
+                    "--out",
+                    str(release),
+                ],
+                cwd=repo,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            artifact_names = {
+                "moonsight-web-x86_64-v1.0.0.zip",
+                "moonsight-linux-x86_64-v1.0.0.AppImage",
+                "moonsight-linux-x86_64-v1.0.0.deb",
+                "moonsight-linux-x86_64-v1.0.0.rpm",
+            }
+            self.assertEqual(
+                {path.name for path in (release / "first").iterdir()},
+                artifact_names | {"SHA256SUMS", "build-metadata.json"},
+            )
+            self.assertEqual(
+                {path.name for path in (release / "second").iterdir()},
+                artifact_names | {"build-metadata.json"},
+            )
+            self.assertFalse((release / "second" / "SHA256SUMS").exists())
+            web_name = "moonsight-web-x86_64-v1.0.0.zip"
+            self.assertEqual(
+                (release / "first" / web_name).read_bytes(),
+                (release / "second" / web_name).read_bytes(),
+            )
+            first_metadata = json.loads(
+                (release / "first" / "build-metadata.json").read_text(encoding="utf-8")
+            )
+            second_metadata = json.loads(
+                (release / "second" / "build-metadata.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(first_metadata["build_number"], 1)
+            self.assertEqual(second_metadata["build_number"], 2)
+            self.assertTrue(first_metadata["release_candidate"])
+            self.assertFalse(second_metadata["release_candidate"])
+            self.assertEqual(
+                [item["path"] for item in first_metadata["artifacts"]],
+                sorted(artifact_names),
+            )
+
+    def test_web_zip_requires_raw_byte_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            left.mkdir()
+            right.mkdir()
+            name = "moonsight-web-x86_64-v1.0.0.zip"
+            for directory, comment in ((left, b"first"), (right, b"second")):
+                with zipfile.ZipFile(directory / name, "w") as archive:
+                    archive.comment = comment
+                    archive.writestr("index.html", "same payload")
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(REPRO_POLICY),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f"web ZIP differs in raw bytes: {name}", result.stderr)
+
+    def test_desktop_packages_compare_normalized_extracted_payloads(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            left.mkdir()
+            right.mkdir()
+            name = "moonsight-linux-x86_64-v1.0.0.deb"
+            payload = {
+                "usr/bin/moonsight": b"same executable",
+                "usr/lib/moonsight/game.msb": b"MSB2same",
+                "usr/lib/moonsight/app.js": b"same javascript",
+            }
+            write_deb(left / name, payload, timestamp=1_700_000_000)
+            write_deb(right / name, payload, timestamp=1_800_000_000)
+            report_path = root / "report.json"
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(REPRO_POLICY),
+                "--output",
+                str(report_path),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertRegex(str(report.get("input_sha256", "")), r"^[0-9a-f]{64}$")
+            artifact = report["artifacts"][0]
+            self.assertEqual(artifact["left_size_bytes"], (left / name).stat().st_size)
+            self.assertEqual(artifact["right_size_bytes"], (right / name).stat().st_size)
+            self.assertNotEqual(artifact["left_raw_sha256"], artifact["right_raw_sha256"])
+            self.assertEqual(
+                artifact["left_normalized_sha256"],
+                artifact["right_normalized_sha256"],
+            )
+            self.assertEqual(artifact["comparison"], "normalized-desktop-payload")
+
+    def test_desktop_payload_rejects_unexplained_core_difference(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            left.mkdir()
+            right.mkdir()
+            name = "moonsight-linux-x86_64-v1.0.0.deb"
+            write_deb(
+                left / name,
+                {"usr/lib/moonsight/app.js": b"left javascript"},
+                timestamp=1_700_000_000,
+            )
+            write_deb(
+                right / name,
+                {"usr/lib/moonsight/app.js": b"right javascript"},
+                timestamp=1_800_000_000,
+            )
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(REPRO_POLICY),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "desktop payload differs in raw bytes: usr/lib/moonsight/app.js",
+                result.stderr,
+            )
+
+    def test_desktop_payload_never_normalizes_extensionless_executables(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            left.mkdir()
+            right.mkdir()
+            name = "moonsight-linux-x86_64-v1.0.0.deb"
+            write_deb(
+                left / name,
+                {"usr/bin/moonsight": b"build=1\n"},
+                timestamp=1_700_000_000,
+            )
+            write_deb(
+                right / name,
+                {"usr/bin/moonsight": b"build=2\n"},
+                timestamp=1_800_000_000,
+            )
+            policy = json.loads(REPRO_POLICY.read_text(encoding="utf-8"))
+            policy["entries"] = [
+                {
+                    "id": "forbidden-executable-normalization",
+                    "artifact_glob": "usr/bin/moonsight",
+                    "byte_range": {"start": 6, "end": 7},
+                    "replacement_utf8": "0",
+                    "rationale": "test-only attempted executable exclusion",
+                    "owner": "test",
+                }
+            ]
+            policy_path = root / "policy.json"
+            policy_path.write_text(json.dumps(policy), encoding="utf-8")
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(policy_path),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "desktop payload differs in raw bytes: usr/bin/moonsight",
+                result.stderr,
+            )
+
+    def test_desktop_payload_never_normalizes_web_resources(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            left.mkdir()
+            right.mkdir()
+            name = "moonsight-linux-x86_64-v1.0.0.deb"
+            resource = "usr/lib/moonsight/assets/app.css"
+            write_deb(left / name, {resource: b"color:1\n"}, timestamp=1_700_000_000)
+            write_deb(right / name, {resource: b"color:2\n"}, timestamp=1_800_000_000)
+            policy = json.loads(REPRO_POLICY.read_text(encoding="utf-8"))
+            policy["entries"] = [
+                {
+                    "id": "forbidden-resource-normalization",
+                    "artifact_glob": resource,
+                    "byte_range": {"start": 6, "end": 7},
+                    "replacement_utf8": "0",
+                    "rationale": "test-only attempted resource exclusion",
+                    "owner": "test",
+                }
+            ]
+            policy_path = root / "policy.json"
+            policy_path.write_text(json.dumps(policy), encoding="utf-8")
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(policy_path),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                f"desktop payload differs in raw bytes: {resource}",
+                result.stderr,
+            )
+
     def test_retains_raw_digests_and_allows_only_declared_normalization(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

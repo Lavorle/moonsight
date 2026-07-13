@@ -1,4 +1,27 @@
 {
   "schema_version": 1,
+  "desktop_packages": [
+    {
+      "id": "appimage-extracted-payload-v1",
+      "artifact_glob": "moonsight-linux-x86_64-v1.0.0.AppImage",
+      "format": "appimage",
+      "rationale": "Compare the complete extracted AppImage application filesystem instead of unstable container metadata.",
+      "owner": "release engineering"
+    },
+    {
+      "id": "deb-data-payload-v1",
+      "artifact_glob": "moonsight-linux-x86_64-v1.0.0.deb",
+      "format": "deb",
+      "rationale": "Compare every entry in the Debian data payload while excluding only the separate package-control container.",
+      "owner": "release engineering"
+    },
+    {
+      "id": "rpm-cpio-payload-v1",
+      "artifact_glob": "moonsight-linux-x86_64-v1.0.0.rpm",
+      "format": "rpm",
+      "rationale": "Compare every entry in the RPM cpio application payload instead of unstable RPM container metadata.",
+      "owner": "release engineering"
+    }
+  ],
   "entries": []
 }
