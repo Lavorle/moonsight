@@ -459,6 +459,19 @@ class PublishPlannerTests(unittest.TestCase):
             last = payload["commands"][-1]["argv"]
             self.assertEqual(last[:3], ["gh", "release", "edit"])
             self.assertIn("--draft=false", last)
+            # Operator review: digests (and sizes) for every planned attachment.
+            digests = payload["attachment_digests"]
+            sizes = payload["attachment_sizes"]
+            self.assertIsInstance(digests, dict)
+            self.assertIsInstance(sizes, dict)
+            self.assertEqual(set(digests), set(payload["attachments"]))
+            self.assertEqual(set(sizes), set(payload["attachments"]))
+            sources = local_sources(fx)
+            for name in payload["attachments"]:
+                path = sources[name]
+                self.assertEqual(digests[name], sha256_bytes(path.read_bytes()))
+                self.assertEqual(sizes[name], path.stat().st_size)
+                self.assertRegex(digests[name], r"^[0-9a-f]{64}$")
 
     def test_execute_requires_authorize_v1(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -665,6 +678,95 @@ class PublishPlannerTests(unittest.TestCase):
                     for a in fake.calls
                 )
             )
+
+    def test_refuses_artifact_digest_mismatch_vs_candidate(self) -> None:
+        """On-disk artifact bytes must match candidate.artifacts[].sha256."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fx = make_fixture(root)
+            artifacts = Path(fx["artifacts"])
+            (artifacts / WEB).write_bytes(b"tampered-payload\n")
+            # Dry-run and execute both fail closed at load/bind.
+            code = publisher.run(cli_args(fx))
+            self.assertNotEqual(code, 0)
+            fake = make_fake_run(fx)
+            with patch.object(publisher, "run_command", side_effect=fake):
+                code = publisher.run(
+                    cli_args(fx, "--execute", "--authorize", "v1.0.0")
+                )
+            self.assertNotEqual(code, 0)
+            self.assertFalse(
+                any(
+                    a[:3] == ["gh", "release", "edit"] and "--draft=false" in a
+                    for a in fake.calls
+                )
+            )
+
+    def test_refuses_sha256sums_mismatch(self) -> None:
+        """SHA256SUMS must agree with candidate digests for each artifact name."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fx = make_fixture(root)
+            artifacts = Path(fx["artifacts"])
+            # Keep on-disk bytes + candidate digests aligned; corrupt SHA256SUMS only.
+            (artifacts / "SHA256SUMS").write_text(
+                "\n".join(f"{'a' * 64}  {n}" for n in ARTIFACTS) + "\n",
+                encoding="utf-8",
+            )
+            code = publisher.run(cli_args(fx))
+            self.assertNotEqual(code, 0)
+            fake = make_fake_run(fx)
+            with patch.object(publisher, "run_command", side_effect=fake):
+                code = publisher.run(
+                    cli_args(fx, "--execute", "--authorize", "v1.0.0")
+                )
+            self.assertNotEqual(code, 0)
+            self.assertFalse(
+                any(
+                    a[:3] == ["gh", "release", "edit"] and "--draft=false" in a
+                    for a in fake.calls
+                )
+            )
+
+    def test_refuses_gate_digest_mismatch_for_candidate_and_index(self) -> None:
+        """Gate candidate/index digests must rebind to on-disk input files."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fx = make_fixture(root)
+            gate = json.loads(Path(fx["gate"]).read_text(encoding="utf-8"))
+            gate["candidate_sha256"] = "0" * 64
+            write_json(Path(fx["gate"]), gate)
+            code = publisher.run(cli_args(fx))
+            self.assertNotEqual(code, 0)
+
+            # Restore candidate digest, break evidence index binding.
+            gate["candidate_sha256"] = sha256_bytes(
+                Path(fx["candidate"]).read_bytes()
+            )
+            gate["evidence_index_sha256"] = "1" * 64
+            write_json(Path(fx["gate"]), gate)
+            fake = make_fake_run(fx)
+            with patch.object(publisher, "run_command", side_effect=fake):
+                code = publisher.run(
+                    cli_args(fx, "--execute", "--authorize", "v1.0.0")
+                )
+            self.assertNotEqual(code, 0)
+            self.assertFalse(
+                any(
+                    a[:3] == ["gh", "release", "edit"] and "--draft=false" in a
+                    for a in fake.calls
+                )
+            )
+
+    def test_refuses_missing_gate_digest_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fx = make_fixture(root)
+            gate = json.loads(Path(fx["gate"]).read_text(encoding="utf-8"))
+            del gate["candidate_sha256"]
+            write_json(Path(fx["gate"]), gate)
+            code = publisher.run(cli_args(fx))
+            self.assertNotEqual(code, 0)
 
     def test_execute_resumes_existing_correct_tag_and_draft(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

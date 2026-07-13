@@ -54,6 +54,128 @@ def git_argv(repo: Path, *args: str) -> list[str]:
     return ["git", "-C", str(repo), *args]
 
 
+def parse_sha256sums(path: Path) -> dict[str, str]:
+    """Parse a GNU sha256sum-format SHA256SUMS file into name -> digest."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        die(f"cannot read SHA256SUMS: {error}")
+
+    digests: dict[str, str] = {}
+    for line_no, raw_line in enumerate(text.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            die(f"SHA256SUMS line {line_no}: invalid format")
+        digest, name = parts[0].lower(), parts[1]
+        if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            die(f"SHA256SUMS line {line_no}: invalid digest")
+        if name.startswith("*"):
+            name = name[1:]
+        if not name:
+            die(f"SHA256SUMS line {line_no}: empty filename")
+        digests[name] = digest
+    return digests
+
+
+def verify_artifact_digests(
+    artifacts: list[Any],
+    artifacts_dir: Path,
+) -> list[str]:
+    """Bind on-disk artifacts to candidate digests and SHA256SUMS.
+
+    Returns ordered artifact basenames after successful verification.
+    """
+    sums_path = artifacts_dir / "SHA256SUMS"
+    if not sums_path.is_file():
+        die(f"missing artifact file: {sums_path}")
+    sums = parse_sha256sums(sums_path)
+
+    artifact_names: list[str] = []
+    for index_item, item in enumerate(artifacts):
+        if not isinstance(item, dict):
+            die(f"candidate.candidate.artifacts[{index_item}] must be an object")
+        name = item.get("path")
+        expected = item.get("sha256")
+        if not isinstance(name, str) or not name:
+            die(f"candidate.candidate.artifacts[{index_item}].path must be a string")
+        if not isinstance(expected, str) or not expected:
+            die(
+                f"candidate.candidate.artifacts[{index_item}].sha256 "
+                "must be a non-empty string"
+            )
+        expected = expected.lower()
+        if len(expected) != 64 or any(c not in "0123456789abcdef" for c in expected):
+            die(
+                f"candidate.candidate.artifacts[{index_item}].sha256 "
+                "must be a 64-character hexadecimal digest"
+            )
+
+        path = artifacts_dir / name
+        if not path.is_file():
+            die(f"missing artifact file: {path}")
+
+        actual = sha256_file(path)
+        if actual != expected:
+            die(
+                f"artifact digest mismatch for {name}: "
+                f"on-disk={actual} candidate={expected}"
+            )
+        if name not in sums:
+            die(f"SHA256SUMS missing entry for {name}")
+        if sums[name] != expected:
+            die(
+                f"SHA256SUMS digest mismatch for {name}: "
+                f"SHA256SUMS={sums[name]} candidate={expected}"
+            )
+        artifact_names.append(name)
+    return artifact_names
+
+
+def verify_gate_digests(
+    gate: dict[str, Any],
+    candidate_path: Path,
+    index_path: Path,
+) -> None:
+    """Rebind gate digests to the on-disk candidate and evidence index inputs."""
+    expected_candidate = gate.get("candidate_sha256")
+    expected_index = gate.get("evidence_index_sha256")
+    if not isinstance(expected_candidate, str) or not expected_candidate:
+        die("gate.candidate_sha256 is missing or invalid")
+    if not isinstance(expected_index, str) or not expected_index:
+        die("gate.evidence_index_sha256 is missing or invalid")
+    expected_candidate = expected_candidate.lower()
+    expected_index = expected_index.lower()
+    if len(expected_candidate) != 64 or any(
+        c not in "0123456789abcdef" for c in expected_candidate
+    ):
+        die("gate.candidate_sha256 must be a 64-character hexadecimal digest")
+    if len(expected_index) != 64 or any(
+        c not in "0123456789abcdef" for c in expected_index
+    ):
+        die("gate.evidence_index_sha256 must be a 64-character hexadecimal digest")
+
+    try:
+        actual_candidate = sha256_file(candidate_path)
+        actual_index = sha256_file(index_path)
+    except OSError as error:
+        die(f"cannot digest gate-bound inputs: {error}")
+
+    if actual_candidate != expected_candidate:
+        die(
+            f"candidate file digest mismatch: "
+            f"on-disk={actual_candidate} gate.candidate_sha256={expected_candidate}"
+        )
+    if actual_index != expected_index:
+        die(
+            f"evidence index digest mismatch: "
+            f"on-disk={actual_index} "
+            f"gate.evidence_index_sha256={expected_index}"
+        )
+
+
 def load_inputs(
     candidate_path: Path,
     index_path: Path,
@@ -64,6 +186,8 @@ def load_inputs(
     index = read_object(index_path, "index")
     gate = read_object(gate_path, "gate")
 
+    verify_gate_digests(gate, candidate_path, index_path)
+
     candidate_block = candidate.get("candidate")
     if not isinstance(candidate_block, dict):
         die("candidate.candidate must be an object")
@@ -71,16 +195,7 @@ def load_inputs(
     if not isinstance(artifacts, list) or not artifacts:
         die("candidate.candidate.artifacts must be a non-empty list")
 
-    artifact_names: list[str] = []
-    for index_item, item in enumerate(artifacts):
-        if not isinstance(item, dict) or not isinstance(item.get("path"), str):
-            die(f"candidate.candidate.artifacts[{index_item}].path must be a string")
-        artifact_names.append(item["path"])
-
-    for name in artifact_names + ["SHA256SUMS"]:
-        path = artifacts_dir / name
-        if not path.is_file():
-            die(f"missing artifact file: {path}")
+    artifact_names = verify_artifact_digests(artifacts, artifacts_dir)
 
     return candidate, index, gate, artifact_names
 
@@ -159,6 +274,17 @@ def plan_commands(
     path_by_name["notes.md"] = notes_path
     required = required_attachment_names(artifact_names)
     attachment_paths = [str(path_by_name[name]) for name in required]
+    attachment_digests: dict[str, str] = {}
+    attachment_sizes: dict[str, int] = {}
+    for name in required:
+        path = path_by_name[name]
+        if not path.is_file():
+            die(f"missing attachment file: {path}")
+        try:
+            attachment_digests[name] = sha256_file(path)
+            attachment_sizes[name] = path.stat().st_size
+        except OSError as error:
+            die(f"cannot digest attachment {name}: {error}")
 
     commands: list[dict[str, Any]] = [
         {
@@ -227,7 +353,9 @@ def plan_commands(
         "mode": "plan",
         "version": VERSION,
         "commit": commit,
-        "attachments": required_attachment_names(artifact_names),
+        "attachments": required,
+        "attachment_digests": attachment_digests,
+        "attachment_sizes": attachment_sizes,
         "commands": commands,
     }
 
@@ -439,9 +567,13 @@ def verify_remote_attachments(
     missing = [name for name in required if name not in present]
     if missing:
         die(f"incomplete remote attachments: {', '.join(missing)}")
-    extra = sorted(present - set(required))
     # Extra assets are allowed but required set must be complete.
-    _ = extra
+    extra = sorted(present - set(required))
+    if extra:
+        print(
+            f"note: remote has extra assets beyond required set: {', '.join(extra)}",
+            file=sys.stderr,
+        )
 
     with tempfile.TemporaryDirectory(prefix="moonsight-publish-verify-") as tmp:
         download_dir = Path(tmp)
@@ -582,6 +714,8 @@ def run(argv: list[str] | None = None) -> int:
                         "version": plan["version"],
                         "commit": plan["commit"],
                         "attachments": plan["attachments"],
+                        "attachment_digests": plan["attachment_digests"],
+                        "attachment_sizes": plan["attachment_sizes"],
                         "commands": plan["commands"],
                     },
                     indent=2,
