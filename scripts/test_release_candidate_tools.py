@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import shutil
+import struct
 import subprocess
 import tarfile
 import tempfile
@@ -19,12 +21,23 @@ REPRO_POLICY = ROOT / "scripts" / "reproducibility-normalization-v1.json"
 RC = ROOT / "scripts" / "rc_manifest.py"
 EVIDENCE_TEMPLATE = ROOT / "scripts" / "release-evidence-template.json"
 SHA = "1" * 40
+WEB_NAME = "moonsight-web-x86_64-v1.0.0.zip"
+APPIMAGE_NAME = "moonsight-linux-x86_64-v1.0.0.AppImage"
+DEB_NAME = "moonsight-linux-x86_64-v1.0.0.deb"
+RPM_NAME = "moonsight-linux-x86_64-v1.0.0.rpm"
+RELEASE_ARTIFACT_NAMES = {WEB_NAME, APPIMAGE_NAME, DEB_NAME, RPM_NAME}
 
 
-def run_script(script: Path, *args: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
+def run_script(
+    script: Path,
+    *args: str,
+    cwd: Path = ROOT,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["python3", str(script), *args],
         cwd=cwd,
+        env=env,
         text=True,
         capture_output=True,
         check=False,
@@ -57,9 +70,22 @@ def tar_gz(files: dict[str, bytes], *, timestamp: int) -> bytes:
     return output.getvalue()
 
 
-def write_deb(path: Path, files: dict[str, bytes], *, timestamp: int) -> None:
+def write_deb(
+    path: Path,
+    files: dict[str, bytes],
+    *,
+    timestamp: int,
+    package: str = "moonsight",
+    version: str = "1.0.0",
+    architecture: str = "amd64",
+) -> None:
     control = tar_gz(
-        {"control": b"Package: moonsight\nVersion: 1.0.0\nArchitecture: amd64\n"},
+        {
+            "control": (
+                f"Package: {package}\nVersion: {version}\n"
+                f"Architecture: {architecture}\nDescription: MoonSight\n"
+            ).encode("utf-8")
+        },
         timestamp=timestamp,
     )
     data = tar_gz(files, timestamp=timestamp)
@@ -71,6 +97,168 @@ def write_deb(path: Path, files: dict[str, bytes], *, timestamp: int) -> None:
                 ("data.tar.gz", data, timestamp),
             ]
         )
+    )
+
+
+def write_web_zip(path: Path, *, comment: bytes = b"") -> None:
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.comment = comment
+        info = zipfile.ZipInfo("index.html", date_time=(1980, 1, 1, 0, 0, 0))
+        info.external_attr = (0o100644 << 16)
+        archive.writestr(info, "same web payload")
+
+
+def elf_x86_64(payload: bytes = b"same executable", *, machine: int = 62) -> bytes:
+    header = bytearray(64)
+    header[:4] = b"\x7fELF"
+    header[4] = 2
+    header[5] = 1
+    struct.pack_into("<H", header, 18, machine)
+    return bytes(header) + payload
+
+
+def write_appimage(
+    path: Path,
+    *,
+    version: str | None = "1.0.0",
+    app_name: str = "MoonSight",
+    app_exec: str = "moonsight",
+    build_id: str | None = None,
+    elf_machine: int = 62,
+    marker: str = "first",
+) -> None:
+    version_line = "" if version is None else f"X-AppImage-Version={version}\n"
+    build_id_line = "" if build_id is None else f"X-AppImage-BuildId={build_id}\n"
+    binary_hex = elf_x86_64(machine=elf_machine).hex()
+    path.write_text(
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+test "${{1:-}}" = "--appimage-extract"
+mkdir -p squashfs-root/usr/bin squashfs-root/usr/lib/moonsight
+cat > squashfs-root/MoonSight.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name={app_name}
+Exec={app_exec}
+{version_line}{build_id_line}EOF
+python3 - <<'PY'
+from pathlib import Path
+Path('squashfs-root/usr/bin/{app_exec}').write_bytes(bytes.fromhex('{binary_hex}'))
+PY
+chmod 755 squashfs-root/usr/bin/{app_exec}
+printf 'MSB2same' > squashfs-root/usr/lib/moonsight/game.msb
+# container marker: {marker}
+""",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+
+
+def write_fake_rpm(
+    path: Path,
+    *,
+    timestamp: int,
+    package: str = "moonsight",
+    version: str = "1.0.0",
+    release: str = "1",
+    architecture: str = "x86_64",
+) -> None:
+    identity = json.dumps(
+        {
+            "package_name": package,
+            "version": version,
+            "release": release,
+            "architecture": architecture,
+            "build_time": timestamp,
+            "build_host": "builder.example",
+        },
+        sort_keys=True,
+    ).encode("utf-8")
+    with tarfile.open(path, "w") as archive:
+        for name, data, mode in (
+            (".rpm-identity.json", identity, 0o644),
+            ("usr/bin/moonsight", elf_x86_64(), 0o755),
+            ("usr/lib/moonsight/game.msb", b"MSB2same", 0o644),
+        ):
+            info = tarfile.TarInfo(name)
+            info.mtime = timestamp
+            info.mode = mode
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+
+
+def package_tool_env(root: Path) -> dict[str, str]:
+    tools = root / "fake-package-tools"
+    tools.mkdir()
+    (tools / "rpm").write_text(
+        """#!/usr/bin/env python3
+import json, sys, tarfile
+with tarfile.open(sys.argv[-1]) as archive:
+    data = json.load(archive.extractfile('.rpm-identity.json'))
+for key in ('package_name', 'version', 'release', 'architecture', 'build_time', 'build_host'):
+    print(data[key])
+""",
+        encoding="utf-8",
+    )
+    (tools / "rpm2cpio").write_text(
+        "#!/usr/bin/env bash\ncat -- \"${@: -1}\"\n", encoding="utf-8"
+    )
+    (tools / "cpio").write_text(
+        "#!/usr/bin/env bash\ntar -xf -\nrm -f .rpm-identity.json\n", encoding="utf-8"
+    )
+    for tool in tools.iterdir():
+        tool.chmod(0o755)
+    env = dict(os.environ)
+    env["PATH"] = f"{tools}:{env['PATH']}"
+    return env
+
+
+def write_release_set(
+    root: Path,
+    *,
+    timestamp: int,
+    web_comment: bytes = b"",
+    deb_package: str = "moonsight",
+    deb_version: str = "1.0.0",
+    deb_architecture: str = "amd64",
+    rpm_package: str = "moonsight",
+    rpm_version: str = "1.0.0",
+    rpm_architecture: str = "x86_64",
+    appimage_name: str = "MoonSight",
+    appimage_version: str | None = "1.0.0",
+    appimage_build_id: str | None = None,
+    appimage_elf_machine: int = 62,
+    deb_payload: dict[str, bytes] | None = None,
+) -> None:
+    root.mkdir()
+    write_web_zip(root / WEB_NAME, comment=web_comment)
+    write_appimage(
+        root / APPIMAGE_NAME,
+        app_name=appimage_name,
+        version=appimage_version,
+        build_id=appimage_build_id,
+        elf_machine=appimage_elf_machine,
+        marker=str(timestamp),
+    )
+    write_deb(
+        root / DEB_NAME,
+        deb_payload
+        or {
+            "usr/bin/moonsight": elf_x86_64(),
+            "usr/lib/moonsight/game.msb": b"MSB2same",
+            "usr/lib/moonsight/app.js": b"same javascript",
+        },
+        timestamp=timestamp,
+        package=deb_package,
+        version=deb_version,
+        architecture=deb_architecture,
+    )
+    write_fake_rpm(
+        root / RPM_NAME,
+        timestamp=timestamp,
+        package=rpm_package,
+        version=rpm_version,
+        architecture=rpm_architecture,
     )
 
 
@@ -298,13 +486,9 @@ printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSi
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             left, right = root / "left", root / "right"
-            left.mkdir()
-            right.mkdir()
-            name = "moonsight-web-x86_64-v1.0.0.zip"
-            for directory, comment in ((left, b"first"), (right, b"second")):
-                with zipfile.ZipFile(directory / name, "w") as archive:
-                    archive.comment = comment
-                    archive.writestr("index.html", "same payload")
+            write_release_set(left, timestamp=1_700_000_000, web_comment=b"first")
+            write_release_set(right, timestamp=1_800_000_000, web_comment=b"second")
+            env = package_tool_env(root)
 
             result = run_script(
                 REPRO,
@@ -312,25 +496,229 @@ printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSi
                 str(right),
                 "--allowlist",
                 str(REPRO_POLICY),
+                env=env,
             )
 
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn(f"web ZIP differs in raw bytes: {name}", result.stderr)
+            self.assertIn(f"web ZIP differs in raw bytes: {WEB_NAME}", result.stderr)
+
+    def test_release_set_requires_all_four_exact_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            write_release_set(left, timestamp=1_700_000_000)
+            write_release_set(right, timestamp=1_800_000_000)
+            (left / RPM_NAME).unlink()
+            (right / RPM_NAME).unlink()
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(REPRO_POLICY),
+                env=package_tool_env(root),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f"left release set missing required artifact: {RPM_NAME}", result.stderr)
+            self.assertIn(f"right release set missing required artifact: {RPM_NAME}", result.stderr)
+
+    def test_release_set_rejects_extra_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            write_release_set(left, timestamp=1_700_000_000)
+            write_release_set(right, timestamp=1_800_000_000)
+            (left / "extra.bin").write_bytes(b"same")
+            (right / "extra.bin").write_bytes(b"same")
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(REPRO_POLICY),
+                env=package_tool_env(root),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("left release set has unexpected artifact: extra.bin", result.stderr)
+            self.assertIn("right release set has unexpected artifact: extra.bin", result.stderr)
+
+    def test_deb_version_mismatch_fails_even_when_payload_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            write_release_set(left, timestamp=1_700_000_000)
+            write_release_set(right, timestamp=1_800_000_000, deb_version="1.0.1")
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(REPRO_POLICY),
+                env=package_tool_env(root),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("desktop package identity differs: version", result.stderr)
+
+    def test_rpm_version_mismatch_fails_even_when_payload_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            write_release_set(left, timestamp=1_700_000_000)
+            write_release_set(right, timestamp=1_800_000_000, rpm_version="1.0.1")
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(REPRO_POLICY),
+                env=package_tool_env(root),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("desktop package identity differs: version", result.stderr)
+
+    def test_appimage_without_embedded_version_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            write_release_set(left, timestamp=1_700_000_000)
+            write_release_set(right, timestamp=1_800_000_000, appimage_version=None)
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(REPRO_POLICY),
+                env=package_tool_env(root),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("AppImage identity missing version", result.stderr)
+
+    def test_matching_wrong_embedded_identity_values_fail_policy_binding(self) -> None:
+        cases = (
+            (
+                "deb-package",
+                {"deb_package": "not-moonsight"},
+                "left deb identity package_name must equal moonsight",
+            ),
+            (
+                "deb-architecture",
+                {"deb_architecture": "arm64"},
+                "left deb identity architecture must equal amd64",
+            ),
+            (
+                "rpm-package",
+                {"rpm_package": "not-moonsight"},
+                "left rpm identity package_name must equal moonsight",
+            ),
+            (
+                "rpm-architecture",
+                {"rpm_architecture": "aarch64"},
+                "left rpm identity architecture must equal x86_64",
+            ),
+            (
+                "appimage-name",
+                {"appimage_name": "NotMoonSight"},
+                "left appimage identity app_name must equal MoonSight",
+            ),
+            (
+                "appimage-version",
+                {"appimage_version": "1.0.1"},
+                "left appimage identity version must equal 1.0.0",
+            ),
+        )
+        for label, overrides, diagnostic in cases:
+            with self.subTest(case=label), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                left, right = root / "left", root / "right"
+                write_release_set(left, timestamp=1_700_000_000, **overrides)
+                write_release_set(right, timestamp=1_800_000_000, **overrides)
+
+                result = run_script(
+                    REPRO,
+                    str(left),
+                    str(right),
+                    "--allowlist",
+                    str(REPRO_POLICY),
+                    env=package_tool_env(root),
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(diagnostic, result.stderr)
+
+    def test_appimage_non_x86_64_executable_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            write_release_set(left, timestamp=1_700_000_000, appimage_elf_machine=183)
+            write_release_set(right, timestamp=1_800_000_000, appimage_elf_machine=183)
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(REPRO_POLICY),
+                env=package_tool_env(root),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("AppImage executable architecture is not x86_64", result.stderr)
+
+    def test_rejects_path_glob_and_product_payload_normalization_entries(self) -> None:
+        for artifact_glob in ("*", "build.txt", "config.toml", "config.yaml", "blob.bin", "payload"):
+            with self.subTest(artifact_glob=artifact_glob), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                left, right = root / "left", root / "right"
+                left.mkdir()
+                right.mkdir()
+                (left / "build.txt").write_bytes(b"time=1111\n")
+                (right / "build.txt").write_bytes(b"time=2222\n")
+                policy = {
+                    "schema_version": 1,
+                    "entries": [
+                        {
+                            "id": "forbidden-path-normalization",
+                            "artifact_glob": artifact_glob,
+                            "byte_range": {"start": 5, "end": 9},
+                            "replacement_utf8": "0000",
+                            "rationale": "test-only legacy path normalization",
+                            "owner": "test",
+                        }
+                    ],
+                }
+                policy_path = root / "policy.json"
+                policy_path.write_text(json.dumps(policy), encoding="utf-8")
+
+                result = run_script(
+                    REPRO,
+                    str(left),
+                    str(right),
+                    "--allowlist",
+                    str(policy_path),
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    "entries[0].namespace must equal package_metadata",
+                    result.stderr,
+                )
 
     def test_desktop_packages_compare_normalized_extracted_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             left, right = root / "left", root / "right"
-            left.mkdir()
-            right.mkdir()
-            name = "moonsight-linux-x86_64-v1.0.0.deb"
-            payload = {
-                "usr/bin/moonsight": b"same executable",
-                "usr/lib/moonsight/game.msb": b"MSB2same",
-                "usr/lib/moonsight/app.js": b"same javascript",
-            }
-            write_deb(left / name, payload, timestamp=1_700_000_000)
-            write_deb(right / name, payload, timestamp=1_800_000_000)
+            write_release_set(left, timestamp=1_700_000_000)
+            write_release_set(right, timestamp=1_800_000_000)
             report_path = root / "report.json"
 
             result = run_script(
@@ -341,37 +729,37 @@ printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSi
                 str(REPRO_POLICY),
                 "--output",
                 str(report_path),
+                env=package_tool_env(root),
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertRegex(str(report.get("input_sha256", "")), r"^[0-9a-f]{64}$")
-            artifact = report["artifacts"][0]
-            self.assertEqual(artifact["left_size_bytes"], (left / name).stat().st_size)
-            self.assertEqual(artifact["right_size_bytes"], (right / name).stat().st_size)
+            artifact = next(item for item in report["artifacts"] if item["path"] == DEB_NAME)
+            self.assertEqual(artifact["left_size_bytes"], (left / DEB_NAME).stat().st_size)
+            self.assertEqual(artifact["right_size_bytes"], (right / DEB_NAME).stat().st_size)
             self.assertNotEqual(artifact["left_raw_sha256"], artifact["right_raw_sha256"])
             self.assertEqual(
                 artifact["left_normalized_sha256"],
                 artifact["right_normalized_sha256"],
             )
-            self.assertEqual(artifact["comparison"], "normalized-desktop-payload")
+            self.assertEqual(
+                artifact["comparison"], "normalized-desktop-payload-and-identity"
+            )
 
     def test_desktop_payload_rejects_unexplained_core_difference(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             left, right = root / "left", root / "right"
-            left.mkdir()
-            right.mkdir()
-            name = "moonsight-linux-x86_64-v1.0.0.deb"
-            write_deb(
-                left / name,
-                {"usr/lib/moonsight/app.js": b"left javascript"},
+            write_release_set(
+                left,
                 timestamp=1_700_000_000,
+                deb_payload={"usr/lib/moonsight/app.js": b"left javascript"},
             )
-            write_deb(
-                right / name,
-                {"usr/lib/moonsight/app.js": b"right javascript"},
+            write_release_set(
+                right,
                 timestamp=1_800_000_000,
+                deb_payload={"usr/lib/moonsight/app.js": b"right javascript"},
             )
 
             result = run_script(
@@ -380,6 +768,7 @@ printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSi
                 str(right),
                 "--allowlist",
                 str(REPRO_POLICY),
+                env=package_tool_env(root),
             )
 
             self.assertNotEqual(result.returncode, 0)
@@ -392,39 +781,24 @@ printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSi
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             left, right = root / "left", root / "right"
-            left.mkdir()
-            right.mkdir()
-            name = "moonsight-linux-x86_64-v1.0.0.deb"
-            write_deb(
-                left / name,
-                {"usr/bin/moonsight": b"build=1\n"},
+            write_release_set(
+                left,
                 timestamp=1_700_000_000,
+                deb_payload={"usr/bin/moonsight": elf_x86_64(b"build=1")},
             )
-            write_deb(
-                right / name,
-                {"usr/bin/moonsight": b"build=2\n"},
+            write_release_set(
+                right,
                 timestamp=1_800_000_000,
+                deb_payload={"usr/bin/moonsight": elf_x86_64(b"build=2")},
             )
-            policy = json.loads(REPRO_POLICY.read_text(encoding="utf-8"))
-            policy["entries"] = [
-                {
-                    "id": "forbidden-executable-normalization",
-                    "artifact_glob": "usr/bin/moonsight",
-                    "byte_range": {"start": 6, "end": 7},
-                    "replacement_utf8": "0",
-                    "rationale": "test-only attempted executable exclusion",
-                    "owner": "test",
-                }
-            ]
-            policy_path = root / "policy.json"
-            policy_path.write_text(json.dumps(policy), encoding="utf-8")
 
             result = run_script(
                 REPRO,
                 str(left),
                 str(right),
                 "--allowlist",
-                str(policy_path),
+                str(REPRO_POLICY),
+                env=package_tool_env(root),
             )
 
             self.assertNotEqual(result.returncode, 0)
@@ -437,32 +811,21 @@ printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSi
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             left, right = root / "left", root / "right"
-            left.mkdir()
-            right.mkdir()
-            name = "moonsight-linux-x86_64-v1.0.0.deb"
             resource = "usr/lib/moonsight/assets/app.css"
-            write_deb(left / name, {resource: b"color:1\n"}, timestamp=1_700_000_000)
-            write_deb(right / name, {resource: b"color:2\n"}, timestamp=1_800_000_000)
-            policy = json.loads(REPRO_POLICY.read_text(encoding="utf-8"))
-            policy["entries"] = [
-                {
-                    "id": "forbidden-resource-normalization",
-                    "artifact_glob": resource,
-                    "byte_range": {"start": 6, "end": 7},
-                    "replacement_utf8": "0",
-                    "rationale": "test-only attempted resource exclusion",
-                    "owner": "test",
-                }
-            ]
-            policy_path = root / "policy.json"
-            policy_path.write_text(json.dumps(policy), encoding="utf-8")
+            write_release_set(
+                left, timestamp=1_700_000_000, deb_payload={resource: b"color:1\n"}
+            )
+            write_release_set(
+                right, timestamp=1_800_000_000, deb_payload={resource: b"color:2\n"}
+            )
 
             result = run_script(
                 REPRO,
                 str(left),
                 str(right),
                 "--allowlist",
-                str(policy_path),
+                str(REPRO_POLICY),
+                env=package_tool_env(root),
             )
 
             self.assertNotEqual(result.returncode, 0)
@@ -471,49 +834,71 @@ printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSi
                 result.stderr,
             )
 
-    def test_retains_raw_digests_and_allows_only_declared_normalization(self) -> None:
+    def test_retains_raw_digests_and_normalizes_only_declared_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             left, right = root / "left", root / "right"
-            left.mkdir()
-            right.mkdir()
-            (left / "game.msb").write_bytes(b"MSB2same")
-            (right / "game.msb").write_bytes(b"MSB2same")
-            (left / "build.txt").write_bytes(b"time=1111\npayload=same\n")
-            (right / "build.txt").write_bytes(b"time=2222\npayload=same\n")
-            allowlist = {
-                "schema_version": 1,
-                "entries": [
-                    {
-                        "id": "build-time",
-                        "artifact_glob": "build.txt",
-                        "byte_range": {"start": 5, "end": 9},
-                        "replacement_utf8": "0000",
-                        "rationale": "packager timestamp",
-                        "owner": "release engineering",
-                    }
-                ],
-            }
-            allow_path = root / "allow.json"
+            write_release_set(left, timestamp=1_700_000_000)
+            write_release_set(right, timestamp=1_800_000_000)
             report_path = root / "report.json"
-            allow_path.write_text(json.dumps(allowlist), encoding="utf-8")
 
             result = run_script(
                 REPRO,
                 str(left),
                 str(right),
                 "--allowlist",
-                str(allow_path),
+                str(REPRO_POLICY),
                 "--output",
                 str(report_path),
+                env=package_tool_env(root),
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
             report = json.loads(report_path.read_text(encoding="utf-8"))
-            artifact = next(item for item in report["artifacts"] if item["path"] == "build.txt")
+            artifact = next(item for item in report["artifacts"] if item["path"] == RPM_NAME)
             self.assertNotEqual(artifact["left_raw_sha256"], artifact["right_raw_sha256"])
             self.assertEqual(artifact["left_normalized_sha256"], artifact["right_normalized_sha256"])
-            self.assertEqual(artifact["normalization_id"], "build-time")
+            self.assertEqual(
+                artifact["normalization_ids"],
+                ["rpm-build-host-v1", "rpm-build-time-v1"],
+            )
+
+    def test_normalizes_only_declared_appimage_build_id_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            left, right = root / "left", root / "right"
+            write_release_set(
+                left,
+                timestamp=1_700_000_000,
+                appimage_build_id="build-left",
+            )
+            write_release_set(
+                right,
+                timestamp=1_800_000_000,
+                appimage_build_id="build-right",
+            )
+            report_path = root / "report.json"
+
+            result = run_script(
+                REPRO,
+                str(left),
+                str(right),
+                "--allowlist",
+                str(REPRO_POLICY),
+                "--output",
+                str(report_path),
+                env=package_tool_env(root),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            artifact = next(
+                item for item in report["artifacts"] if item["path"] == APPIMAGE_NAME
+            )
+            self.assertEqual(
+                artifact["normalization_ids"],
+                ["appimage-build-id-v1"],
+            )
 
     def test_unknown_or_core_artifact_difference_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -529,7 +914,7 @@ printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSi
             result = run_script(REPRO, str(left), str(right), "--allowlist", str(allow_path))
 
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("core artifact differs in raw bytes: game.msb", result.stderr)
+            self.assertIn("artifact differs in raw bytes: game.msb", result.stderr)
 
 
 class RcManifestTests(unittest.TestCase):
