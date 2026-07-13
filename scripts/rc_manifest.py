@@ -20,6 +20,8 @@ from release_schema import (
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
 CHECK_STATUSES = {"PASS", "FAIL", "BLOCKED", "NOT_RUN"}
+AUTOMATED_CHECK_IDS = ("benchmark", "reproducibility")
+PUBLICATION_NOTICE = "Candidate identity does not authorize publication."
 
 
 def check_status(report: dict[str, Any]) -> str:
@@ -60,6 +62,166 @@ def require_version_map(
     for key in required_keys:
         require_non_empty_string(value.get(key), f"{path}.{key}", errors)
     return value
+
+
+def require_object(value: Any, path: str, errors: list[str]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        errors.append(f"{path} must be an object")
+        return {}
+    return value
+
+
+def require_array(value: Any, path: str, errors: list[str]) -> list[Any]:
+    if not isinstance(value, list):
+        errors.append(f"{path} must be an array")
+        return []
+    return value
+
+
+def validate_report_reference(
+    value: Any, path: str, errors: list[str]
+) -> dict[str, Any]:
+    report = require_object(value, path, errors)
+    require_non_empty_string(report.get("path"), f"{path}.path", errors)
+    validate_sha256(report.get("sha256"), f"{path}.sha256", errors)
+    return report
+
+
+def validate_candidate_manifest(manifest: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if manifest.get("schema_version") != 2:
+        errors.append("candidate.schema_version must be 2")
+    require_non_empty_string(
+        manifest.get("attempt_id"), "candidate.attempt_id", errors
+    )
+
+    identity = require_object(manifest.get("candidate"), "candidate", errors)
+    if identity.get("version") != "v1.0.0":
+        errors.append("candidate.version must equal v1.0.0")
+    commit = require_non_empty_string(
+        identity.get("commit"), "candidate.commit", errors
+    )
+    if commit and SHA.fullmatch(commit) is None:
+        errors.append("candidate.commit must be a full lowercase Git SHA")
+    if identity.get("architecture") != "x86_64":
+        errors.append("candidate.architecture must equal x86_64")
+    if identity.get("clean_tree") is not True:
+        errors.append("candidate.clean_tree must be true")
+    require_non_empty_string(
+        identity.get("built_at_utc"), "candidate.built_at_utc", errors
+    )
+    require_non_empty_string(
+        identity.get("build_host"), "candidate.build_host", errors
+    )
+
+    artifacts = require_array(
+        identity.get("artifacts"), "candidate.artifacts", errors
+    )
+    if not artifacts:
+        errors.append("candidate.artifacts must be a non-empty array")
+    artifact_paths: set[str] = set()
+    for index, raw_artifact in enumerate(artifacts):
+        path = f"candidate.artifacts[{index}]"
+        artifact = require_object(raw_artifact, path, errors)
+        artifact_path = require_non_empty_string(
+            artifact.get("path"), f"{path}.path", errors
+        )
+        if artifact_path in artifact_paths:
+            errors.append(f"{path}.path duplicates candidate artifact {artifact_path}")
+        elif artifact_path:
+            artifact_paths.add(artifact_path)
+        size = artifact.get("size_bytes")
+        if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+            errors.append(f"{path}.size_bytes must be a non-negative integer")
+        validate_sha256(artifact.get("sha256"), f"{path}.sha256", errors)
+
+    require_version_map(
+        manifest.get("toolchains"),
+        "candidate.toolchains",
+        ("moon", "node", "rustc", "tauri_cli"),
+        errors,
+    )
+    require_version_map(
+        manifest.get("system"),
+        "candidate.system",
+        ("build_os", "kernel", "fedora", "arch"),
+        errors,
+    )
+    require_version_map(
+        manifest.get("validation_targets"),
+        "candidate.validation_targets",
+        ("chromium", "firefox", "webkitgtk"),
+        errors,
+    )
+
+    reproducibility = require_object(
+        manifest.get("reproducibility"), "candidate.reproducibility", errors
+    )
+    reproducibility_input = validate_sha256(
+        reproducibility.get("input_sha256"),
+        "candidate.reproducibility.input_sha256",
+        errors,
+    )
+    reproducibility_report = validate_report_reference(
+        reproducibility.get("report"),
+        "candidate.reproducibility.report",
+        errors,
+    )
+
+    if manifest.get("required_evidence_ids") != list(REQUIRED_EVIDENCE_IDS):
+        errors.append("candidate.required_evidence_ids must equal the Formal 1.0 matrix")
+
+    checks = require_array(
+        manifest.get("automated_checks"), "candidate.automated_checks", errors
+    )
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    by_id: dict[str, dict[str, Any]] = {}
+    for index, raw_check in enumerate(checks):
+        path = f"candidate.automated_checks[{index}]"
+        check = require_object(raw_check, path, errors)
+        check_id = check.get("id")
+        if check_id not in AUTOMATED_CHECK_IDS:
+            errors.append(f"{path}.id is not a required automated check")
+        elif check_id in seen:
+            duplicates.add(check_id)
+        else:
+            seen.add(check_id)
+            by_id[check_id] = check
+        if check.get("status") not in CHECK_STATUSES:
+            errors.append(f"{path}.status is invalid")
+        validate_sha256(check.get("input_sha256"), f"{path}.input_sha256", errors)
+        validate_report_reference(check.get("report"), f"{path}.report", errors)
+    for check_id in sorted(duplicates):
+        errors.append(f"duplicate automated check ID: {check_id}")
+    missing_checks = [check_id for check_id in AUTOMATED_CHECK_IDS if check_id not in seen]
+    if missing_checks:
+        errors.append(f"missing automated check IDs: {', '.join(missing_checks)}")
+    reproducibility_check = by_id.get("reproducibility", {})
+    if (
+        reproducibility_input
+        and reproducibility_check.get("input_sha256") != reproducibility_input
+    ):
+        errors.append(
+            "candidate reproducibility automated check input must equal "
+            "candidate.reproducibility.input_sha256"
+        )
+    if (
+        reproducibility_report
+        and reproducibility_check.get("report") != reproducibility_report
+    ):
+        errors.append(
+            "candidate reproducibility automated check report must equal "
+            "candidate.reproducibility.report"
+        )
+
+    if manifest.get("notice") != PUBLICATION_NOTICE:
+        errors.append(f"candidate.notice must equal {PUBLICATION_NOTICE}")
+    if "external_checks" in manifest:
+        errors.append("candidate must not contain external_checks")
+    if "release_authorized" in manifest:
+        errors.append("candidate must not contain release_authorized")
+    return errors
 
 
 def generate(args: argparse.Namespace) -> int:
@@ -171,8 +333,13 @@ def generate(args: argparse.Namespace) -> int:
         "validation_targets": metadata["validation_targets"],
         "required_evidence_ids": list(REQUIRED_EVIDENCE_IDS),
         "automated_checks": automated_checks,
-        "notice": "Candidate identity does not authorize publication.",
+        "notice": PUBLICATION_NOTICE,
     }
+    manifest_errors = validate_candidate_manifest(manifest)
+    if manifest_errors:
+        for error in manifest_errors:
+            print(f"error: {error}", file=sys.stderr)
+        return 1
     encoded = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
     try:
         descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)

@@ -4,181 +4,32 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
-from release_schema import (
-    REQUIRED_EVIDENCE_IDS,
-    read_object,
-    sha256_file,
-    validate_sha256,
-)
+from rc_manifest import validate_candidate_manifest
+from release_evidence import candidate_commit, validate_evidence_index
+from release_schema import read_object, sha256_file
 
 
-SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
-
-
-def require_object(value: Any, path: str, errors: list[str]) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        errors.append(f"{path} must be an object")
-        return {}
-    return value
-
-
-def require_array(value: Any, path: str, errors: list[str]) -> list[Any]:
-    if not isinstance(value, list):
-        errors.append(f"{path} must be an array")
-        return []
-    return value
-
-
-def require_non_empty_string(value: Any, path: str, errors: list[str]) -> str:
-    if not isinstance(value, str) or not value:
-        errors.append(f"{path} must be a non-empty string")
-        return ""
-    return value
-
-
-def validate_candidate(
-    candidate: dict[str, Any], errors: list[str]
-) -> tuple[str, dict[str, str]]:
-    if candidate.get("schema_version") != 2:
-        errors.append("candidate.schema_version must be 2")
-
-    identity = require_object(candidate.get("candidate"), "candidate", errors)
-    commit = require_non_empty_string(
-        identity.get("commit"), "candidate.commit", errors
-    )
-    if commit and SHA_PATTERN.fullmatch(commit) is None:
-        errors.append("candidate.commit must be a full lowercase Git SHA")
-
-    artifacts: dict[str, str] = {}
-    raw_artifacts = require_array(
-        identity.get("artifacts"), "candidate.artifacts", errors
-    )
-    if not raw_artifacts:
-        errors.append("candidate.artifacts must not be empty")
-    for index, raw_artifact in enumerate(raw_artifacts):
-        path = f"candidate.artifacts[{index}]"
-        artifact = require_object(raw_artifact, path, errors)
-        artifact_path = require_non_empty_string(
-            artifact.get("path"), f"{path}.path", errors
-        )
-        artifact_digest = validate_sha256(
-            artifact.get("sha256"), f"{path}.sha256", errors
-        )
-        if artifact_path in artifacts:
-            errors.append(f"{path}.path duplicates candidate artifact {artifact_path}")
-        elif artifact_path and artifact_digest:
-            artifacts[artifact_path] = artifact_digest
-
-    if candidate.get("required_evidence_ids") != list(REQUIRED_EVIDENCE_IDS):
-        errors.append("candidate.required_evidence_ids must equal the Formal 1.0 matrix")
-
-    automated_checks = require_array(
-        candidate.get("automated_checks"), "candidate.automated_checks", errors
-    )
-    if not automated_checks:
-        errors.append("candidate.automated_checks must not be empty")
-    for index, raw_check in enumerate(automated_checks):
-        path = f"automated_checks[{index}]"
-        check = require_object(raw_check, path, errors)
-        require_non_empty_string(check.get("id"), f"{path}.id", errors)
-        if check.get("status") != "PASS":
-            errors.append(f"{path}.status must be PASS")
-
-    return commit, artifacts
-
-
-def validate_index(
-    candidate_path: Path,
-    candidate_sha256: str,
-    candidate_commit: str,
-    candidate_artifacts: dict[str, str],
-    index: dict[str, Any],
-    errors: list[str],
+def validate_technical_readiness(
+    candidate: dict[str, Any], index: dict[str, Any], errors: list[str]
 ) -> None:
-    if index.get("schema_version") != 1:
-        errors.append("index.schema_version must be 1")
-    if index.get("candidate_commit") != candidate_commit:
-        errors.append("index.candidate_commit must equal candidate commit")
-
-    candidate_reference = require_object(
-        index.get("candidate_manifest"), "index.candidate_manifest", errors
-    )
-    if candidate_reference.get("path") != candidate_path.name:
-        errors.append("index.candidate_manifest.path must name the candidate manifest")
-    referenced_candidate_digest = validate_sha256(
-        candidate_reference.get("sha256"),
-        "index.candidate_manifest.sha256",
-        errors,
-    )
-    if (
-        referenced_candidate_digest
-        and referenced_candidate_digest != candidate_sha256
-    ):
-        errors.append(
-            "index.candidate_manifest.sha256 must equal the candidate manifest"
-        )
+    automated_checks = candidate.get("automated_checks")
+    if isinstance(automated_checks, list):
+        for check_index, check in enumerate(automated_checks):
+            if isinstance(check, dict) and check.get("status") != "PASS":
+                errors.append(f"automated_checks[{check_index}].status must be PASS")
 
     if index.get("aggregate_status") != "PASS":
         errors.append("index.aggregate_status must be PASS")
-
-    records = require_array(index.get("records"), "index.records", errors)
-    seen: set[str] = set()
-    duplicates: set[str] = set()
-    for record_index, raw_record in enumerate(records):
-        path = f"records[{record_index}]"
-        record = require_object(raw_record, path, errors)
-        evidence_id = record.get("id")
-        if evidence_id not in REQUIRED_EVIDENCE_IDS:
-            errors.append(f"{path}.id is not a required evidence ID")
-        elif evidence_id in seen:
-            duplicates.add(evidence_id)
-        else:
-            seen.add(evidence_id)
-
-        if record.get("status") != "PASS":
-            errors.append(f"{path}.status must be PASS")
-        if record.get("candidate_commit") != candidate_commit:
-            errors.append(f"{path}.candidate_commit must equal candidate commit")
-
-        artifact = require_object(record.get("artifact"), f"{path}.artifact", errors)
-        artifact_path = require_non_empty_string(
-            artifact.get("path"), f"{path}.artifact.path", errors
-        )
-        artifact_digest = validate_sha256(
-            artifact.get("sha256"), f"{path}.artifact.sha256", errors
-        )
-        if artifact_path and artifact_path not in candidate_artifacts:
-            errors.append(f"{path}.artifact.path must reference candidate artifact")
-        elif (
-            artifact_path
-            and artifact_digest
-            and artifact_digest != candidate_artifacts.get(artifact_path)
-        ):
-            errors.append(f"{path}.artifact.sha256 must equal candidate artifact")
-
-        require_non_empty_string(record.get("record_path"), f"{path}.record_path", errors)
-        for field in (
-            "record_sha256",
-            "public_evidence_sha256",
-            "raw_evidence_sha256",
-        ):
-            validate_sha256(record.get(field), f"{path}.{field}", errors)
-
-    for evidence_id in sorted(duplicates):
-        errors.append(f"duplicate evidence ID: {evidence_id}")
-    missing = [
-        evidence_id
-        for evidence_id in REQUIRED_EVIDENCE_IDS
-        if evidence_id not in seen
-    ]
-    if missing:
-        errors.append(f"missing required evidence IDs: {', '.join(missing)}")
+    records = index.get("records")
+    if isinstance(records, list):
+        for record_index, record in enumerate(records):
+            if isinstance(record, dict) and record.get("status") != "PASS":
+                errors.append(f"records[{record_index}].status must be PASS")
 
 
 def git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -191,11 +42,11 @@ def git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def validate_git_state(repo: Path, candidate_commit: str, errors: list[str]) -> None:
+def validate_git_state(repo: Path, frozen_commit: str, errors: list[str]) -> None:
     head = git(repo, "rev-parse", "HEAD")
     if head.returncode != 0:
         errors.append(f"cannot resolve repository HEAD: {head.stderr.strip()}")
-    elif candidate_commit and head.stdout.strip() != candidate_commit:
+    elif frozen_commit and head.stdout.strip() != frozen_commit:
         errors.append("repository HEAD must equal candidate commit")
 
     status = git(repo, "status", "--porcelain=v1")
@@ -204,9 +55,12 @@ def validate_git_state(repo: Path, candidate_commit: str, errors: list[str]) -> 
     elif status.stdout:
         errors.append("repository worktree must be clean")
 
-    tag = git(repo, "show-ref", "--verify", "refs/tags/v1.0.0")
+    tag = git(repo, "show-ref", "--verify", "--quiet", "refs/tags/v1.0.0")
     if tag.returncode == 0:
         errors.append("refs/tags/v1.0.0 must not exist")
+    elif tag.returncode != 1:
+        detail = tag.stderr.strip() or f"exit status {tag.returncode}"
+        errors.append(f"cannot inspect refs/tags/v1.0.0: {detail}")
 
 
 def write_report(output: Path, report: dict[str, Any]) -> bool:
@@ -256,16 +110,17 @@ def main() -> int:
         errors.append(str(error))
         index = {}
 
-    candidate_commit, candidate_artifacts = validate_candidate(candidate, errors)
-    validate_index(
-        args.candidate,
-        candidate_sha256,
-        candidate_commit,
-        candidate_artifacts,
-        index,
-        errors,
+    errors.extend(validate_candidate_manifest(candidate))
+    errors.extend(
+        validate_evidence_index(
+            candidate,
+            index,
+            candidate_manifest_path=args.candidate,
+            candidate_manifest_sha256=candidate_sha256,
+        )
     )
-    validate_git_state(args.repo, candidate_commit, errors)
+    validate_technical_readiness(candidate, index, errors)
+    validate_git_state(args.repo, candidate_commit(candidate), errors)
 
     report = {
         "schema_version": 1,

@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any, Callable
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,11 +18,20 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from release_schema import REQUIRED_EVIDENCE_IDS  # noqa: E402
+import verify_release_evidence  # noqa: E402
 
 
 VERIFIER = SCRIPTS / "verify_release_evidence.py"
-ARTIFACT_PATH = "MoonSight-v1.0.0-web-x86_64.zip"
-ARTIFACT_DIGEST = "a" * 64
+WEB_PATH = "MoonSight-v1.0.0-web-x86_64.zip"
+APPIMAGE_PATH = "MoonSight-v1.0.0-linux-x86_64.AppImage"
+DEB_PATH = "MoonSight-v1.0.0-linux-x86_64.deb"
+RPM_PATH = "MoonSight-v1.0.0-linux-x86_64.rpm"
+ARTIFACT_DIGESTS = {
+    WEB_PATH: "a" * 64,
+    APPIMAGE_PATH: "d" * 64,
+    DEB_PATH: "e" * 64,
+    RPM_PATH: "f" * 64,
+}
 
 
 def write_json(path: Path, value: object) -> None:
@@ -64,23 +74,96 @@ def init_repo(root: Path) -> tuple[Path, str]:
 def candidate_manifest(candidate_commit: str) -> dict[str, Any]:
     return {
         "schema_version": 2,
+        "attempt_id": "rc-20260713T030000Z-111111111111",
         "candidate": {
             "version": "v1.0.0",
             "commit": candidate_commit,
+            "architecture": "x86_64",
+            "clean_tree": True,
+            "built_at_utc": "2026-07-13T03:00:00Z",
+            "build_host": "release-builder.example",
             "artifacts": [
                 {
-                    "path": ARTIFACT_PATH,
+                    "path": path,
                     "size_bytes": 123,
-                    "sha256": ARTIFACT_DIGEST,
+                    "sha256": digest,
                 }
+                for path, digest in ARTIFACT_DIGESTS.items()
             ],
+        },
+        "toolchains": {
+            "moon": "0.6.29+3f4c5d6",
+            "node": "24.4.0",
+            "rustc": "1.88.0",
+            "tauri_cli": "2.7.1",
+        },
+        "system": {
+            "build_os": "Ubuntu 24.04.2 LTS",
+            "kernel": "6.8.0-63-generic",
+            "fedora": "Fedora Linux 42",
+            "arch": "Arch Linux 2026.07.01",
+        },
+        "reproducibility": {
+            "input_sha256": "6" * 64,
+            "report": {
+                "path": "reports/reproducibility.json",
+                "sha256": "7" * 64,
+            },
+        },
+        "validation_targets": {
+            "chromium": "138.0.7204.92",
+            "firefox": "140.0.4",
+            "webkitgtk": "2.48.3",
         },
         "required_evidence_ids": list(REQUIRED_EVIDENCE_IDS),
         "automated_checks": [
-            {"id": "benchmark", "status": "PASS"},
-            {"id": "reproducibility", "status": "PASS"},
+            {
+                "id": "benchmark",
+                "status": "PASS",
+                "input_sha256": "8" * 64,
+                "report": {
+                    "path": "reports/benchmark.json",
+                    "sha256": "9" * 64,
+                },
+            },
+            {
+                "id": "reproducibility",
+                "status": "PASS",
+                "input_sha256": "6" * 64,
+                "report": {
+                    "path": "reports/reproducibility.json",
+                    "sha256": "7" * 64,
+                },
+            },
         ],
+        "notice": "Candidate identity does not authorize publication.",
     }
+
+
+def artifact_for_evidence(evidence_id: str) -> str:
+    if evidence_id.startswith("W1-") or evidence_id == "C1-web":
+        return WEB_PATH
+    if evidence_id.endswith("-deb"):
+        return DEB_PATH
+    if evidence_id.endswith("-rpm"):
+        return RPM_PATH
+    return APPIMAGE_PATH
+
+
+def negative_fixtures() -> list[dict[str, Any]]:
+    return [
+        {
+            "source_artifact": {
+                "path": WEB_PATH,
+                "sha256": ARTIFACT_DIGESTS[WEB_PATH],
+            },
+            "transformation": transformation,
+            "derived_artifact_sha256": str(index) * 64,
+        }
+        for index, transformation in enumerate(
+            ("missing-msb", "empty-msb", "corrupt-msb"), start=1
+        )
+    ]
 
 
 def evidence_index(
@@ -101,13 +184,20 @@ def evidence_index(
                 "status": "PASS",
                 "candidate_commit": candidate_commit,
                 "artifact": {
-                    "path": ARTIFACT_PATH,
-                    "sha256": ARTIFACT_DIGEST,
+                    "path": artifact_for_evidence(evidence_id),
+                    "sha256": ARTIFACT_DIGESTS[
+                        artifact_for_evidence(evidence_id)
+                    ],
                 },
                 "record_path": f"{index:02d}-{evidence_id}.json",
                 "record_sha256": f"{index + 1:x}" * 64,
                 "public_evidence_sha256": "b" * 64,
                 "raw_evidence_sha256": "c" * 64,
+                **(
+                    {"negative_fixtures": negative_fixtures()}
+                    if evidence_id.startswith("W1-")
+                    else {}
+                ),
             }
             for index, evidence_id in enumerate(REQUIRED_EVIDENCE_IDS)
         ],
@@ -196,6 +286,126 @@ class VerifyReleaseEvidenceTests(unittest.TestCase):
             self.assertFalse(report["publication_authorized"])
             self.assertEqual(report["reasons"], [])
             self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o444)
+
+    def test_rejects_each_omitted_candidate_schema_category(self) -> None:
+        mutations: tuple[
+            tuple[str, Callable[[dict[str, Any]], None], str], ...
+        ] = (
+            (
+                "attempt",
+                lambda candidate: candidate.pop("attempt_id"),
+                "candidate.attempt_id must be a non-empty string",
+            ),
+            (
+                "build",
+                lambda candidate: candidate["candidate"].pop("architecture"),
+                "candidate.architecture must equal x86_64",
+            ),
+            (
+                "toolchain",
+                lambda candidate: candidate["toolchains"].pop("moon"),
+                "candidate.toolchains.moon must be a non-empty string",
+            ),
+            (
+                "system",
+                lambda candidate: candidate["system"].pop("fedora"),
+                "candidate.system.fedora must be a non-empty string",
+            ),
+            (
+                "validation",
+                lambda candidate: candidate["validation_targets"].pop("firefox"),
+                "candidate.validation_targets.firefox must be a non-empty string",
+            ),
+            (
+                "reproducibility",
+                lambda candidate: candidate["reproducibility"].pop("report"),
+                "candidate.reproducibility.report must be an object",
+            ),
+        )
+        for category, mutate, expected_reason in mutations:
+            with self.subTest(category=category), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                repo, candidate, index, output = self.prepare(
+                    root, mutate_candidate=mutate
+                )
+
+                result = run_verifier(repo, candidate, index, output)
+
+                self.assert_rejected(result, output, expected_reason)
+
+    def test_rejects_missing_w1_negative_fixture_provenance(self) -> None:
+        def remove_fixtures(index: dict[str, Any]) -> None:
+            index["records"][0].pop("negative_fixtures")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, candidate, index, output = self.prepare(
+                root, mutate_index=remove_fixtures
+            )
+
+            result = run_verifier(repo, candidate, index, output)
+
+            self.assert_rejected(
+                result,
+                output,
+                "records[0].negative_fixtures must contain missing-msb",
+            )
+
+    def test_rejects_w1_negative_fixture_from_another_artifact(self) -> None:
+        def change_source_digest(index: dict[str, Any]) -> None:
+            index["records"][0]["negative_fixtures"][0]["source_artifact"][
+                "sha256"
+            ] = "0" * 64
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, candidate, index, output = self.prepare(
+                root, mutate_index=change_source_digest
+            )
+
+            result = run_verifier(repo, candidate, index, output)
+
+            self.assert_rejected(
+                result,
+                output,
+                (
+                    "records[0].negative_fixtures[0].source_artifact.sha256 "
+                    "must equal candidate Web artifact"
+                ),
+            )
+
+    def test_rejects_private_or_parent_evidence_index_references(self) -> None:
+        mutations: tuple[
+            tuple[str, Callable[[dict[str, Any]], None], str], ...
+        ] = (
+            (
+                "record",
+                lambda index: index["records"][0].__setitem__(
+                    "record_path", "../private-record.json"
+                ),
+                "records[0].record_path must be a public relative path",
+            ),
+            (
+                "fixture",
+                lambda index: index["records"][0]["negative_fixtures"][0][
+                    "source_artifact"
+                ].__setitem__("path", "../private-web.zip"),
+                (
+                    "records[0].negative_fixtures[0].source_artifact.path "
+                    "must be a public relative path"
+                ),
+            ),
+        )
+        for reference, mutate, expected_reason in mutations:
+            with self.subTest(reference=reference), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir)
+                repo, candidate, index, output = self.prepare(
+                    root, mutate_index=mutate
+                )
+
+                result = run_verifier(repo, candidate, index, output)
+
+                self.assert_rejected(result, output, expected_reason)
 
     def test_missing_id_writes_failure_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -316,7 +526,7 @@ class VerifyReleaseEvidenceTests(unittest.TestCase):
             repo, candidate, index, output = self.prepare(root)
             release_dir = repo / "dist"
             release_dir.mkdir()
-            (release_dir / ARTIFACT_PATH).write_bytes(b"untracked release content")
+            (release_dir / WEB_PATH).write_bytes(b"untracked release content")
 
             result = run_verifier(repo, candidate, index, output)
 
@@ -331,6 +541,45 @@ class VerifyReleaseEvidenceTests(unittest.TestCase):
             result = run_verifier(repo, candidate, index, output)
 
             self.assert_rejected(result, output, "refs/tags/v1.0.0 must not exist")
+
+    def test_show_ref_rc_1_is_absent_and_other_nonzero_is_gate_error(self) -> None:
+        candidate_commit = "1" * 40
+        head = subprocess.CompletedProcess(
+            ["git", "rev-parse", "HEAD"],
+            0,
+            stdout=f"{candidate_commit}\n",
+            stderr="",
+        )
+        status = subprocess.CompletedProcess(
+            ["git", "status", "--porcelain=v1"], 0, stdout="", stderr=""
+        )
+        for returncode, expected_error in (
+            (1, None),
+            (2, "cannot inspect refs/tags/v1.0.0"),
+        ):
+            with self.subTest(returncode=returncode):
+                tag = subprocess.CompletedProcess(
+                    ["git", "show-ref"],
+                    returncode,
+                    stdout="",
+                    stderr="tag lookup failed",
+                )
+                errors: list[str] = []
+                with patch.object(
+                    verify_release_evidence,
+                    "git",
+                    side_effect=(head, status, tag),
+                ):
+                    verify_release_evidence.validate_git_state(
+                        Path("."), candidate_commit, errors
+                    )
+
+                if expected_error is None:
+                    self.assertEqual(errors, [])
+                else:
+                    self.assertTrue(
+                        any(expected_error in error for error in errors), errors
+                    )
 
     def test_existing_output_is_never_overwritten(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

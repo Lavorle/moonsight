@@ -215,15 +215,19 @@ def validate_string_array(value: Any, path: str, errors: list[str]) -> list[Any]
 
 
 def validate_negative_fixtures(
-    candidate: dict[str, Any], record: dict[str, Any], errors: list[str]
+    candidate: dict[str, Any],
+    record: dict[str, Any],
+    errors: list[str],
+    record_path: str = "record",
 ) -> None:
+    fixtures_path = f"{record_path}.negative_fixtures"
     fixtures = require_array(
-        record.get("negative_fixtures"), "record.negative_fixtures", errors
+        record.get("negative_fixtures"), fixtures_path, errors
     )
     transformations: list[Any] = []
     artifacts = candidate_artifacts(candidate)
     for index, raw_fixture in enumerate(fixtures):
-        path = f"record.negative_fixtures[{index}]"
+        path = f"{fixtures_path}[{index}]"
         fixture = require_object(raw_fixture, path, errors)
         source = require_object(
             fixture.get("source_artifact"), f"{path}.source_artifact", errors
@@ -262,8 +266,7 @@ def validate_negative_fixtures(
         or set(transformations) != NEGATIVE_FIXTURE_TRANSFORMATIONS
     ):
         errors.append(
-            "record.negative_fixtures must contain missing-msb, empty-msb, "
-            "and corrupt-msb"
+            f"{fixtures_path} must contain missing-msb, empty-msb, and corrupt-msb"
         )
 
 
@@ -421,6 +424,122 @@ def aggregate_status(statuses: list[str]) -> str:
     return "NOT_RUN"
 
 
+def validate_evidence_index(
+    candidate: dict[str, Any],
+    index: dict[str, Any],
+    *,
+    candidate_manifest_path: Path | None = None,
+    candidate_manifest_sha256: str | None = None,
+) -> list[str]:
+    errors: list[str] = []
+    if index.get("schema_version") != 1:
+        errors.append("index.schema_version must be 1")
+
+    expected_commit = candidate_commit(candidate)
+    if index.get("candidate_commit") != expected_commit:
+        errors.append("index.candidate_commit must equal candidate commit")
+
+    candidate_reference = require_object(
+        index.get("candidate_manifest"), "index.candidate_manifest", errors
+    )
+    referenced_path = validate_public_reference(
+        candidate_reference.get("path"), "index.candidate_manifest.path", errors
+    )
+    if (
+        candidate_manifest_path is not None
+        and referenced_path
+        and referenced_path != candidate_manifest_path.name
+    ):
+        errors.append("index.candidate_manifest.path must name the candidate manifest")
+    referenced_digest = validate_sha256(
+        candidate_reference.get("sha256"),
+        "index.candidate_manifest.sha256",
+        errors,
+    )
+    if (
+        candidate_manifest_sha256 is not None
+        and referenced_digest
+        and referenced_digest != candidate_manifest_sha256
+    ):
+        errors.append(
+            "index.candidate_manifest.sha256 must equal the candidate manifest"
+        )
+
+    aggregate = index.get("aggregate_status")
+    if aggregate not in STATUSES:
+        errors.append("index.aggregate_status is invalid")
+
+    records = require_array(index.get("records"), "index.records", errors)
+    artifacts = candidate_artifacts(candidate)
+    seen: set[str] = set()
+    duplicate_ids: set[str] = set()
+    statuses: list[str] = []
+    for record_index, raw_record in enumerate(records):
+        path = f"records[{record_index}]"
+        record = require_object(raw_record, path, errors)
+        evidence_id = record.get("id")
+        if evidence_id not in REQUIRED_EVIDENCE_IDS:
+            errors.append(f"{path}.id is not a required evidence ID")
+        elif evidence_id in seen:
+            duplicate_ids.add(evidence_id)
+        else:
+            seen.add(evidence_id)
+
+        status = record.get("status")
+        if status not in STATUSES:
+            errors.append(f"{path}.status is invalid")
+        else:
+            statuses.append(status)
+        if record.get("candidate_commit") != expected_commit:
+            errors.append(f"{path}.candidate_commit must equal candidate commit")
+
+        artifact = require_object(record.get("artifact"), f"{path}.artifact", errors)
+        artifact_path = validate_public_reference(
+            artifact.get("path"), f"{path}.artifact.path", errors
+        )
+        artifact_digest = validate_sha256(
+            artifact.get("sha256"), f"{path}.artifact.sha256", errors
+        )
+        if artifact_path and artifact_path not in artifacts:
+            errors.append(f"{path}.artifact.path must reference candidate artifact")
+        elif (
+            artifact_path
+            and artifact_digest
+            and artifact_digest != artifacts.get(artifact_path)
+        ):
+            errors.append(f"{path}.artifact.sha256 must equal candidate artifact")
+
+        validate_public_reference(
+            record.get("record_path"), f"{path}.record_path", errors
+        )
+        for field in (
+            "record_sha256",
+            "public_evidence_sha256",
+            "raw_evidence_sha256",
+        ):
+            validate_sha256(record.get(field), f"{path}.{field}", errors)
+
+        if (
+            isinstance(evidence_id, str)
+            and evidence_id.startswith("W1-")
+            and (status == "PASS" or "negative_fixtures" in record)
+        ):
+            validate_negative_fixtures(candidate, record, errors, path)
+        elif "negative_fixtures" in record:
+            errors.append(f"{path}.negative_fixtures is only valid for W1 evidence")
+
+    for evidence_id in sorted(duplicate_ids):
+        errors.append(f"duplicate evidence ID: {evidence_id}")
+    missing = [
+        evidence_id for evidence_id in REQUIRED_EVIDENCE_IDS if evidence_id not in seen
+    ]
+    if missing:
+        errors.append(f"missing required evidence IDs: {', '.join(missing)}")
+    if aggregate in STATUSES and aggregate != aggregate_status(statuses):
+        errors.append("index.aggregate_status must equal the aggregate record status")
+    return errors
+
+
 def validate_record_command(args: argparse.Namespace) -> int:
     try:
         candidate = read_object(args.candidate, "candidate manifest")
@@ -518,6 +637,16 @@ def build_index(args: argparse.Namespace) -> int:
         "aggregate_status": aggregate_status(statuses),
         "records": records,
     }
+    index_errors = validate_evidence_index(
+        candidate,
+        index,
+        candidate_manifest_path=args.candidate,
+        candidate_manifest_sha256=sha256_file(args.candidate),
+    )
+    if index_errors:
+        for error in index_errors:
+            print(f"error: {error}", file=sys.stderr)
+        return 1
     encoded = (json.dumps(index, indent=2, sort_keys=True) + "\n").encode("utf-8")
     try:
         descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444)
