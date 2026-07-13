@@ -167,7 +167,9 @@ PY
 build_set() {
   local build_number="$1"
   local destination="$2"
-  local target_dir="$STAGING/target-$build_number"
+  # Use a stable target directory name for both builds. linuxdeploy's gtk hook
+  # embeds absolute AppDir paths; target-1 vs target-2 would make AppImages differ.
+  local target_dir="$STAGING/target"
   local artifact_dir="$STAGING/$destination"
   local web_dist="$ROOT/dist/demo"
   local built_at_utc

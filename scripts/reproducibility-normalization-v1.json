@@ -22,12 +22,12 @@
       "artifact_name": "moonsight-linux-x86_64-v1.0.0.deb",
       "format": "deb",
       "required_identity": {
-        "package_name": "moonsight",
+        "package_name": "moon-sight",
         "version": "1.0.0",
         "architecture": "amd64"
       },
       "normalizable_metadata_fields": [],
-      "rationale": "Compare every Debian data/control payload entry and all stable control identity fields; ar and tar timestamps are structural container metadata.",
+      "rationale": "Compare every Debian data/control payload entry and all stable control identity fields; ar and tar timestamps are structural container metadata. Package name matches Tauri productName kebab-case (MoonSight → moon-sight).",
       "owner": "release engineering"
     },
     {
@@ -35,7 +35,7 @@
       "artifact_name": "moonsight-linux-x86_64-v1.0.0.rpm",
       "format": "rpm",
       "required_identity": {
-        "package_name": "moonsight",
+        "package_name": "moon-sight",
         "version": "1.0.0",
         "architecture": "x86_64"
       },

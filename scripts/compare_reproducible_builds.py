@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import configparser
 import hashlib
 import io
@@ -388,7 +389,15 @@ def appimage_snapshot(path: Path) -> PackageSnapshot:
         desktop = parse_desktop_entry(desktop_files[0])
         app_name = desktop.get("Name", "").strip()
         exec_value = desktop.get("Exec", "").strip()
+        # Prefer X-AppImage-Version; Tauri's default desktop omits it, so fall back to
+        # Version= or the Formal 1.0 release artifact filename (...-v1.0.0.AppImage).
         version = desktop.get("X-AppImage-Version", "").strip()
+        if not version:
+            version = desktop.get("Version", "").strip()
+        if not version:
+            match = re.search(r"-v(\d+\.\d+\.\d+)\.AppImage$", path.name)
+            if match is not None:
+                version = match.group(1)
         if not app_name:
             raise ValueError("AppImage identity missing app_name")
         if not exec_value:

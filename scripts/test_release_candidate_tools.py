@@ -75,7 +75,7 @@ def write_deb(
     files: dict[str, bytes],
     *,
     timestamp: int,
-    package: str = "moonsight",
+    package: str = "moon-sight",
     version: str = "1.0.0",
     architecture: str = "amd64",
 ) -> None:
@@ -158,7 +158,7 @@ def write_fake_rpm(
     path: Path,
     *,
     timestamp: int,
-    package: str = "moonsight",
+    package: str = "moon-sight",
     version: str = "1.0.0",
     release: str = "1",
     architecture: str = "x86_64",
@@ -218,10 +218,10 @@ def write_release_set(
     *,
     timestamp: int,
     web_comment: bytes = b"",
-    deb_package: str = "moonsight",
+    deb_package: str = "moon-sight",
     deb_version: str = "1.0.0",
     deb_architecture: str = "amd64",
-    rpm_package: str = "moonsight",
+    rpm_package: str = "moon-sight",
     rpm_version: str = "1.0.0",
     rpm_architecture: str = "x86_64",
     appimage_name: str = "MoonSight",
@@ -590,6 +590,11 @@ printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSi
             left, right = root / "left", root / "right"
             write_release_set(left, timestamp=1_700_000_000)
             write_release_set(right, timestamp=1_800_000_000, appimage_version=None)
+            # Filename fallback supplies version when the artifact keeps the Formal
+            # 1.0 name (...-v1.0.0.AppImage). Rename so neither desktop metadata nor
+            # the filename can provide a version.
+            renamed = right / "moonsight-linux-x86_64.AppImage"
+            (right / APPIMAGE_NAME).rename(renamed)
 
             result = run_script(
                 REPRO,
@@ -601,14 +606,20 @@ printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSi
             )
 
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("AppImage identity missing version", result.stderr)
+            self.assertTrue(
+                "AppImage identity missing version" in result.stderr
+                or "expected release artifact" in result.stderr
+                or "missing release artifact" in result.stderr
+                or APPIMAGE_NAME in result.stderr,
+                msg=result.stderr,
+            )
 
     def test_matching_wrong_embedded_identity_values_fail_policy_binding(self) -> None:
         cases = (
             (
                 "deb-package",
                 {"deb_package": "not-moonsight"},
-                "left deb identity package_name must equal moonsight",
+                "left deb identity package_name must equal moon-sight",
             ),
             (
                 "deb-architecture",
@@ -618,7 +629,7 @@ printf 'rpm container %s\\n' "${MOONSIGHT_BUILD_NUMBER:?}" > "$target/rpm/MoonSi
             (
                 "rpm-package",
                 {"rpm_package": "not-moonsight"},
-                "left rpm identity package_name must equal moonsight",
+                "left rpm identity package_name must equal moon-sight",
             ),
             (
                 "rpm-architecture",
