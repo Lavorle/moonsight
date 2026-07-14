@@ -98,3 +98,52 @@ test "vm handles JumpScene from host flow.jump" {
   assert_true(eng.stage.get_var("landed") == Int(1))
   assert_true(eng.vm.wait == Halted)
 }
+
+///|
+fn build_long_var_set_scene(n : Int) -> String {
+  let mut src = #|- scene "s"
+#|
+  for i in 0..<n {
+    src = src + "@var.set \"x\" \{i}\n"
+  }
+  src
+}
+
+///|
+test "H5 budget exhaustion increments counter without halt" {
+  let src = build_long_var_set_scene(30)
+  let eng = @runtime.Engine::from_ir(
+    @script.compile_to_ir(src, file="h5.yuki"),
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng.vm.run_until_wait(eng.director, eng.stage, budget=2)
+  assert_true(!eng.vm.halted)
+  assert_true(eng.vm.wait == Running)
+  assert_eq(eng.vm.budget_exhaustions, 1)
+  assert_true(eng.vm.last_budget_exhausted)
+  // Next frame with full budget finishes; last flag clears on non-exhaust exit.
+  eng.vm.run_until_wait(eng.director, eng.stage, budget=10000)
+  assert_true(eng.vm.halted)
+  assert_true(eng.vm.wait == Halted)
+  assert_eq(eng.vm.budget_exhaustions, 1)
+  assert_true(!eng.vm.last_budget_exhausted)
+  assert_true(eng.stage.get_var("x") == Int(29))
+}
+
+///|
+test "H5 short script keeps budget exhaustion counter at zero" {
+  let src =
+    #|- scene "s"
+    #|@var.set "x" 1
+    #|
+  let eng = @runtime.Engine::from_ir(
+    @script.compile_to_ir(src, file="h5-short.yuki"),
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng.vm.run_until_wait(eng.director, eng.stage)
+  assert_true(eng.vm.halted)
+  assert_eq(eng.vm.budget_exhaustions, 0)
+  assert_true(!eng.vm.last_budget_exhausted)
+}

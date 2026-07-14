@@ -118,6 +118,9 @@ fn VmLogicalState::prepare(
     last_error: None,
     stable_presentations: current.stable_presentations,
     presentation_changed: false,
+    // Session diagnostics are not save/rollback authority.
+    budget_exhaustions: 0,
+    last_budget_exhausted: false,
   }
 }
 

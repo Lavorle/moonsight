@@ -321,6 +321,18 @@ pub impl Capabilities for Engine with fn load_slot(self, i) {
 }
 
 ///|
+/// Cumulative VM instruction-budget exhaustions this session (H5 diagnostics).
+pub fn Engine::vm_budget_exhaustions(self : Engine) -> Int {
+  self.vm.budget_exhaustions
+}
+
+///|
+/// True when the last `run_until_wait` exited because its budget ran out.
+pub fn Engine::vm_budget_exhausted_last_frame(self : Engine) -> Bool {
+  self.vm.last_budget_exhausted
+}
+
+///|
 /// Slot index for the pending menu-load diagnostic, or -1 when none exists.
 pub fn Engine::slot_load_error_slot(self : Engine) -> Int {
   self.slot_load_error_slot

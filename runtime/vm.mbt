@@ -24,6 +24,10 @@ pub(all) struct Vm {
   mut last_error : String?
   mut stable_presentations : Map[String, RuntimePresentationIds]
   mut presentation_changed : Bool
+  /// Times `run_until_wait` exited solely because the instruction budget ran out.
+  mut budget_exhaustions : Int
+  /// True when the most recent `run_until_wait` call exhausted its budget.
+  mut last_budget_exhausted : Bool
 } derive(Debug)
 
 ///|
@@ -106,6 +110,8 @@ pub fn Vm::from_module(ir : @script.IrModule, entry~ : String) -> Vm {
         last_error: None,
         stable_presentations: {},
         presentation_changed: false,
+        budget_exhaustions: 0,
+        last_budget_exhausted: false,
       }
     None =>
       {
@@ -120,6 +126,8 @@ pub fn Vm::from_module(ir : @script.IrModule, entry~ : String) -> Vm {
         last_error: Some("unknown scene: \{entry}"),
         stable_presentations: {},
         presentation_changed: false,
+        budget_exhaustions: 0,
+        last_budget_exhausted: false,
       }
   }
 }
@@ -151,6 +159,7 @@ pub fn Vm::run_until_wait(
     self.wait = Halted
     return
   }
+  self.last_budget_exhausted = false
   self.wait = Running
   for _ in 0..<budget {
     if self.wait is (Yield | Choose | Halted) {
@@ -237,6 +246,11 @@ pub fn Vm::run_until_wait(
         self.wait = Halted
       }
     }
+  }
+  // Budget spent without Yield/Choose/Halt: keep ip and retry next frame.
+  if self.wait is Running && !self.halted {
+    self.budget_exhaustions = self.budget_exhaustions + 1
+    self.last_budget_exhausted = true
   }
 }
 
