@@ -432,6 +432,28 @@ test "H4 shelf overflow grows atlas and bumps generation" {
 }
 
 ///|
+/// After grow/repack, early glyphs must keep positive cells within atlas bounds
+/// so the host can re-upload valid UVs (not zeroed / out-of-bounds slots).
+test "H4 grow repacks early glyphs with valid UVs" {
+  let atlas = GlyphAtlas::new(width=64, height=64)
+  for i in 0..<8 {
+    let ch = (0x41 + i).unsafe_to_char()
+    let _ = atlas.get_or_queue(ch, 32, cell_w=32, cell_h=32)
+  }
+  assert_true(atlas.width >= 128)
+  for i in 0..<8 {
+    let ch = (0x41 + i).unsafe_to_char()
+    let e = atlas.get_or_queue(ch, 32, cell_w=32, cell_h=32)
+    assert_true(e.atlas_w > 0)
+    assert_true(e.atlas_h > 0)
+    assert_true(e.atlas_x >= 0)
+    assert_true(e.atlas_y >= 0)
+    assert_true(e.atlas_x + e.atlas_w <= atlas.width)
+    assert_true(e.atlas_y + e.atlas_h <= atlas.height)
+  }
+}
+
+///|
 test "H4 cell larger than MAX is terminal non-pending" {
   let atlas = GlyphAtlas::new(width=64, height=64)
   let e = atlas.get_or_queue('Z', 64, cell_w=5000, cell_h=5000)
@@ -440,8 +462,8 @@ test "H4 cell larger than MAX is terminal non-pending" {
   assert_true(!e.pending)
   let e2 = atlas.get_or_queue('Z', 64, cell_w=5000, cell_h=5000)
   assert_true(!e2.pending)
-  // Must not grow pending_queue unboundedly
-  assert_true(atlas.pending_queue.length() <= 1)
+  // Terminal must not sit on pending_queue at all
+  assert_eq(atlas.pending_queue.length(), 0)
 }
 
 ///|

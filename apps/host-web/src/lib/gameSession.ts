@@ -185,7 +185,7 @@ function ensureAtlasTexture(exports_: HostExports): number {
   if (gen !== lastAtlasGeneration || edge !== atlasEdge) {
     lastAtlasGeneration = gen;
     atlasEdge = edge;
-    Gpu.resizeGlyphAtlas?.(edge);
+    Gpu.resizeGlyphAtlas(edge);
   }
   return edge;
 }
@@ -194,20 +194,37 @@ function ensureAtlasTexture(exports_: HostExports): number {
  * Rasterize pending glyphs. Only mark ready when stamp has real ink
  * (or is whitespace). Empty stamps stay pending so the next frame retries.
  * Terminal 0×0 overflows are skipped (not a hard failure).
+ *
+ * Snapshot the full pending list before mark_glyph_ready mutates the queue
+ * (post-grow bulk re-upload would otherwise skip entries under an index walk).
  */
 function flushPendingGlyphs(exports_: HostExports): void {
   if (typeof exports_.pending_glyph_count !== "function") return;
   const n = exports_.pending_glyph_count() | 0;
   if (n <= 0) return;
   const edge = ensureAtlasTexture(exports_);
-  let anyFailed = false;
+  // Snapshot all slots first; mark_ready removes from pending_queue.
+  const pending: Array<{
+    cp: number;
+    size: number;
+    atlasX: number;
+    atlasY: number;
+    atlasW: number;
+    atlasH: number;
+  }> = [];
   for (let i = 0; i < n; i++) {
-    const cp = (exports_.pending_glyph_cp?.(i) ?? 0) | 0;
-    const size = (exports_.pending_glyph_size?.(i) ?? 0) | 0;
-    const atlasX = (exports_.pending_glyph_atlas_x?.(i) ?? 0) | 0;
-    const atlasY = (exports_.pending_glyph_atlas_y?.(i) ?? 0) | 0;
-    const atlasW = (exports_.pending_glyph_atlas_w?.(i) ?? 0) | 0;
-    const atlasH = (exports_.pending_glyph_atlas_h?.(i) ?? 0) | 0;
+    pending.push({
+      cp: (exports_.pending_glyph_cp?.(i) ?? 0) | 0,
+      size: (exports_.pending_glyph_size?.(i) ?? 0) | 0,
+      atlasX: (exports_.pending_glyph_atlas_x?.(i) ?? 0) | 0,
+      atlasY: (exports_.pending_glyph_atlas_y?.(i) ?? 0) | 0,
+      atlasW: (exports_.pending_glyph_atlas_w?.(i) ?? 0) | 0,
+      atlasH: (exports_.pending_glyph_atlas_h?.(i) ?? 0) | 0,
+    });
+  }
+  let anyFailed = false;
+  for (const g of pending) {
+    const { cp, size, atlasX, atlasY, atlasW, atlasH } = g;
     // Terminal overflow / invalid slot: skip without retry storm.
     if (size <= 0 || atlasW <= 0 || atlasH <= 0) {
       continue;
