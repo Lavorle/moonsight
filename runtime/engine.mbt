@@ -1248,28 +1248,23 @@ fn Engine::tick_dissolve(self : Engine, dt : Double) -> Unit {
 }
 
 ///|
-/// Visible typewriter prefix of `full` up to `visible_chars` code units.
+/// Visible typewriter prefix of `full` up to a grapheme-aligned UTF-16 index.
 fn visible_text_prefix(full : String, visible_chars : Int) -> String {
-  if visible_chars <= 0 {
-    ""
-  } else if visible_chars >= full.length() {
-    full
-  } else {
-    full.unsafe_substring(start=0, end=visible_chars)
-  }
+  visible_prefix(full, visible_chars)
 }
 
 ///|
-/// Gradual typewriter reveal when text is incomplete (base chars/sec ≈ 40 × prefs).
+/// Gradual typewriter reveal when text is incomplete.
+/// Rate is ≈ 40 graphemes/sec × prefs text_speed (name `reveal_chars` kept).
 fn Engine::tick_typewriter(self : Engine, dt : Double) -> Unit {
   match self.stage.text {
     Some({ complete: false, .. }) => {
       let speed = self.ui.prefs.text_speed
       let n = (40.0 * speed * dt).to_int()
-      let chars = if n < 1 { 1 } else { n }
+      let graphemes = if n < 1 { 1 } else { n }
       // Only advance when dt is positive; skip zero-dt frames.
       if dt > 0.0 {
-        self.stage.reveal_chars(chars)
+        self.stage.reveal_chars(graphemes)
       }
     }
     _ => ()

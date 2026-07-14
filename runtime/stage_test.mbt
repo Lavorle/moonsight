@@ -220,6 +220,53 @@ test "partial stage relocalization requires a grapheme-derived boundary" {
 }
 
 ///|
+test "H3 typewriter reveal does not split combining mark" {
+  let st = @runtime.Stage::new()
+  st.begin_text(speaker="y")
+  // e + combining acute — one grapheme cluster of UTF-16 length 2
+  st.type_more("e\u{0301}X")
+  st.reveal_chars(1)
+  guard st.text is Some(t1) else { fail("after first reveal") }
+  assert_eq(t1.visible_chars, 2)
+  assert_eq(visible_prefix(t1.full_text, t1.visible_chars), "e\u{0301}")
+  assert_false(t1.complete)
+  st.reveal_chars(1)
+  guard st.text is Some(t2) else { fail("after second reveal") }
+  assert_eq(t2.visible_chars, 3)
+  assert_true(t2.complete)
+}
+
+///|
+test "H3 typewriter reveal treats ZWJ family as one grapheme" {
+  let st = @runtime.Stage::new()
+  st.begin_text()
+  let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
+  st.type_more(family + "!")
+  st.reveal_chars(1)
+  guard st.text is Some(t) else { fail("after reveal") }
+  assert_eq(t.visible_chars, family.length())
+  assert_false(t.complete)
+  st.reveal_chars(1)
+  guard st.text is Some(t2) else { fail("after full") }
+  assert_eq(t2.visible_chars, family.length() + 1)
+  assert_true(t2.complete)
+}
+
+///|
+test "H3 ASCII reveal_chars remains one unit per char" {
+  let st = @runtime.Stage::new()
+  st.begin_text()
+  st.type_more("Hi")
+  st.reveal_chars(1)
+  guard st.text is Some(t) else { fail("reveal") }
+  assert_eq(t.visible_chars, 1)
+  st.reveal_chars(1)
+  guard st.text is Some(t2) else { fail("reveal2") }
+  assert_eq(t2.visible_chars, 2)
+  assert_true(t2.complete)
+}
+
+///|
 test "tick_layer_tweens eases opacity linearly" {
   let st = @runtime.Stage::new()
   st.show_layer(

@@ -112,6 +112,27 @@ test "save roundtrip restores Yield with incomplete typewriter text" {
 }
 
 ///|
+/// H3: mid-cluster `visible_chars` from a hostile/legacy blob floors to a
+/// grapheme boundary on decode (no format bump).
+test "H3 load clamps mid-cluster visible_chars" {
+  // full_text = e + combining acute + X  (clusters at 0, 2, 3)
+  // visible_chars=1 sits inside the first cluster → clamp to 0
+  // Optional TextBlock fields omit when None (derived ToJson/FromJson shape).
+  let blob =
+    #|{"format_version":5,"module_id":"","scene":"s","ip":0,"call_stack":[],"vars":{},"layers":[],"text":{"full_text":"e\u0301X","visible_chars":1,"complete":false},"overlay_opacity":0,"audio":{},"wait":"Yield","choice_ids":[],"auto":false,"fade_to":0,"fade_remaining":0,"wait_remaining":0,"dissolve_phase":0,"dissolve_total":0,"saved_at":""}
+  let game = @runtime.parse_save_game(blob)
+  guard game.text is Some(t) else { fail("decoded text") }
+  assert_eq(t.full_text.length(), 3)
+  assert_eq(t.visible_chars, 0)
+  assert_eq(t.visible_chars, clamp_to_grapheme_boundary(t.full_text, 1))
+  // Also verify load path applies the clamped value.
+  let eng = load_min_demo_engine()
+  eng.load(blob)
+  guard eng.stage.text is Some(loaded) else { fail("loaded text") }
+  assert_eq(loaded.visible_chars, 0)
+}
+
+///|
 /// Save v5 persists the full dual-phase dissolve continuation so load resumes
 /// the same logical transition rather than degrading it to a simple fade.
 test "save during dissolve restores dual-phase" {
@@ -558,3 +579,4 @@ test "validate_save exposes typed checks without mutating engine state" {
   assert_eq(eng.vm.ip, ip_before)
   assert_true(eng.stage.get_var("keep") == Int(9))
 }
+

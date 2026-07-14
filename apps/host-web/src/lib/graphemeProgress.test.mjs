@@ -1,6 +1,42 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+/**
+ * Host-side boundary helper (Intl.Segmenter). Runtime authority is
+ * runtime/grapheme.mbt — this fixture documents parity with grapheme_test.mbt.
+ */
+function graphemeBoundaries(text) {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const out = [0];
+  for (const part of segmenter.segment(text)) {
+    out.push(part.index + part.segment.length);
+  }
+  return out;
+}
+
+test("H3 host Segmenter fixtures match runtime grapheme_test.mbt cases", () => {
+  // Same sequences as runtime/grapheme_test.mbt (MoonBit authority).
+  assert.deepEqual(graphemeBoundaries("ab"), [0, 1, 2]);
+
+  const cjk = "你好";
+  const cjkBounds = graphemeBoundaries(cjk);
+  assert.equal(cjkBounds.length, 3);
+  assert.equal(cjkBounds[0], 0);
+  assert.equal(cjkBounds[cjkBounds.length - 1], cjk.length);
+
+  const combining = "e\u{0301}";
+  assert.deepEqual(graphemeBoundaries(combining), [0, combining.length]);
+
+  const family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}";
+  assert.deepEqual(graphemeBoundaries(family), [0, family.length]);
+
+  const familyX = family + "X";
+  const mid = 2;
+  const bounds = graphemeBoundaries(familyX);
+  assert.ok(bounds.includes(0) && bounds.includes(family.length));
+  assert.equal(bounds.includes(mid), false);
+});
+
 test("grapheme progress never splits combining or emoji clusters", async () => {
   const { remapGraphemeProgress } = await import("./graphemeProgress.ts");
   const oldText = "A👨‍👩‍👧‍👦B";
@@ -9,7 +45,6 @@ test("grapheme progress never splits combining or emoji clusters", async () => {
   assert.equal(remapGraphemeProgress(oldText, 2, "é好Z", false), 2);
   assert.equal(remapGraphemeProgress(oldText, 0, "é好Z", true), 4);
 });
-
 test("warm grapheme handoff p95 stays within the 16ms locale-switch gate", async () => {
   const { remapGraphemeProgress } = await import("./graphemeProgress.ts");
   const samples = [];

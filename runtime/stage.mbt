@@ -524,7 +524,8 @@ pub fn Stage::complete_text(self : Stage) -> Unit {
 }
 
 ///|
-/// Reveal up to `n` additional typewriter characters (clamped to full text).
+/// Reveal up to `n` additional typewriter grapheme clusters (clamped to full
+/// text). `visible_chars` remains a grapheme-aligned UTF-16 end index.
 ///
 /// Marks the block complete when all characters are visible. No-op if no text
 /// is active or the block is already complete.
@@ -538,10 +539,14 @@ pub fn Stage::reveal_chars(self : Stage, n : Int) -> Unit {
       if t.complete {
         return
       }
+      let next = advance_visible_utf16(t.full_text, t.visible_chars, n)
       let len = t.full_text.length()
-      let next = t.visible_chars + n
       let visible = if next >= len { len } else { next }
-      self.text = Some({ ..t, visible_chars: visible, complete: visible >= len })
+      self.text = Some({
+        ..t,
+        visible_chars: visible,
+        complete: visible >= len,
+      })
     }
   }
 }

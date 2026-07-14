@@ -278,7 +278,7 @@ pub fn parse_save_game(blob : String) -> SaveGame raise SaveError {
     let v2 : SaveGameV2 = @json.from_json(json) catch {
       err => raise SaveError::DecodeFailed(message=err.to_string())
     }
-    return save_game_from_v2(v2)
+    return clamp_save_game_text(save_game_from_v2(v2))
   }
   // Old v3 blobs omit `saved_at` and/or layer `scale`; inject defaults.
   let json = ensure_saved_at_default(json)
@@ -291,7 +291,24 @@ pub fn parse_save_game(blob : String) -> SaveGame raise SaveError {
   if !is_supported_save_version(game.format_version) {
     raise SaveError::UnsupportedVersion(version=game.format_version)
   }
-  game
+  clamp_save_game_text(game)
+}
+
+///|
+/// Floor `TextBlock.visible_chars` to a grapheme boundary after decode.
+/// No format bump: illegal mid-cluster values clamp down rather than reject.
+fn clamp_save_game_text(game : SaveGame) -> SaveGame {
+  match game.text {
+    None => game
+    Some(t) => {
+      let visible = clamp_to_grapheme_boundary(t.full_text, t.visible_chars)
+      if visible == t.visible_chars {
+        game
+      } else {
+        { ..game, text: Some({ ..t, visible_chars: visible }) }
+      }
+    }
+  }
 }
 
 ///|
