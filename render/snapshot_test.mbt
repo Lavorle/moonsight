@@ -402,16 +402,46 @@ test "glyph atlas CJK keys are distinct from ASCII and by size" {
 }
 
 ///|
-test "glyph atlas oversized cell is zero placeholder" {
+/// Cell larger than current atlas but ≤ MAX grows the square atlas (H4).
+test "glyph atlas oversized cell grows when under MAX" {
   let atlas = GlyphAtlas::new(width=32, height=32)
+  let g0 = atlas.generation
   let e = atlas.get_or_queue('X', 64)
+  assert_eq(e.atlas_w, 64)
+  assert_eq(e.atlas_h, 64)
+  assert_true(e.pending)
+  assert_true(atlas.width >= 64)
+  assert_true(atlas.height >= 64)
+  assert_true(atlas.generation > g0)
+  let e2 = atlas.get_or_queue('X', 64)
+  assert_eq(e2.atlas_x, e.atlas_x)
+  assert_eq(e2.atlas_y, e.atlas_y)
+}
+
+///|
+test "H4 shelf overflow grows atlas and bumps generation" {
+  let atlas = GlyphAtlas::new(width=64, height=64)
+  let g0 = atlas.generation
+  // Fill with many 32x32 cells until shelf would overflow old size.
+  for i in 0..<8 {
+    let ch = (0x41 + i).unsafe_to_char() // 'A'..
+    let _ = atlas.get_or_queue(ch, 32, cell_w=32, cell_h=32)
+  }
+  assert_true(atlas.width >= 128 || atlas.height >= 128)
+  assert_true(atlas.generation > g0)
+}
+
+///|
+test "H4 cell larger than MAX is terminal non-pending" {
+  let atlas = GlyphAtlas::new(width=64, height=64)
+  let e = atlas.get_or_queue('Z', 64, cell_w=5000, cell_h=5000)
   assert_eq(e.atlas_w, 0)
   assert_eq(e.atlas_h, 0)
-  assert_true(e.pending)
-  // Still tracked so re-queue does not allocate again.
-  let e2 = atlas.get_or_queue('X', 64)
-  assert_eq(e2.atlas_w, 0)
-  assert_eq(atlas.pending_queue.length(), 1)
+  assert_true(!e.pending)
+  let e2 = atlas.get_or_queue('Z', 64, cell_w=5000, cell_h=5000)
+  assert_true(!e2.pending)
+  // Must not grow pending_queue unboundedly
+  assert_true(atlas.pending_queue.length() <= 1)
 }
 
 ///|

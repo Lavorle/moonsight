@@ -619,6 +619,24 @@ pub fn clear_pending_glyphs() -> Int {
 }
 
 ///|
+/// Current glyph atlas width in pixels (grows on overflow, H4).
+pub fn atlas_width() -> Int {
+  session.val.atlas.width
+}
+
+///|
+/// Current glyph atlas height in pixels.
+pub fn atlas_height() -> Int {
+  session.val.atlas.height
+}
+
+///|
+/// Atlas generation counter; bumps on grow/repack so host rebuilds GPU texture.
+pub fn atlas_generation() -> Int {
+  session.val.atlas.generation
+}
+
+///|
 fn main {
   // Linked as `_start`. Prefer explicit `init_demo` from JS after GPU init.
   install_session_audio()

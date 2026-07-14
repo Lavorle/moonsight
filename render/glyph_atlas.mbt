@@ -13,6 +13,11 @@ pub(all) struct AtlasEntry {
 } derive(Debug, Eq)
 
 ///|
+/// Maximum square atlas edge (H4). Single cells larger than this are
+/// terminal 0×0 non-pending overflows.
+let atlas_max_edge : Int = 4096
+
+///|
 /// Dynamic glyph atlas bookkeeping (no pixels).
 ///
 /// Entries are nested maps: codepoint → px size → `AtlasEntry`. Nested keys
@@ -22,9 +27,15 @@ pub(all) struct AtlasEntry {
 /// (`measure` / `default_char_advance`) and may not equal the cell edge;
 /// Task 12 host rasterization paints into the allocated cell and may refine
 /// `atlas_w`/`atlas_h` via `mark_ready`.
+///
+/// On shelf overflow the square atlas doubles (up to `atlas_max_edge`),
+/// bumps `generation`, and repacks all known glyphs so the host can rebuild
+/// the GPU texture.
 pub(all) struct GlyphAtlas {
-  width : Int
-  height : Int
+  mut width : Int
+  mut height : Int
+  /// Bumped on every grow/repack so the host can discard stale GPU pixels.
+  mut generation : Int
   /// codepoint → size_px → entry
   mut entries : Map[Int, Map[Int, AtlasEntry]]
   /// Shelf-pack cursor.
@@ -41,6 +52,7 @@ pub fn GlyphAtlas::new(width? : Int = 1024, height? : Int = 1024) -> GlyphAtlas 
   {
     width,
     height,
+    generation: 0,
     entries: {},
     cursor_x: 0,
     cursor_y: 0,
@@ -57,6 +69,48 @@ fn atlas_size_key(size : Int) -> Int {
   } else {
     size
   }
+}
+
+///|
+fn atlas_max2(a : Int, b : Int) -> Int {
+  if a > b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+fn atlas_min2(a : Int, b : Int) -> Int {
+  if a < b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+/// Smallest power of two ≥ `n` (clamped growth uses `atlas_max_edge` separately).
+fn atlas_next_pow2(n : Int) -> Int {
+  if n <= 1 {
+    1
+  } else {
+    let mut p = 1
+    while p < n {
+      // Stop runaway if n is huge; caller also clamps to MAX.
+      if p >= atlas_max_edge {
+        return atlas_max_edge
+      }
+      p = p * 2
+    }
+    p
+  }
+}
+
+///|
+/// Terminal overflow: never re-queued; host skips 0×0.
+fn atlas_terminal_entry() -> AtlasEntry {
+  { atlas_x: 0, atlas_y: 0, atlas_w: 0, atlas_h: 0, pending: false }
 }
 
 ///|
@@ -91,11 +145,101 @@ fn GlyphAtlas::store(
 }
 
 ///|
+/// Ensure `(ch, size)` is on the pending queue at most once.
+fn GlyphAtlas::ensure_pending(self : GlyphAtlas, ch : Char, size : Int) -> Unit {
+  let mut found = false
+  for item in self.pending_queue {
+    let (c, s) = item
+    if c == ch && s == size {
+      found = true
+    }
+  }
+  if !found {
+    self.pending_queue.push((ch, size))
+  }
+}
+
+///|
+/// Try to shelf-pack a cell. Returns `None` if it does not fit.
+fn GlyphAtlas::try_shelf_place(
+  self : GlyphAtlas,
+  cw : Int,
+  cell_h : Int,
+) -> AtlasEntry? {
+  if cw > self.width || cell_h > self.height {
+    return None
+  }
+  if self.cursor_x + cw > self.width {
+    self.cursor_x = 0
+    self.cursor_y = self.cursor_y + self.row_h
+    self.row_h = 0
+  }
+  if self.cursor_y + cell_h > self.height {
+    return None
+  }
+  let e : AtlasEntry = {
+    atlas_x: self.cursor_x,
+    atlas_y: self.cursor_y,
+    atlas_w: cw,
+    atlas_h: cell_h,
+    pending: true,
+  }
+  self.cursor_x = self.cursor_x + cw
+  if cell_h > self.row_h {
+    self.row_h = cell_h
+  }
+  Some(e)
+}
+
+///|
+/// Grow square atlas and repack every known positive cell plus `(ch,size)`.
+fn GlyphAtlas::grow_and_repack(
+  self : GlyphAtlas,
+  ch : Char,
+  size : Int,
+  cw : Int,
+  cell_h : Int,
+) -> AtlasEntry {
+  let need = atlas_max2(cw, cell_h)
+  let candidate = atlas_max2(self.width * 2, atlas_next_pow2(need))
+  let new_edge = atlas_min2(atlas_max_edge, candidate)
+  if new_edge <= self.width {
+    let entry = atlas_terminal_entry()
+    self.store(ch, size, entry)
+    return entry
+  }
+  // Snapshot placements that still have positive cells (skip terminals).
+  let known : Array[(Char, Int, Int, Int)] = []
+  for cp, by_size in self.entries {
+    for sk, e in by_size {
+      if e.atlas_w > 0 && e.atlas_h > 0 {
+        known.push((cp.unsafe_to_char(), sk, e.atlas_w, e.atlas_h))
+      }
+    }
+  }
+  self.width = new_edge
+  self.height = new_edge
+  self.generation = self.generation + 1
+  self.entries = {}
+  self.cursor_x = 0
+  self.cursor_y = 0
+  self.row_h = 0
+  self.pending_queue = []
+  for item in known {
+    let (c, s, w, h) = item
+    let _ = self.get_or_queue(c, s, cell_w=w, cell_h=h)
+  }
+  self.get_or_queue(ch, size, cell_w=cw, cell_h=cell_h)
+}
+
+///|
 /// Look up or allocate a rect for `ch` at font pixel size `size` (lookup key).
 ///
 /// `cell_w` / `cell_h` are shelf dimensions. Height should exceed the em size
 /// slightly so canvas descenders (`g`, `y`, `p`, …) are not clipped.
-/// Overflow → 0×0 placeholder.
+///
+/// Shelf overflow grows the square atlas up to 4096 (H4). A single cell larger
+/// than MAX, or overflow after MAX, is a terminal 0×0 non-pending entry.
 pub fn GlyphAtlas::get_or_queue(
   self : GlyphAtlas,
   ch : Char,
@@ -107,17 +251,9 @@ pub fn GlyphAtlas::get_or_queue(
     Some(e) => {
       // If still pending (host stamp failed / font not ready), ensure the
       // pair is on the queue so JS can retry next frame.
+      // Terminal overflows have pending=false and must not re-queue.
       if e.pending {
-        let mut found = false
-        for item in self.pending_queue {
-          let (c, s) = item
-          if c == ch && s == size {
-            found = true
-          }
-        }
-        if !found {
-          self.pending_queue.push((ch, size))
-        }
+        self.ensure_pending(ch, size)
       }
       e
     }
@@ -138,37 +274,27 @@ pub fn GlyphAtlas::get_or_queue(
       if cw < 1 {
         cw = 1
       }
-      // Cell must fit in atlas dimensions; otherwise 0×0 overflow placeholder.
-      let entry : AtlasEntry = if cw > self.width || cell_h > self.height {
-        { atlas_x: 0, atlas_y: 0, atlas_w: 0, atlas_h: 0, pending: true }
-      } else {
-        // Advance to next row when this cell does not fit on the current shelf.
-        if self.cursor_x + cw > self.width {
-          self.cursor_x = 0
-          self.cursor_y = self.cursor_y + self.row_h
-          self.row_h = 0
-        }
-        if self.cursor_y + cell_h > self.height {
-          // Overflow: zero rect; still track so callers do not re-queue forever.
-          { atlas_x: 0, atlas_y: 0, atlas_w: 0, atlas_h: 0, pending: true }
-        } else {
-          let e : AtlasEntry = {
-            atlas_x: self.cursor_x,
-            atlas_y: self.cursor_y,
-            atlas_w: cw,
-            atlas_h: cell_h,
-            pending: true,
-          }
-          self.cursor_x = self.cursor_x + cw
-          if cell_h > self.row_h {
-            self.row_h = cell_h
-          }
-          e
-        }
+      let need = atlas_max2(cw, cell_h)
+      if need > atlas_max_edge {
+        let entry = atlas_terminal_entry()
+        self.store(ch, size, entry)
+        return entry
       }
-      self.store(ch, size, entry)
-      self.pending_queue.push((ch, size))
-      entry
+      match self.try_shelf_place(cw, cell_h) {
+        Some(entry) => {
+          self.store(ch, size, entry)
+          self.pending_queue.push((ch, size))
+          entry
+        }
+        None =>
+          if self.width < atlas_max_edge {
+            self.grow_and_repack(ch, size, cw, cell_h)
+          } else {
+            let entry = atlas_terminal_entry()
+            self.store(ch, size, entry)
+            entry
+          }
+      }
     }
   }
 }

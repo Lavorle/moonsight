@@ -827,6 +827,18 @@ function writeAtlasSubrect(texture, x, y, w, h, rgba) {
 }
 
 /**
+ * Force-create (or replace) the glyph atlas GPU texture at `atlasSize`².
+ * Used when MoonBit bumps atlas generation after a grow/repack (H4).
+ * @param {number} atlasSize
+ */
+export function resizeGlyphAtlas(atlasSize = 1024) {
+  ensureGpu();
+  const edge = Math.max(1, atlasSize | 0);
+  const pixels = new Uint8Array(edge * edge * 4);
+  uploadRgbaTexture("atlas", edge, edge, pixels);
+}
+
+/**
  * Rasterize one glyph into the atlas.
  * @returns {boolean} true if the cell has usable ink (or is intentionally blank space)
  */
@@ -841,9 +853,8 @@ export function rasterizeGlyphToAtlas(
 ) {
   ensureGpu();
   let entry = textures.get("atlas");
-  if (!entry || entry.width < atlasSize) {
-    const pixels = new Uint8Array(atlasSize * atlasSize * 4);
-    uploadRgbaTexture("atlas", atlasSize, atlasSize, pixels);
+  if (!entry || entry.width < atlasSize || entry.height < atlasSize) {
+    resizeGlyphAtlas(atlasSize);
     entry = textures.get("atlas");
   }
   if (atlasW <= 0 || atlasH <= 0) return false;
@@ -959,6 +970,7 @@ const api = {
   drawVeil,
   endFrame,
   rasterizeGlyphToAtlas,
+  resizeGlyphAtlas,
   setOutlineRasterizer,
   setSlugGpu,
   setGlyphRasterMode,

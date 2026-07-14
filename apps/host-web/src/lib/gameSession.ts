@@ -96,6 +96,10 @@ export type HostExports = WebAssembly.Exports & {
     ah: number,
   ) => void;
   clear_pending_glyphs?: () => void;
+  /** H4: dynamic atlas edge after grow/repack. */
+  atlas_width?: () => number;
+  atlas_height?: () => number;
+  atlas_generation?: () => number;
   set_prefs_json?: (json: string) => number;
   prefs_json?: () => string;
   set_slot_json?: (slot: number, json: string) => void;
@@ -165,14 +169,37 @@ function copyFrame(exports_: HostExports): Float32Array {
   return out;
 }
 
+/** Cached atlas edge/generation so GPU texture rebuilds on MoonBit grow (H4). */
+let lastAtlasGeneration = -1;
+let atlasEdge = 1024;
+
+/**
+ * Sync GPU atlas texture size with wasm atlas exports. Rebuilds when
+ * `atlas_generation` bumps or the edge changes.
+ */
+function ensureAtlasTexture(exports_: HostExports): number {
+  const gen = exports_.atlas_generation?.() ?? 0;
+  const w = exports_.atlas_width?.() ?? 1024;
+  const h = exports_.atlas_height?.() ?? 1024;
+  const edge = Math.max(w | 0, h | 0, 1);
+  if (gen !== lastAtlasGeneration || edge !== atlasEdge) {
+    lastAtlasGeneration = gen;
+    atlasEdge = edge;
+    Gpu.resizeGlyphAtlas?.(edge);
+  }
+  return edge;
+}
+
 /**
  * Rasterize pending glyphs. Only mark ready when stamp has real ink
  * (or is whitespace). Empty stamps stay pending so the next frame retries.
+ * Terminal 0×0 overflows are skipped (not a hard failure).
  */
 function flushPendingGlyphs(exports_: HostExports): void {
   if (typeof exports_.pending_glyph_count !== "function") return;
   const n = exports_.pending_glyph_count() | 0;
   if (n <= 0) return;
+  const edge = ensureAtlasTexture(exports_);
   let anyFailed = false;
   for (let i = 0; i < n; i++) {
     const cp = (exports_.pending_glyph_cp?.(i) ?? 0) | 0;
@@ -181,8 +208,8 @@ function flushPendingGlyphs(exports_: HostExports): void {
     const atlasY = (exports_.pending_glyph_atlas_y?.(i) ?? 0) | 0;
     const atlasW = (exports_.pending_glyph_atlas_w?.(i) ?? 0) | 0;
     const atlasH = (exports_.pending_glyph_atlas_h?.(i) ?? 0) | 0;
+    // Terminal overflow / invalid slot: skip without retry storm.
     if (size <= 0 || atlasW <= 0 || atlasH <= 0) {
-      anyFailed = true;
       continue;
     }
     const ch = String.fromCodePoint(cp);
@@ -194,7 +221,7 @@ function flushPendingGlyphs(exports_: HostExports): void {
         atlasY,
         atlasW,
         atlasH,
-        1024,
+        edge,
       );
       if (ok) {
         exports_.mark_glyph_ready?.(cp, size, atlasX, atlasY, atlasW, atlasH);
