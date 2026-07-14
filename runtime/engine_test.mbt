@@ -1236,6 +1236,40 @@ test "request_quit_to_title requires confirm_yes" {
 }
 
 ///|
+/// H2: quit_to_title hard-stops global mixer BGM (session boundary).
+test "H2 quit_to_title clears global mixer bgm" {
+  @audio.reset_global_mixer()
+  let q = @audio.QueueBackend::new()
+  @audio.install_mixer(@audio.Mixer::with_backend((q : &@audio.AudioBackend)))
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let eng = @runtime.Engine::from_ir(
+    @script.compile_to_ir(src, file="h2.yuki"),
+    entry="s",
+    director=@std_commands.standard_registry(),
+  )
+  eng.ui.app.register_modal(
+    "title",
+    @runtime.UiNode::VBox(x=Some(0.0), y=Some(0.0), children=[]),
+  )
+  @audio.global_mixer().play_bgm("bgm_soft", volume=1.0)
+  eng.quit_to_title()
+  assert_true(@audio.global_mixer().bgm is None)
+  assert_true(@audio.global_mixer().se is None)
+  assert_true(@audio.global_mixer().bgm_fade_to is None)
+  let mut saw_stop = false
+  for i in 0..<q.len() {
+    if q.get(i) is Some(@audio.StopBgm) {
+      saw_stop = true
+    }
+  }
+  assert_true(saw_stop)
+  @audio.reset_global_mixer()
+}
+
+///|
 /// Pref volume mutations must multiply into global mixer output gains.
 test "set_pref volume updates global mixer gains" {
   @audio.reset_global_mixer()

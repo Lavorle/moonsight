@@ -251,6 +251,20 @@ pub fn Mixer::apply_logic(
 }
 
 ///|
+/// Hard-stop logical playback for a session boundary (title / new game).
+///
+/// Clears in-flight fade, stops BGM, and resets SE logical state. Bumps
+/// `se_seq` once as a session-boundary marker. Preserves preference gains
+/// and the installed backend.
+pub fn Mixer::clear_playback_session(self : Mixer) -> Unit {
+  self.clear_fade()
+  self.stop_bgm()
+  self.se = None
+  self.se_volume = 1.0
+  self.se_seq = self.se_seq + 1
+}
+
+///|
 /// Update preference master/channel gains (clamped 0..1).
 ///
 /// When BGM is playing, re-emits the current logical volume through the new gains.

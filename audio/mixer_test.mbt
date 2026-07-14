@@ -175,3 +175,57 @@ test "apply_prefs re-emits SetBgmVolume when bgm playing" {
   }
   assert_true(volume > 0.49 && volume < 0.51)
 }
+
+///|
+test "clear_playback_session stops bgm and clears se" {
+  let q = QueueBackend::new()
+  let m = Mixer::with_backend((q : &AudioBackend))
+  m.set_pref_gains(master=0.8, bgm=0.7, se=0.6)
+  m.play_bgm("bgm_soft", volume=1.0)
+  m.play_se("click", volume=1.0)
+  assert_eq(m.se_seq, 1)
+  let _ = q.take() // drain play events
+  m.fade_bgm_to(0.0, 1.0, stop=true)
+  m.clear_playback_session()
+  assert_true(m.bgm is None)
+  assert_true(m.se is None)
+  assert_true(m.bgm_fade_to is None)
+  assert_eq(m.se_volume, 1.0)
+  // se_seq bumps once as a session-boundary marker
+  assert_eq(m.se_seq, 2)
+  // prefs preserved
+  assert_true(m.pref_master > 0.79 && m.pref_master < 0.81)
+  assert_true(m.pref_bgm > 0.69 && m.pref_bgm < 0.71)
+  assert_true(m.pref_se > 0.59 && m.pref_se < 0.61)
+  // backend received StopBgm
+  let mut saw_stop = false
+  for i in 0..<q.len() {
+    if q.get(i) is Some(StopBgm) {
+      saw_stop = true
+    }
+  }
+  assert_true(saw_stop)
+}
+
+///|
+test "clear_playback_session is idempotent" {
+  let m = Mixer::new()
+  m.clear_playback_session()
+  m.clear_playback_session()
+  assert_true(m.bgm is None)
+  assert_true(m.se is None)
+}
+
+///|
+test "clear_playback_session preserves prefs for subsequent play" {
+  let q = QueueBackend::new()
+  let m = Mixer::with_backend((q : &AudioBackend))
+  m.set_pref_gains(master=0.5, bgm=0.5, se=1.0)
+  m.play_bgm("bgm_soft", volume=1.0)
+  m.clear_playback_session()
+  let _ = q.take()
+  m.play_bgm("bgm_soft", volume=1.0)
+  guard q.get(0) is Some(PlayBgm(volume~, ..)) else { fail("PlayBgm") }
+  // prefs still multiply: 1.0 * 0.5 * 0.5 = 0.25
+  assert_true(volume > 0.24 && volume < 0.26)
+}

@@ -166,6 +166,7 @@ fn Engine::sync_mixer_prefs(self : Engine) -> Unit {
 /// Cold start: enter `Title` and push `title` only when a modal is registered.
 /// Without a `title` modal, leave mode as `Playing` (scene-first fallback).
 pub fn Engine::boot_title(self : Engine) -> Unit {
+  @audio.global_mixer().clear_playback_session()
   self.ui.stack = []
   if self.ui.app.modals.contains("title") {
     self.ui.mode = Title
@@ -173,11 +174,13 @@ pub fn Engine::boot_title(self : Engine) -> Unit {
   } else {
     self.ui.mode = Playing
   }
+  self.sync_mixer_prefs()
 }
 
 ///|
 /// Start (or restart) narrative at `ir_entry`: clear stack, `Playing`, fresh stage/VM.
 pub fn Engine::start_game(self : Engine) -> Unit {
+  @audio.global_mixer().clear_playback_session()
   self.rollback.clear()
   self.rollback_unavailable_reason = ""
   self.ui.stack = []
@@ -190,11 +193,13 @@ pub fn Engine::start_game(self : Engine) -> Unit {
   self.auto = self.ui.prefs.auto_mode
   self.backlog.clear()
   self.backlog_last_key = ""
+  self.sync_mixer_prefs()
 }
 
 ///|
 /// Tear down narrative, clear stack, enter Title and show `title` when defined.
 pub fn Engine::quit_to_title(self : Engine) -> Unit {
+  @audio.global_mixer().clear_playback_session()
   self.rollback.clear()
   self.rollback_unavailable_reason = ""
   self.ui.stack = []
@@ -210,6 +215,7 @@ pub fn Engine::quit_to_title(self : Engine) -> Unit {
   if self.ui.app.modals.contains("title") {
     self.ui.show_modal("title")
   }
+  self.sync_mixer_prefs()
 }
 
 ///|
