@@ -1,7 +1,9 @@
 # Outline text (Slug / WebGPU)
 
 MoonSight stamps dialogue glyphs into a shared atlas, then draws textured
-quads. Glyph **stamping** can use three modes (query `?glyph=`):
+quads. The atlas **may grow** (power-of-two, up to edge **4096**) when the
+shelf cannot place a cell; Host rebuilds the GPU texture when generation
+bumps. Glyph **stamping** can use three modes (query `?glyph=`):
 
 | Mode | Description |
 |------|-------------|

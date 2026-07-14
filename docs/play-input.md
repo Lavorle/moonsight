@@ -141,11 +141,20 @@ block.
 
 ### Presentation clocks vs wait / skip
 
-Dissolve and fade clocks **advance during** timed `@flow.wait` (and while menus
-are open — same presentation tick). Hold-skip and Advance remain blocked by
-`wait_remaining > 0` and **do not snap** mid-fade or mid-dissolve; after the
-wait ends, any remaining presentation time continues on the wall clock until
-complete.
+While a modal is open under **Playing**, presentation clocks keep running on
+the wall clock — they are **not** frozen by the menu:
+
+- timed `@flow.wait` countdown (`wait_remaining`)
+- `trans.fade` / `trans.dissolve` overlay clocks
+- layer property tweens
+- **typewriter reveal** (`tick_typewriter`)
+
+Narrative **Advance** / **Select** / hold-skip remain gated (menu input wins on
+the stack top; timed wait still blocks Advance and skip). Hold-skip and Advance
+**do not snap** mid-fade or mid-dissolve; after a wait ends, any remaining
+presentation time continues until complete.
+
+**Title** is UI-only: no narrative presentation clocks advance until Start.
 
 **Mid-dissolve save/load:** dual-phase dissolve is not part of the save format;
 after load the dissolve clock is hard-cleared (`dissolve_phase=0`). Authors

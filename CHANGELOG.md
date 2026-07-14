@@ -31,6 +31,14 @@ Release.
   catalog examples.
 - Release verification template and RC tooling runbook aligned to Linux x86_64
   Web ZIP / AppImage / deb / rpm + `SHA256SUMS` via GitHub Release (not Pages).
+- VM instruction-budget exhaustion counters for diagnostics (no player halt).
+
+### Fixed
+
+- System menus no longer pause wait, fade/dissolve, layer tweens, or typewriter clocks.
+- Quit-to-title and new game hard-stop logical BGM/SE (preference volumes preserved).
+- Typewriter reveal follows grapheme clusters; mid-cluster save values clamp on load.
+- Glyph atlas grows instead of spinning on zero-sized pending slots (max 4096).
 
 ### Changed
 

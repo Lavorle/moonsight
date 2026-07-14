@@ -38,7 +38,14 @@ Cold start → Title modal (`title`)
 intents + HUD (e.g. choice focus). Esc while Playing with empty stack ≡
 `show_modal("game_menu")`; Esc while a modal is open pops one layer.
 
-**Save:** narrative save **v4** + separate prefs. UI stack and focus are **not**
+**Presentation under menu:** while Playing with a modal open, wait / fade /
+dissolve / layer tweens / **typewriter** clocks still advance; only narrative
+Advance and skip are gated. Title is UI-only until Start.
+
+**Typewriter reveal:** dialogue reveals by **grapheme cluster**. Stage
+`visible_chars` is a UTF-16 end index on a grapheme boundary (clamped on load).
+
+**Save:** narrative save **v5** + separate prefs. UI stack and focus are **not**
 serialized into slots.
 
 ## Registration API
@@ -140,8 +147,8 @@ Closed host surface for UI actions (engine implements; tests can fake):
 
 | Method | Effect |
 |--------|--------|
-| `start_game()` | Clear stack, load entry scene, Playing |
-| `quit_to_title()` | Tear down narrative, Title + `title` when registered |
+| `start_game()` | Clear stack, load entry scene, Playing; clears logical audio session (prefs kept) |
+| `quit_to_title()` | Tear down narrative, Title + `title` when registered; clears logical audio session (prefs kept) |
 | `show_modal(name, mode~)` | Push modal; optional mode (e.g. `"save"` / `"load"`) |
 | `return_modal()` | Pop one modal |
 | `hide_modal(name~)` | Pop top, or remove matching name when given |

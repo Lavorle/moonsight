@@ -61,6 +61,10 @@ explicitly.
 | **Effect** | No-op on stage; leaves typewriter incomplete so the engine can reveal chars |
 | **Result** | `Ok` |
 
+**Typewriter reveal:** the engine advances by **grapheme cluster** (not raw
+code unit). Saved / live `visible_chars` is a UTF-16 end index that always
+falls on a grapheme boundary; mid-cluster values clamp on load.
+
 ---
 
 ## layer
@@ -189,6 +193,13 @@ Unknown scene names fail at VM jump time (empty ops / halt depending on loader).
 Does **not** wait for layer tweens or fade by itself — pair with a matching duration
 when the script should stay paused for presentation.
 
+### VM frame instruction budget
+
+`Vm::run_until_wait` uses a per-call instruction budget that may **span
+multiple frames** when a script is long. Exhaustion increments diagnostic
+counters (`budget_exhaustions`, `last_budget_exhausted`) only — the player is
+**not** halted; the VM resumes on a later frame until Yield / Choose / halt.
+
 ### `flow.yield`
 
 | | |
@@ -239,6 +250,12 @@ Choice UI is the HUD `ChoiceList` node (`std_ui`); input mapping is in the host
 
 Logical mixer is `@audio` (`global_mixer`); Stage mirrors `bgm` / `se` ids for
 snapshots. JS host drains audio events and drives `HTMLAudioElement`.
+
+**Session clear:** `quit_to_title`, `start_game`, and `boot_title` call
+`Mixer::clear_playback_session` — hard-stop logical BGM (including in-flight
+fades) and clear SE state. **Preference volumes** (`master` / `bgm` / `se`) are
+kept. Load still applies saved audio via the normal logic path (not a session
+clear).
 
 ### `audio.bgm [resource]` + named `volume` / `fade`
 
@@ -403,8 +420,9 @@ v5**.
 | audio block | BGM id + logical volume / fade mid-state where applicable |
 
 - Mid-tween / mid-fade / mid-wait / mid-dissolve save → load continues with
-  remaining logical progress. Text reveal is interpreted in grapheme clusters;
-  compatibility must not derive identity from localized display text.
+  remaining logical progress. Text reveal advances by grapheme cluster;
+  `visible_chars` is a UTF-16 end index on a boundary (mid-cluster values clamp
+  on load). Compatibility must not derive identity from localized display text.
 - v3 loads: layers missing `scale` default to `1.0`; otherwise same as v3 shape.
 - v2 loads: layers without tweens; `kind` defaults as stored (missing → character semantics where applicable); no tween restore; `scale=1.0`.
 - Unknown higher versions are rejected with a clear error.

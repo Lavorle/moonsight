@@ -74,7 +74,9 @@ cell as the screen size made Latin text look massively letter-spaced.
 
 Atlas texture id is fixed on the JS side (`atlas` / texture id reserved for
 glyphs). MoonBit only emits UV rects; JS rasterizes pending glyphs into the
-atlas (see `GlyphAtlas::take_pending` / `mark_ready`).
+atlas (see `GlyphAtlas::take_pending` / `mark_ready`). The logical atlas may
+**grow up to edge 4096** (generation counter); Host rebuilds the GPU texture
+when size/generation changes.
 
 ### Standalone packs
 
