@@ -616,7 +616,7 @@ test "open menu freezes vm ip until continue" {
   assert_eq(eng.ui.stack[0].name, "game_menu")
   assert_true(eng.ui.mode is Menu)
   assert_eq(eng.vm.ip, ip0)
-  // Narrative frozen while menu open.
+  // Narrative IP frozen while menu open (presentation clocks may still run).
   eng.tick(None_, dt=0.05)
   assert_eq(eng.vm.ip, ip0)
   assert_eq(eng.ui.stack_depth(), 1)
@@ -626,10 +626,14 @@ test "open menu freezes vm ip until continue" {
   assert_true(eng.ui.mode is Playing)
   assert_eq(eng.vm.ip, ip0)
   assert_true(eng.vm.wait == Yield)
-  // Resume narrative: complete typewriter then advance line.
-  eng.tick(Advance)
-  guard eng.stage.text is Some(t) else { fail("text") }
-  assert_true(t.complete)
+  // Resume narrative: complete typewriter if needed, then advance line.
+  // Typewriter may already have completed under the menu (H1 presentation clocks).
+  guard eng.stage.text is Some(t0) else { fail("text") }
+  if !t0.complete {
+    eng.tick(Advance)
+    guard eng.stage.text is Some(t) else { fail("text") }
+    assert_true(t.complete)
+  }
   eng.tick(Advance)
   guard eng.stage.text is Some(t2) else { fail("second line") }
   assert_eq(t2.full_text, "There")
@@ -1529,4 +1533,96 @@ test "MenuUp on backlog decreases scroll_y toward older" {
   assert_true(
     eng.ui.scroll_y > expected - 0.1 && eng.ui.scroll_y < expected + 0.1,
   )
+}
+
+///|
+test "H1 wait countdown continues while game_menu open" {
+  let src =
+    #|- scene "s"
+    #|@flow.wait 0.5
+    #|@var.set "done" true
+    #|
+  let eng = @runtime.Engine::from_ir(
+    @script.compile_to_ir(src, file="h1-wait.yuki"),
+    entry="s",
+    director=@std_commands.standard_registry(),
+    app=app_game_menu_continue(),
+  )
+  eng.tick(None_, dt=0.0)
+  assert_true(eng.stage.wait_remaining > 0.4)
+  eng.tick(OpenMenu, dt=0.0)
+  assert_true(eng.ui.stack_depth() > 0)
+  let before = eng.stage.wait_remaining
+  eng.tick(None_, dt=0.2)
+  assert_true(eng.stage.wait_remaining < before - 0.15)
+  eng.tick(None_, dt=0.4)
+  // Wait finished under menu; var may already be set via run_until_wait.
+  assert_true(eng.stage.wait_remaining <= 0.0)
+}
+
+///|
+test "H1 fade clock continues while modal open" {
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let eng = @runtime.Engine::from_ir(
+    @script.compile_to_ir(src, file="h1-fade.yuki"),
+    entry="s",
+    director=@std_commands.standard_registry(),
+    app=app_game_menu_continue(),
+  )
+  eng.tick(None_, dt=0.0)
+  eng.stage.fade_to = 1.0
+  eng.stage.fade_remaining = 0.5
+  eng.tick(OpenMenu, dt=0.0)
+  eng.tick(None_, dt=0.2)
+  assert_true(eng.stage.fade_remaining < 0.35)
+  assert_true(eng.stage.fade_remaining > 0.2)
+}
+
+///|
+test "H1 layer tween continues while modal open" {
+  let src =
+    #|- scene "s"
+    #|@flow.yield
+    #|
+  let eng = @runtime.Engine::from_ir(
+    @script.compile_to_ir(src, file="h1-tween.yuki"),
+    entry="s",
+    app=app_game_menu_continue(),
+  )
+  eng.tick(None_, dt=0.0)
+  // Same layer setup as "layer opacity tween advances on engine tick".
+  eng.stage.show_layer(id="y", layer=Character, resource="c", z=1, opacity=0.0)
+  eng.stage.start_layer_tween(id="y", prop=Opacity, to=1.0, duration=1.0)
+  eng.tick(OpenMenu, dt=0.0)
+  eng.tick(None_, dt=0.5)
+  assert_eq(eng.stage.layers[0].opacity, 0.5)
+}
+
+///|
+test "H1 skip_held does not burst under modal" {
+  let src =
+    #|- scene "s"
+    #|y:line one
+    #|y:line two
+    #|
+  let eng = @runtime.Engine::from_ir(
+    @script.compile_to_ir(src, file="h1-skip.yuki"),
+    entry="s",
+    app=app_game_menu_continue(),
+  )
+  eng.tick(None_, dt=0.0)
+  eng.tick(OpenMenu, dt=0.0)
+  let text_before = match eng.stage.text {
+    Some(t) => t.full_text
+    None => ""
+  }
+  eng.tick(None_, dt=0.05, skip_held=true)
+  let text_after = match eng.stage.text {
+    Some(t) => t.full_text
+    None => ""
+  }
+  assert_eq(text_before, text_after)
 }

@@ -524,10 +524,11 @@ let skip_burst_max : Int = 8
 ///
 /// `dt` is frame delta in seconds (default ≈ 1/60) for fade, tweens, wait, typewriter.
 /// `skip_held` (Ctrl hold): complete typewriter / burst-advance Yields; does not skip
-/// timed waits or auto-select choices. Ignored while UI/Title is active.
+/// timed waits or auto-select choices. Ignored while Title is active or a modal is open.
 ///
-/// Tick order (Phase 4): UI intents when stack/Title → else Playing narrative path;
-/// layer tweens only while Playing; always tick BGM fade.
+/// Tick order: Title is UI-only; Playing + modal advances presentation clocks
+/// (wait / fade / dissolve / layer tweens / typewriter) without narrative Advance
+/// or skip_burst; Playing with empty stack runs the full narrative path.
 pub fn Engine::tick(
   self : Engine,
   intent : Intent,
@@ -538,27 +539,33 @@ pub fn Engine::tick(
     self.rollback_latest()
     return
   }
-  let ui_active = self.ui.stack_depth() > 0 || self.ui.mode is Title
-  if ui_active {
+
+  // Title: UI only (no narrative presentation clocks required).
+  if self.ui.mode is Title {
     self.tick_ui(intent)
     @audio.global_mixer().tick(dt)
     self.drain_ui_ops()
     return
   }
 
+  // Playing + modal stack: menu input + presentation clocks; no narrative Advance.
+  if self.ui.stack_depth() > 0 {
+    self.tick_ui(intent)
+    self.tick_presentation(dt)
+    return
+  }
+
   // Playing (no modal stack): OpenMenu / OpenBacklog open system modals
-  // without advancing narrative.
+  // without advancing narrative; presentation clocks still run this frame.
   let effective = self.effective_intent(intent)
   if effective is OpenMenu {
     self.ui.show_modal("game_menu")
-    @audio.global_mixer().tick(dt)
-    self.drain_ui_ops()
+    self.tick_presentation(dt)
     return
   }
   if effective is OpenBacklog {
     self.ui.show_modal("backlog")
-    @audio.global_mixer().tick(dt)
-    self.drain_ui_ops()
+    self.tick_presentation(dt)
     return
   }
 
@@ -581,9 +588,9 @@ pub fn Engine::tick(
     self.vm.run_until_wait(self.director, self.stage)
   }
   self.relocalize_new_presentation()
-  // If @ui.show opened a modal this frame, freeze narrative presentation.
-  // Also gate on pending ui_ops: Show is queued until drain_ui_ops, so stack
-  // may still be empty while a modal is about to open.
+  // skip_burst only while Playing with empty stack and no pending modal open.
+  // Gate on pending ui_ops: Show is queued until drain_ui_ops, so stack may
+  // still be empty while a modal is about to open.
   let playing = self.ui.stack.is_empty() &&
     !(self.ui.mode is Title) &&
     self.stage.ui_ops.is_empty()
@@ -592,13 +599,28 @@ pub fn Engine::tick(
   }
   self.enforce_completed_effects()
   self.drain_ui_ops()
-  // Re-check playing: skip burst or host ops may have opened a modal.
-  let playing = self.ui.stack.is_empty() && !(self.ui.mode is Title)
-  if playing {
-    self.tick_transitions(dt)
-    self.stage.tick_layer_tweens(dt)
-    self.tick_typewriter(dt)
+  // Presentation clocks always advance while Playing (including if a modal
+  // opened mid-frame via ui_ops / skip_burst).
+  self.tick_transitions(dt)
+  self.stage.tick_layer_tweens(dt)
+  self.tick_typewriter(dt)
+  @audio.global_mixer().tick(dt)
+}
+
+///|
+/// Advance wait / VM resume-on-wait / transitions / layer tweens / typewriter /
+/// mixer without applying narrative Advance or skip_burst.
+fn Engine::tick_presentation(self : Engine, dt : Double) -> Unit {
+  self.tick_wait(dt)
+  if self.vm.wait is Running {
+    self.vm.run_until_wait(self.director, self.stage)
   }
+  self.relocalize_new_presentation()
+  self.enforce_completed_effects()
+  self.drain_ui_ops()
+  self.tick_transitions(dt)
+  self.stage.tick_layer_tweens(dt)
+  self.tick_typewriter(dt)
   @audio.global_mixer().tick(dt)
 }
 
@@ -1157,8 +1179,12 @@ fn Engine::tick_transitions(self : Engine, dt : Double) -> Unit {
     self.stage.fade_remaining = 0.0
     return
   }
+  // Zero-dt frames must not snap (same as dissolve / skip_held intent-only ticks).
+  if dt <= 0.0 {
+    return
+  }
   let rem = self.stage.fade_remaining
-  if rem <= 0.0 || dt <= 0.0 {
+  if rem <= 0.0 {
     self.stage.overlay_opacity = target
     self.stage.fade_remaining = 0.0
     return
